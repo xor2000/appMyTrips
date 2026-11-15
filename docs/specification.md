@@ -42,11 +42,11 @@ Monorepo pnpm :
 
 **Bindings** :
 
-| Binding  | Type   | Usage                             |
-| -------- | ------ | --------------------------------- |
-| `ASSETS` | Assets | Build du front                    |
-| `DB`     | D1     | Données (base `mytrips`)          |
-| `FILES`  | R2     | Fichiers (GPX, à partir du lot 6) |
+| Binding      | Type   | Usage                                                             |
+| ------------ | ------ | ----------------------------------------------------------------- |
+| `ASSETS`     | Assets | Build du front                                                    |
+| `DB`         | D1     | Données (base `mytrips`)                                          |
+| R2 (`FILES`) | —      | Reporté au lot 6 (GPX) : R2 n'est pas encore activé sur le compte |
 
 **PWA** :
 
@@ -114,7 +114,7 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 - **SvelteKit 3** (au lieu de la 2 prévue dans le plan) : version stable depuis octobre 2026, exigée par `adapter-static` 4 et `@vite-pwa/sveltekit` 2.
 - **TypeScript 6** : `typescript-eslint` n'accepte pas encore TS 7.
 - **Vitest 4** : exigé par `@cloudflare/vitest-plugin`.
-- **Tests du Worker dans le runtime workerd** (`@cloudflare/vitest-plugin`), pour exercer les vrais bindings (D1 et R2 aux lots suivants).
+- **Tests du Worker dans le runtime workerd** (`@cloudflare/vitest-plugin`), pour exercer les vrais bindings (D1, puis R2 au lot 6).
 - **Données en ligne d'abord** : D1 fait foi, hors ligne en lecture seule (lot 7).
 
 ## 9. Limites connues et reste à faire

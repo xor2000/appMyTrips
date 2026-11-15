@@ -47,16 +47,16 @@ pnpm --filter @mytrips/api exec wrangler dev
 
 ## Scripts
 
-| Commande         | Rôle                                                                  |
-| ---------------- | --------------------------------------------------------------------- |
-| `pnpm dev`       | Front Vite + Worker local                                             |
-| `pnpm build`     | Build de production du front (`apps/web/build`, servi par le Worker)  |
-| `pnpm test`      | Tests unitaires (Vitest) de `packages/core`, `apps/api` et `apps/web` |
-| `pnpm test:e2e`  | Tests end-to-end (Playwright) sur le build servi par `wrangler dev`   |
-| `pnpm lint`      | ESLint + vérification Prettier                                        |
-| `pnpm format`    | Formatage Prettier                                                    |
-| `pnpm typecheck` | TypeScript (tsc, svelte-check) sur tout le monorepo                   |
-| `pnpm deploy`    | Build puis déploiement du Worker                                      |
+| Commande          | Rôle                                                                           |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `pnpm dev`        | Front Vite + Worker local                                                      |
+| `pnpm build`      | Build de production du front (`apps/web/build`, servi par le Worker)           |
+| `pnpm test`       | Tests unitaires (Vitest) de `packages/core`, `apps/api` et `apps/web`          |
+| `pnpm test:e2e`   | Tests end-to-end (Playwright) sur le build servi par `wrangler dev`            |
+| `pnpm lint`       | ESLint + vérification Prettier                                                 |
+| `pnpm format`     | Formatage Prettier                                                             |
+| `pnpm typecheck`  | TypeScript (tsc, svelte-check) sur tout le monorepo                            |
+| `pnpm run deploy` | Build puis déploiement du Worker (`pnpm deploy` seul est une commande de pnpm) |
 
 Avant le premier `pnpm test:e2e` : `pnpm exec playwright install chromium`.
 
@@ -77,17 +77,12 @@ docs           Spécification et journal des tâches (docs/tasks)
 
 Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
 
-1. Créer les ressources :
-
-   ```bash
-   pnpm --filter @mytrips/api exec wrangler d1 create mytrips
-   pnpm --filter @mytrips/api exec wrangler r2 bucket create mytrips-files
-   ```
-
-   Reporter l'identifiant de la base dans `apps/api/wrangler.jsonc` (`database_id`).
+1. Base D1 : déjà créée (`mytrips`, son `database_id` est dans `apps/api/wrangler.jsonc`). Sur un autre
+   compte : `pnpm --filter @mytrips/api exec wrangler d1 create mytrips`, puis reporter l'identifiant.
+   R2 (bucket `mytrips-files`) sera ajouté au lot 6.
 
 2. Appliquer les migrations : `pnpm --filter @mytrips/api db:migrate:remote`.
-3. Déployer : `pnpm deploy`.
+3. Déployer : `pnpm run deploy` (et non `pnpm deploy`, commande intégrée de pnpm).
 4. Protéger le Worker avec **Cloudflare Access** (Zero Trust → Access → Applications) :
    - application de type « Self-hosted » sur le domaine du Worker ;
    - politique « Allow » avec la **liste blanche** des e-mails autorisés ;

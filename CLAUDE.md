@@ -57,6 +57,9 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   Ne jamais le définir en production.
 - **Ordre des routes Hono** : une route déclarée avant `app.use('*', accessAuth())` reste publique
   (c'est voulu pour `/api/health`). Toute nouvelle route doit être déclarée **après** le middleware.
+- **Déploiement** : `pnpm run deploy` (build + `wrangler deploy`). `pnpm deploy` sans `run` est une
+  commande intégrée de pnpm ; dans les scripts, toujours écrire `pnpm --filter <paquet> run deploy`.
+  Worker déployé : https://mytrips.dev-workshop-net.workers.dev (base D1 `mytrips`, région WEUR).
 - **`.dev.vars` et tests** : `@cloudflare/vitest-plugin` charge `apps/api/.dev.vars`. Un test ne doit
   jamais dépendre de ce fichier local : fixer explicitement les bindings concernés
   (ex. `DEV_USER_EMAIL: undefined`).

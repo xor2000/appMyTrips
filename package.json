@@ -14,7 +14,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc -p tsconfig.json && pnpm -r --if-present typecheck",
-    "deploy": "pnpm build && pnpm --filter @mytrips/api deploy"
+    "deploy": "pnpm build && pnpm --filter @mytrips/api run deploy"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

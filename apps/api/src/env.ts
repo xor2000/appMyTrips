@@ -2,7 +2,6 @@
 export interface Bindings {
   ASSETS: Fetcher;
   DB: D1Database;
-  FILES: R2Bucket;
   /** Domaine d'équipe Cloudflare Access, ex. « mytrips.cloudflareaccess.com ». */
   ACCESS_TEAM_DOMAIN?: string;
   /** Audience (AUD) de l'application Access. Sa présence désactive DEV_USER_EMAIL. */

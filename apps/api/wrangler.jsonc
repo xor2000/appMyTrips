@@ -15,12 +15,11 @@
     {
       "binding": "DB",
       "database_name": "mytrips",
-      // À remplacer par l'identifiant réel (wrangler d1 create mytrips) avant le premier déploiement.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "503255e4-8316-4ef0-beb5-86d7ec490d4c",
       "migrations_dir": "migrations",
     },
   ],
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "mytrips-files" }],
+  // R2 (binding FILES, bucket mytrips-files) sera ajouté au lot 6 (GPX) : R2 n'est pas encore activé sur le compte.
   "observability": { "enabled": true },
   // Secrets et variables de production (wrangler secret put) : ACCESS_TEAM_DOMAIN, ACCESS_AUD.
   // DEV_USER_EMAIL est réservé au développement local (.dev.vars) et ignoré si ACCESS_AUD est défini.
