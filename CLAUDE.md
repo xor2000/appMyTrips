@@ -23,8 +23,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - `packages/core` : **toute la logique métier pure** (schémas Zod, calculs d'horaires, GPX, catégories…),
   sans dépendance au DOM ni à Cloudflare. Partagée par le front, l'API et la future appli mobile.
   Exportée en source TypeScript (`exports: ./src/index.ts`), sans étape de build.
-- `apps/api` : Worker Hono. Routes sous `/api` (`basePath`). Middleware `accessAuth` sur tout sauf
-  `/api/health`. Bindings dans `src/env.ts` (`Bindings`). Migrations D1 dans `migrations/`.
+- `apps/api` : Worker Hono. `src/app.ts` (`createApp({ auth })`) monte les routes sous `/api` ;
+  `src/index.ts` exporte `createApp()` avec Access. Routes métier dans `src/routes/`, requêtes D1
+  dans `src/db/`. Droits par voyage : middleware `access('read' | 'write' | 'owner')`. Bindings dans
+  `src/env.ts`. Migrations D1 dans `migrations/`.
 - `apps/web` : SvelteKit 3 en SPA (`ssr = false`, `adapter-static` avec `fallback: 'index.html'`).
   Configuration SvelteKit **dans `vite.config.ts`** (via `withPwa`), il n'y a pas de `svelte.config.js`.
 - `e2e` : parcours Playwright.
@@ -55,11 +57,33 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   Premier appel lent (démarrage de workerd) : `testTimeout` de 20 s, paquets testés un par un.
 - **`DEV_USER_EMAIL`** : contourne Access en local seulement, et seulement si `ACCESS_AUD` est absent.
   Ne jamais le définir en production.
+- **Tests d'API** : utiliser `call(user, method, path, body?, headers?)` de `apps/api/test/helpers.ts`
+  (identité par en-tête `x-test-user`, vraie D1, migrations appliquées par `test/apply-migrations.ts`).
+  L'isolation du stockage entre tests n'est pas garantie : ne jamais supposer une base vide (filtrer
+  sur ses propres données).
+- **Paramètres de chemin Hono** : `c.req.param()` renvoie la valeur **déjà décodée**. Ne pas rappeler
+  `decodeURIComponent` (un `%` ferait planter la route).
+- **Verrou optimiste** : toute écriture sur un voyage ou ses objets passe par `writeWithVersion`
+  (`apps/api/src/routes/trips.ts`) : version incrémentée et requêtes conditionnées dans un seul
+  `db.batch`.
+- **MapLibre 6** : son worker doit être déclaré explicitement
+  (`import('maplibre-gl/dist/maplibre-gl-worker.mjs?url')` puis `setWorkerUrl`), sinon il est
+  cherché à côté du chunk et le Worker Cloudflare renvoie le fallback HTML. L'e2e « la carte charge
+  son web worker sans erreur » le vérifie.
+- **E2E** :
+  - base D1 locale dédiée (`apps/api/.wrangler/e2e`), migrée au démarrage et conservée entre les
+    exécutions : noms de voyages uniques (`uniqueName`) ;
+  - tuiles de carte interceptées (style vide) ;
+  - autre utilisateur via `browser.newContext({ extraHTTPHeaders: { 'x-dev-user-email': … } })` ;
+  - `getByLabel` fait une recherche partielle insensible à la casse : utiliser `{ exact: true }`
+    pour des libellés courts (« Du » correspond aussi à « Nom du voyage »).
 - **Ordre des routes Hono** : une route déclarée avant `app.use('*', accessAuth())` reste publique
   (c'est voulu pour `/api/health`). Toute nouvelle route doit être déclarée **après** le middleware.
 - **Déploiement** : `pnpm run deploy` (build + `wrangler deploy`). `pnpm deploy` sans `run` est une
   commande intégrée de pnpm ; dans les scripts, toujours écrire `pnpm --filter <paquet> run deploy`.
   Worker déployé : https://mytrips.dev-workshop-net.workers.dev (base D1 `mytrips`, région WEUR).
+- **URL Preview** : `"preview_urls": false` dans `wrangler.jsonc` est indispensable. Sans lui,
+  chaque `wrangler deploy` réactive les URL Preview, que Cloudflare Access ne protège pas.
 - **`.dev.vars` et tests** : `@cloudflare/vitest-plugin` charge `apps/api/.dev.vars`. Un test ne doit
   jamais dépendre de ce fichier local : fixer explicitement les bindings concernés
   (ex. `DEV_USER_EMAIL: undefined`).

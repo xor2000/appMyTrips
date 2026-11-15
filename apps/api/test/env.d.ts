@@ -1,10 +1,12 @@
+import type { D1Migration } from '@cloudflare/vitest-plugin';
 import type { Bindings } from '../src/env';
 
 declare global {
   namespace Cloudflare {
-    // Augmentation de l'interface globale : elle doit rester une interface.
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    interface Env extends Bindings {}
+    /** Bindings du Worker, plus les migrations injectées par vitest.config.ts. */
+    interface Env extends Bindings {
+      TEST_MIGRATIONS: D1Migration[];
+    }
     /** Type de `exports` (cloudflare:workers) : le module principal du Worker. */
     interface GlobalProps {
       mainModule: typeof import('../src/index');

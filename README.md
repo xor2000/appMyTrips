@@ -21,6 +21,12 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars
 `apps/api/.dev.vars` (ignoré par git) définit `DEV_USER_EMAIL`, l'identité utilisée en local à la place
 de Cloudflare Access.
 
+Créer ou mettre à jour la base D1 locale (à refaire après chaque nouvelle migration) :
+
+```bash
+pnpm --filter @mytrips/api db:migrate:local
+```
+
 ## Développement
 
 ```bash
@@ -81,7 +87,8 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
    compte : `pnpm --filter @mytrips/api exec wrangler d1 create mytrips`, puis reporter l'identifiant.
    R2 (bucket `mytrips-files`) sera ajouté au lot 6.
 
-2. Appliquer les migrations : `pnpm --filter @mytrips/api db:migrate:remote`.
+2. Appliquer les migrations : `pnpm --filter @mytrips/api db:migrate:remote`. À faire **avant** chaque
+   déploiement qui ajoute une migration.
 3. Déployer : `pnpm run deploy` (et non `pnpm deploy`, commande intégrée de pnpm).
 4. Protéger le Worker avec **Cloudflare Access** : Workers & Pages → mytrips → **Domains** → ligne
    **Production** (workers.dev) → **Enable Access** :

@@ -2,6 +2,7 @@
   import '@fontsource-variable/outfit';
   import '@fontsource-variable/inter';
   import '#lib/styles/global.css';
+  import '#lib/styles/controls.css';
   import { onMount, type Snippet } from 'svelte';
   import { pwaInfo } from 'virtual:pwa-info';
   import AppHeader from '#lib/components/AppHeader.svelte';
@@ -30,11 +31,12 @@
   });
 </script>
 
-<AppHeader {userEmail} />
-
-<main>
-  {@render children()}
-</main>
+<div class="app">
+  <AppHeader {userEmail} />
+  <main>
+    {@render children()}
+  </main>
+</div>
 
 <UpdatePrompt
   {needRefresh}
@@ -43,9 +45,16 @@
 />
 
 <style>
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* Chaque page gère sa mise en page : liste centrée, ou écran voyage plein cadre. */
   main {
-    padding: var(--space-8) var(--space-6);
-    max-width: 1200px;
-    margin: 0 auto;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 </style>
