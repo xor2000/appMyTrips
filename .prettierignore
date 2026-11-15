@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+.svelte-kit/
+.wrangler/
+test-results/
+playwright-report/
+pnpm-lock.yaml
+.claude/
+apps/web/static/

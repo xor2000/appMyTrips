@@ -1,0 +1,3 @@
+# Copier en .dev.vars pour le développement local (fichier ignoré par git).
+# Sans ACCESS_AUD, DEV_USER_EMAIL remplace l'authentification Cloudflare Access.
+DEV_USER_EMAIL=dev@example.test
