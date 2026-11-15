@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mytrips",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Le Worker sert le build SPA de apps/web et l'API /api/* sur la même origine.
+  "assets": {
+    "directory": "../web/build",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mytrips",
+      // À remplacer par l'identifiant réel (wrangler d1 create mytrips) avant le premier déploiement.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "mytrips-files" }],
+  "observability": { "enabled": true },
+  // Secrets et variables de production (wrangler secret put) : ACCESS_TEAM_DOMAIN, ACCESS_AUD.
+  // DEV_USER_EMAIL est réservé au développement local (.dev.vars) et ignoré si ACCESS_AUD est défini.
+}

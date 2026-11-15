@@ -1,0 +1,17 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+*.log
+
+# Fichiers Claude Code propres à la machine
+.claude/launch.json
+.claude/worktrees/
+.claude/settings.local.json
