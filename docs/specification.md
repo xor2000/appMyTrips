@@ -119,8 +119,7 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 
 ## 9. Limites connues et reste à faire
 
-- **Déploiement réel non fait** : `database_id` D1 à renseigner, application Access, liste blanche et secrets `ACCESS_TEAM_DOMAIN` et `ACCESS_AUD` à créer (voir README).
-- **CI pas encore exécutée sur GitHub** : le workflow `.github/workflows/ci.yml` n'a été vérifié qu'en local, commande par commande.
+- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour partager un voyage (lot 1), la politique devra devenir une liste d'e-mails.
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
 - **Lots restants** :
   1. voyages et carte ;

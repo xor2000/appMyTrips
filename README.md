@@ -83,16 +83,23 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
 
 2. Appliquer les migrations : `pnpm --filter @mytrips/api db:migrate:remote`.
 3. Déployer : `pnpm run deploy` (et non `pnpm deploy`, commande intégrée de pnpm).
-4. Protéger le Worker avec **Cloudflare Access** (Zero Trust → Access → Applications) :
-   - application de type « Self-hosted » sur le domaine du Worker ;
-   - politique « Allow » avec la **liste blanche** des e-mails autorisés ;
-   - noter le **domaine d'équipe** (ex. `mytrips.cloudflareaccess.com`) et l'**Application Audience (AUD)**.
+4. Protéger le Worker avec **Cloudflare Access** : Workers & Pages → mytrips → **Domains** → ligne
+   **Production** (workers.dev) → **Enable Access** :
+   - **Scope** : « All traffic » ;
+   - **Authentication policy** : « Cloudflare account » (membres du compte), ou une liste d'e-mails
+     dans Zero Trust → Access → Applications ;
+   - désactiver les URL **Preview** (elles exposeraient d'autres versions sans cette protection) ;
+   - noter l'**AUD** affiché. Le **domaine d'équipe** est l'hôte vers lequel l'URL du Worker redirige
+     (`curl -I https://mytrips.<sous-domaine>.workers.dev` → `https://<équipe>.cloudflareaccess.com/…`).
 5. Déclarer les secrets du Worker :
 
    ```bash
    pnpm --filter @mytrips/api exec wrangler secret put ACCESS_TEAM_DOMAIN
    pnpm --filter @mytrips/api exec wrangler secret put ACCESS_AUD
    ```
+
+Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev (équipe Access
+`mytraces-pages.cloudflareaccess.com`).
 
 `DEV_USER_EMAIL` ne doit jamais être défini en production. Il est de toute façon ignoré dès que
 `ACCESS_AUD` est défini.
