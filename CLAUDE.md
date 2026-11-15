@@ -82,6 +82,8 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - **Déploiement** : `pnpm run deploy` (build + `wrangler deploy`). `pnpm deploy` sans `run` est une
   commande intégrée de pnpm ; dans les scripts, toujours écrire `pnpm --filter <paquet> run deploy`.
   Worker déployé : https://mytrips.dev-workshop-net.workers.dev (base D1 `mytrips`, région WEUR).
+- **URL Preview** : `"preview_urls": false` dans `wrangler.jsonc` est indispensable. Sans lui,
+  chaque `wrangler deploy` réactive les URL Preview, que Cloudflare Access ne protège pas.
 - **`.dev.vars` et tests** : `@cloudflare/vitest-plugin` charge `apps/api/.dev.vars`. Un test ne doit
   jamais dépendre de ce fichier local : fixer explicitement les bindings concernés
   (ex. `DEV_USER_EMAIL: undefined`).

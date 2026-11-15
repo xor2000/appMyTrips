@@ -21,6 +21,9 @@
   ],
   // R2 (binding FILES, bucket mytrips-files) sera ajouté au lot 6 (GPX) : R2 n'est pas encore activé sur le compte.
   "observability": { "enabled": true },
+  // URL Preview désactivées : Access ne protège que l'URL de production (workers.dev).
+  // Sans cette ligne, chaque `wrangler deploy` les réactive.
+  "preview_urls": false,
   // Secrets et variables de production (wrangler secret put) : ACCESS_TEAM_DOMAIN, ACCESS_AUD.
   // DEV_USER_EMAIL est réservé au développement local (.dev.vars) et ignoré si ACCESS_AUD est défini.
 }
