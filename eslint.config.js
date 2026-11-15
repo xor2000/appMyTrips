@@ -34,4 +34,9 @@ export default ts.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    // Les tests lisent librement les corps de réponse JSON.
+    files: ['**/test/**/*.ts', '**/*.test.ts', 'e2e/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
 );

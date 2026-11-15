@@ -42,7 +42,7 @@ export default defineConfig({
         generateSW: {
           // Pas de prérendu en SPA : on ne précache que les fichiers client (la coquille
           // index.html est ajoutée par l'option kit.spa).
-          globPatterns: ['client/**/*.{js,css,ico,png,svg,webp,webmanifest,woff2}'],
+          globPatterns: ['client/**/*.{js,mjs,css,ico,png,svg,webp,webmanifest,woff2}'],
           // Le plugin ajoute toujours « prerendered/** », vide en SPA : ne pas en faire une erreur.
           globStrict: false,
           // La navigation hors ligne ne doit jamais retomber sur la coquille pour /api.

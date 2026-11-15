@@ -117,6 +117,29 @@ describe('middleware Cloudflare Access', () => {
     expect(await res.json()).toEqual({ email: 'dev@example.test' });
   });
 
+  it('en mode dev, l’en-tête x-dev-user-email choisit l’utilisateur (tests e2e multi-utilisateurs)', async () => {
+    const res = await app({ DEV_USER_EMAIL: 'dev@example.test', ACCESS_AUD: undefined })({
+      'x-dev-user-email': 'Bob@Example.test',
+    });
+    expect(await res.json()).toEqual({ email: 'bob@example.test' });
+  });
+
+  it('en mode dev, un en-tête x-dev-user-email invalide est ignoré', async () => {
+    const res = await app({ DEV_USER_EMAIL: 'dev@example.test', ACCESS_AUD: undefined })({
+      'x-dev-user-email': 'pas-un-email',
+    });
+    expect(await res.json()).toEqual({ email: 'dev@example.test' });
+  });
+
+  it('ignore x-dev-user-email quand ACCESS_AUD est configuré (production)', async () => {
+    const token = await sign(privateKey, { email: 'alice@example.test' });
+    const res = await app({ DEV_USER_EMAIL: 'dev@example.test' })({
+      'Cf-Access-Jwt-Assertion': token,
+      'x-dev-user-email': 'mallory@example.test',
+    });
+    expect(await res.json()).toEqual({ email: 'alice@example.test' });
+  });
+
   it('ignore DEV_USER_EMAIL quand ACCESS_AUD est configuré (production)', async () => {
     const res = await app({ DEV_USER_EMAIL: 'dev@example.test' })();
     expect(res.status).toBe(401);

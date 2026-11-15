@@ -28,9 +28,12 @@ test('le manifeste PWA est servi', async ({ request }) => {
 
 test('le service worker est enregistré et actif', async ({ page }) => {
   await page.goto('/');
-  // `ready` se résout dès que le SW est « activating » : attendre l'état final.
+  // `ready` se résout dès que le SW est « activating » : attendre l'état final. Le précache
+  // (~1,6 Mo avec MapLibre) peut prendre plus de 5 s quand les tests tournent en parallèle.
   await expect
-    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state))
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state), {
+      timeout: 20_000,
+    })
     .toBe('activated');
 });
 

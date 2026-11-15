@@ -70,32 +70,63 @@ Monorepo pnpm :
 - **Réponses d'erreur** :
   - `401 { error: 'unauthorized' }` : jeton absent, invalide, expiré, mauvais émetteur, mauvaise audience, mauvais algorithme ou sans e-mail ;
   - `500 { error: 'access_not_configured' }` : `ACCESS_AUD` ou `ACCESS_TEAM_DOMAIN` manquant hors mode dev.
-- **Mode dev** : si `ACCESS_AUD` est absent et `DEV_USER_EMAIL` défini, cet e-mail est utilisé sans JWT.
-- **Droits par voyage** (`trip_members`, rôles `viewer` et `editor`) : prévus au lot 1.
+- **Mode dev** : si `ACCESS_AUD` est absent et `DEV_USER_EMAIL` défini, cet e-mail est utilisé sans JWT. L'en-tête `x-dev-user-email` peut alors choisir un autre utilisateur (e2e à plusieurs utilisateurs) ; il est ignoré dès que `ACCESS_AUD` est défini.
+- **Droits par voyage** :
+  - le **propriétaire** (`trips.owner_email`) peut tout faire ;
+  - un membre **`editor`** lit et modifie le voyage et ses jours, mais ne peut ni partager ni supprimer le voyage ;
+  - un membre **`viewer`** lit seulement ;
+  - un **non-membre** reçoit 404, pour ne pas révéler l'existence du voyage. Un membre sans le droit requis reçoit 403.
+- **Partage** : géré par le propriétaire (`PUT` et `DELETE /api/trips/:id/members/:email`). L'invité doit aussi passer Cloudflare Access : la politique Access doit l'autoriser.
 
 ## 4. Schéma de données (D1)
 
-| Migration       | Contenu                                          |
-| --------------- | ------------------------------------------------ |
-| `0001_init.sql` | Table technique `meta (key TEXT PK, value TEXT)` |
+| Migration        | Contenu                                          |
+| ---------------- | ------------------------------------------------ |
+| `0001_init.sql`  | Table technique `meta (key TEXT PK, value TEXT)` |
+| `0002_trips.sql` | `trips`, `trip_members`, `days`                  |
 
-Les tables métier (`trips`, `trip_members`, `days`, `steps`, `stays`, `legs`, caches) arrivent aux
-lots suivants.
+- **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
+- **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
+- **`days`** : `id`, `trip_id`, `date` (unique par voyage), `day_start` et `day_end` (NULL = heures du voyage), `notes`.
+
+**Règles** :
+
+- Les jours suivent la période du voyage : à la création, et à chaque changement de dates, les jours manquants sont créés et les jours hors période supprimés. Les jours conservés gardent leur identifiant et leurs notes.
+- Un jour est **non vide** s'il a des notes. Le lot 2 étendra cette règle aux étapes, qui passeront alors dans la liste d'idées. Supprimer des jours non vides demande `?force=true`, sinon la réponse est `409 days_not_empty`.
+- Durée maximale d'un voyage : 90 jours. Une journée doit finir après son début : la règle est vérifiée avec les valeurs existantes quand un seul des deux champs change.
+- **Verrou optimiste** : toute modification du voyage ou d'un jour exige `If-Match: <version>` (428 sinon) et incrémente `trips.version`, dans la même transaction D1 que la modification. Une version périmée donne `409 { error: 'version_conflict', version }`. Les changements de membres ne changent pas la version.
+
+Les tables `steps`, `stays`, `legs` et les caches arrivent aux lots suivants.
 
 ## 5. Surface API
 
-| Méthode | Route         | Auth   | Réponse                |
-| ------- | ------------- | ------ | ---------------------- |
-| GET     | `/api/health` | Aucune | `200 { ok: true }`     |
-| GET     | `/api/me`     | Access | `200 { email }` ou 401 |
+| Méthode | Route                           | Droit        | Réponse                                           |
+| ------- | ------------------------------- | ------------ | ------------------------------------------------- |
+| GET     | `/api/health`                   | aucun        | `200 { ok: true }`                                |
+| GET     | `/api/me`                       | connecté     | `200 { email }`                                   |
+| GET     | `/api/trips`                    | connecté     | `200 { trips: TripSummary[] }` (avec rôle)        |
+| POST    | `/api/trips`                    | connecté     | `201 TripSnapshot`                                |
+| GET     | `/api/trips/:id`                | lecture      | `200 TripSnapshot` (voyage, rôle, jours, membres) |
+| PATCH   | `/api/trips/:id[?force=true]`   | modification | `200 TripSnapshot` · `If-Match` obligatoire       |
+| DELETE  | `/api/trips/:id`                | propriétaire | `204`                                             |
+| PATCH   | `/api/trips/:id/days/:dayId`    | modification | `200 TripSnapshot` · `If-Match` obligatoire       |
+| PUT     | `/api/trips/:id/members/:email` | propriétaire | `204` · corps `{ role }`                          |
+| DELETE  | `/api/trips/:id/members/:email` | propriétaire | `204`                                             |
 
-Toute autre route `/api/*` passe d'abord par le middleware : 401 sans identité, puis 404.
+- **Erreurs** : `400 invalid` (avec `issues`) ou `invalid_json`, `401`, `403 forbidden`, `404 not_found`, `409 version_conflict` ou `days_not_empty`, `428 version_required`.
+- Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
+- Les schémas (`TripCreate`, `TripPatch`, `DayPatch`, `MemberPut`) et les types de réponse sont dans `packages/core`.
 
 ## 6. Intégrations externes
 
-Aucune au lot 0. Prévues :
+- **Carte** : MapLibre GL JS 6, avec deux fonds au choix.
+  - **Plan** : OpenFreeMap, style Liberty (`https://tiles.openfreemap.org/styles/liberty`), sans clé et fourni sans garantie.
+  - **Topo** : OpenTopoMap (tuiles raster).
+  - Les URL sont centralisées dans `apps/web/src/lib/map/styles.ts`.
+  - Le worker de MapLibre est émis par Vite et déclaré avec `setWorkerUrl`.
 
-- OpenFreeMap et OpenTopoMap (tuiles) ;
+Prévues :
+
 - Photon (géocodage) ;
 - OpenRouteService et Transitous (routage) ;
 - Overpass, Geoapify et Wikipédia (lieux).
@@ -116,16 +147,13 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 - **Vitest 4** : exigé par `@cloudflare/vitest-plugin`.
 - **Tests du Worker dans le runtime workerd** (`@cloudflare/vitest-plugin`), pour exercer les vrais bindings (D1, puis R2 au lot 6).
 - **Données en ligne d'abord** : D1 fait foi, hors ligne en lecture seule (lot 7).
+- **Fabrique `createApp({ auth })`** (`apps/api/src/app.ts`) : les tests d'API injectent une identité, et tournent sur la vraie D1 de workerd, migrations appliquées.
+- **Pas de couleur stockée par voyage** (prévue dans le plan) : la teinte de la carte de voyage est dérivée de l'identifiant, ce qui évite un champ et un sélecteur sans valeur métier.
 
 ## 9. Limites connues et reste à faire
 
-- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour partager un voyage (lot 1), la politique devra devenir une liste d'e-mails.
+- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour que le partage fonctionne avec d'autres personnes, la politique doit devenir une liste d'e-mails (Zero Trust → Access → Applications).
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
-- **Lots restants** :
-  1. voyages et carte ;
-  2. étapes ;
-  3. lieux ;
-  4. trajets ;
-  5. horaires ;
-  6. GPX ;
-  7. hors ligne.
+- **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
+- **Carte** : sans étapes, la carte montre une vue d'ensemble de l'Europe ; le recentrage sur le voyage arrive avec les étapes (lot 2).
+- **Lots restants** : 2. étapes ; 3. lieux ; 4. trajets ; 5. horaires ; 6. GPX ; 7. hors ligne.

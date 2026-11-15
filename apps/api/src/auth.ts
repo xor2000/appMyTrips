@@ -35,7 +35,9 @@ export function accessAuth(options: { getKey?: KeyResolver } = {}): MiddlewareHa
     const { ACCESS_TEAM_DOMAIN, ACCESS_AUD, DEV_USER_EMAIL } = c.env;
 
     if (!ACCESS_AUD && DEV_USER_EMAIL) {
-      const dev = Email.safeParse(DEV_USER_EMAIL);
+      // Mode dev : l'en-tête x-dev-user-email permet de jouer plusieurs utilisateurs (e2e).
+      const override = Email.safeParse(c.req.header('x-dev-user-email'));
+      const dev = override.success ? override : Email.safeParse(DEV_USER_EMAIL);
       if (dev.success) {
         c.set('userEmail', dev.data);
         return next();

@@ -16,7 +16,12 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `pnpm build && pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --var DEV_USER_EMAIL:dev@example.test`,
+    // Base D1 locale dédiée aux e2e (.wrangler/e2e), migrée avant le démarrage.
+    command: [
+      'pnpm build',
+      'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
+      `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test`,
+    ].join(' && '),
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
