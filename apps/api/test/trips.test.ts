@@ -274,18 +274,30 @@ describe('PATCH /api/trips/:id : période', () => {
 describe('PATCH /api/trips/:id : heures de journée', () => {
   it('refuse un début de journée après la fin existante (400)', async () => {
     const { trip } = await createTrip();
-    const res = await call(ALICE, 'PATCH', `/api/trips/${trip.id}`, { dayStart: '23:00' }, {
-      'if-match': '1',
-    });
+    const res = await call(
+      ALICE,
+      'PATCH',
+      `/api/trips/${trip.id}`,
+      { dayStart: '23:00' },
+      {
+        'if-match': '1',
+      },
+    );
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid');
   });
 
   it('accepte une fin de journée cohérente avec le début existant', async () => {
     const { trip } = await createTrip();
-    const res = await call(ALICE, 'PATCH', `/api/trips/${trip.id}`, { dayEnd: '23:30' }, {
-      'if-match': '1',
-    });
+    const res = await call(
+      ALICE,
+      'PATCH',
+      `/api/trips/${trip.id}`,
+      { dayEnd: '23:30' },
+      {
+        'if-match': '1',
+      },
+    );
     expect(res.status).toBe(200);
     expect(res.body.trip.dayEnd).toBe('23:30');
   });
