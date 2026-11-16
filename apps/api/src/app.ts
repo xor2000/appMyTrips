@@ -1,12 +1,15 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { accessAuth, type AuthEnv } from './auth';
+import { geocodeRoutes } from './routes/geocode';
 import { trips } from './routes/trips';
 
 /**
- * Application Hono de l'API. `auth` permet aux tests d'injecter une identité ; en production,
- * c'est le middleware Cloudflare Access.
+ * Application Hono de l'API. `auth` permet aux tests d'injecter une identité (en production :
+ * Cloudflare Access) ; `fetch` remplace le fetch des appels aux services externes.
  */
-export function createApp(options: { auth?: MiddlewareHandler<AuthEnv> } = {}) {
+export function createApp(
+  options: { auth?: MiddlewareHandler<AuthEnv>; fetch?: typeof fetch } = {},
+) {
   const app = new Hono<AuthEnv>().basePath('/api');
 
   // Route publique : sonde de disponibilité.
@@ -17,6 +20,7 @@ export function createApp(options: { auth?: MiddlewareHandler<AuthEnv> } = {}) {
 
   app.get('/me', (c) => c.json({ email: c.get('userEmail') }));
   app.route('/trips', trips);
+  app.route('/geocode', geocodeRoutes(options.fetch ?? ((input, init) => fetch(input, init))));
 
   return app;
 }

@@ -1,0 +1,138 @@
+<script lang="ts">
+  import type { Step, StayItem, TimelineItem } from '@mytrips/core';
+  import type { DropTarget } from '#lib/steps/dnd.svelte.ts';
+  import DropZone from './DropZone.svelte';
+  import GroupCard from './GroupCard.svelte';
+  import StayCard from './StayCard.svelte';
+  import StepCard from './StepCard.svelte';
+
+  interface Props {
+    items: TimelineItem[];
+    /** Numéros de carte par clé d'étape. */
+    labels: Map<string, string>;
+    canEdit: boolean;
+    highlighted: string | null;
+    onEdit: (step: Step) => void;
+    onEditStay?: (item: StayItem) => void;
+    onMove: (step: Step, delta: -1 | 1) => void;
+    onDelete: (step: Step) => void;
+    onHover: (key: string | null) => void;
+    onDrop: (stepId: string, target: DropTarget) => void;
+  }
+
+  let {
+    items,
+    labels,
+    canEdit,
+    highlighted,
+    onEdit,
+    onEditStay = () => {},
+    onMove,
+    onDelete,
+    onHover,
+    onDrop,
+  }: Props = $props();
+
+  /** Étapes et dossiers à la racine du jour (sans les séjours), dans l'ordre. */
+  const roots = $derived(
+    items.filter((i) => i.kind !== 'stay').map((i) => (i.kind === 'step' ? i.step : i.group)),
+  );
+
+  /** Index de dépôt avant la racine n°`i`, sans compter l'élément déplacé. */
+  function rootIndex(stepId: string, i: number) {
+    return roots.slice(0, i).filter((s) => s.id !== stepId).length;
+  }
+
+  function rootPosition(item: TimelineItem) {
+    return roots.findIndex((s) => s.id === item.key);
+  }
+</script>
+
+{#if items.length === 0}
+  <div class="empty">
+    <p>Aucune étape pour ce jour.</p>
+    {#if canEdit}
+      <p class="muted">Ajoute un lieu, ou glisse ici une idée ou une étape d’un autre jour.</p>
+      <DropZone
+        label="Déposer dans ce jour"
+        onDrop={(id) => onDrop(id, { parentId: null, index: 0 })}
+      />
+    {/if}
+  </div>
+{:else}
+  <div class="timeline" role="list">
+    {#each items as item (item.key)}
+      {#if item.kind === 'stay'}
+        {#if item.edge === 'end' && canEdit}
+          <DropZone
+            label="Déposer à la fin du jour"
+            onDrop={(id) => onDrop(id, { parentId: null, index: rootIndex(id, roots.length) })}
+          />
+        {/if}
+        <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} {onHover} />
+      {:else}
+        {#if canEdit}
+          <DropZone
+            label="Déposer ici"
+            onDrop={(id) =>
+              onDrop(id, { parentId: null, index: rootIndex(id, rootPosition(item)) })}
+          />
+        {/if}
+        {#if item.kind === 'step'}
+          <StepCard
+            step={item.step}
+            label={labels.get(item.step.id) ?? null}
+            {canEdit}
+            highlighted={highlighted === item.step.id}
+            {onEdit}
+            {onMove}
+            {onDelete}
+            {onHover}
+          />
+        {:else}
+          <GroupCard
+            {item}
+            {labels}
+            {canEdit}
+            {highlighted}
+            {onEdit}
+            {onMove}
+            {onDelete}
+            {onHover}
+            onDropInto={(id, index) => onDrop(id, { parentId: item.group.id, index })}
+          />
+        {/if}
+      {/if}
+    {/each}
+    {#if canEdit && !items.some((i) => i.kind === 'stay' && i.edge === 'end')}
+      <DropZone
+        label="Déposer à la fin du jour"
+        onDrop={(id) => onDrop(id, { parentId: null, index: rootIndex(id, roots.length) })}
+      />
+    {/if}
+  </div>
+{/if}
+
+<style>
+  .timeline {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .empty {
+    padding: var(--space-6);
+    border: 2px dashed var(--line);
+    border-radius: var(--radius-lg);
+    text-align: center;
+  }
+
+  .empty p {
+    margin: 0;
+  }
+
+  .muted {
+    margin-top: var(--space-1) !important;
+    color: var(--muted);
+    font-size: 13px;
+  }
+</style>

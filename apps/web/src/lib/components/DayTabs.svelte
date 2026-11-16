@@ -1,15 +1,33 @@
 <script lang="ts">
   import type { Day } from '@mytrips/core';
   import { dayTabLabel } from '#lib/format.ts';
+  import { drag } from '#lib/steps/dnd.svelte.ts';
 
   interface Props {
     days: Day[];
     /** Jour sélectionné, ou null pour « Tout le voyage ». */
     selected: string | null;
     onSelect: (dayId: string | null) => void;
+    /** Dépôt d'une étape glissée sur l'onglet d'un jour (fin de ce jour). */
+    onDropStep?: (stepId: string, dayId: string) => void;
   }
 
-  let { days, selected, onSelect }: Props = $props();
+  let { days, selected, onSelect, onDropStep }: Props = $props();
+
+  let over = $state<string | null>(null);
+
+  function onDragOver(event: DragEvent, dayId: string) {
+    if (!onDropStep || !drag.stepId) return;
+    event.preventDefault();
+    over = dayId;
+  }
+
+  function onDrop(event: DragEvent, dayId: string) {
+    if (!onDropStep || !drag.stepId) return;
+    event.preventDefault();
+    over = null;
+    onDropStep(drag.stepId, dayId);
+  }
 </script>
 
 <div class="tabs" role="tablist" aria-label="Jours du voyage">
@@ -25,8 +43,12 @@
       type="button"
       role="tab"
       class="tab"
+      class:over={over === day.id}
       aria-selected={selected === day.id}
       onclick={() => onSelect(day.id)}
+      ondragover={(e) => onDragOver(e, day.id)}
+      ondragleave={() => (over = null)}
+      ondrop={(e) => onDrop(e, day.id)}
     >
       <b>J{i + 1}</b>
       <span>{dayTabLabel(day.date)}</span>
@@ -69,6 +91,11 @@
     font-weight: 600;
     font-size: 13px;
     color: var(--fg);
+  }
+
+  .tab.over {
+    outline: 2px dashed var(--accent);
+    background: var(--accent-soft);
   }
 
   .tab[aria-selected='true'] {

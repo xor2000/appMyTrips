@@ -3,61 +3,23 @@ import {
   Email,
   MemberPut,
   TripCreate,
-  TripId,
   TripPatch,
   datesInPeriod,
   diffPeriod,
-  type TripRole,
+  isDayEmpty,
 } from '@mytrips/core';
-import { Hono, type Context, type MiddlewareHandler } from 'hono';
-import type { z } from 'zod';
-import type { AuthEnv } from '../auth';
-import { getDays, getRole, getSnapshot, getTrip, listTrips } from '../db/trips';
-
-type TripsEnv = AuthEnv & { Variables: { role: TripRole } };
-type Level = 'read' | 'write' | 'owner';
-
-/** Charge le rôle de l'utilisateur sur le voyage :id et vérifie le niveau d'accès demandé. */
-function access(level: Level): MiddlewareHandler<TripsEnv> {
-  return async (c, next) => {
-    const id = c.req.param('id') ?? '';
-    // Un non-membre reçoit 404 : il ne doit pas savoir que le voyage existe.
-    if (!TripId.safeParse(id).success) return c.json({ error: 'not_found' }, 404);
-    const role = await getRole(c.env.DB, id, c.get('userEmail'));
-    if (!role) return c.json({ error: 'not_found' }, 404);
-    if (level === 'write' && role === 'viewer') return c.json({ error: 'forbidden' }, 403);
-    if (level === 'owner' && role !== 'owner') return c.json({ error: 'forbidden' }, 403);
-    c.set('role', role);
-    await next();
-  };
-}
-
-/** Corps JSON validé par `schema`, ou réponse 400 prête à renvoyer. */
-async function parseBody<S extends z.ZodType>(
-  c: Context,
-  schema: S,
-): Promise<{ data: z.infer<S> } | { error: Response }> {
-  let raw: unknown;
-  try {
-    raw = await c.req.json();
-  } catch {
-    return { error: c.json({ error: 'invalid_json' }, 400) };
-  }
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: c.json({ error: 'invalid', issues: parsed.error.issues }, 400) };
-  }
-  return { data: parsed.data };
-}
-
-/** Version attendue (en-tête If-Match), ou null si absente ou illisible. */
-function expectedVersion(c: Context): number | null {
-  const raw = c.req.header('if-match')?.replace(/^W\//, '').replaceAll('"', '').trim();
-  const n = raw ? Number(raw) : NaN;
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-const now = () => new Date().toISOString();
+import { Hono, type Context } from 'hono';
+import { getDays, getSnapshot, getTrip, listTrips } from '../db/trips';
+import {
+  access,
+  expectedVersion,
+  now,
+  parseBody,
+  versionConflict,
+  writeWithVersion,
+  type TripsEnv,
+} from './shared';
+import { registerStepRoutes } from './steps';
 
 /** La journée doit finir après son début (heures HH:mm comparables en texte). */
 const dayBoundsOk = (start: string, end: string) => start < end;
@@ -72,32 +34,15 @@ function invalidDayBounds(c: Context) {
   );
 }
 
-/**
- * Exécute `statements` dans une transaction D1, seulement si la version du voyage vaut encore
- * `expected` : la version est incrémentée en premier, et chaque autre requête est conditionnée à la
- * nouvelle version. Renvoie false en cas de conflit (rien n'est alors modifié).
- */
-async function writeWithVersion(
-  db: D1Database,
-  tripId: string,
-  expected: number,
-  tripSet: { sql: string; values: unknown[] } | null,
-  statements: (guard: string, guardValues: unknown[]) => D1PreparedStatement[],
-): Promise<boolean> {
-  const set = tripSet ? `${tripSet.sql}, ` : '';
-  const bump = db
+/** Nombre d'étapes par jour du voyage. */
+async function stepCountsByDay(db: D1Database, tripId: string): Promise<Map<string, number>> {
+  const { results } = await db
     .prepare(
-      `UPDATE trips SET ${set}version = version + 1, updated_at = ? WHERE id = ? AND version = ?`,
+      'SELECT day_id, COUNT(*) AS n FROM steps WHERE trip_id = ? AND day_id IS NOT NULL GROUP BY day_id',
     )
-    .bind(...(tripSet?.values ?? []), now(), tripId, expected);
-  const guard = '(SELECT version FROM trips WHERE id = ?) = ?';
-  const results = await db.batch([bump, ...statements(guard, [tripId, expected + 1])]);
-  return (results[0]?.meta.changes ?? 0) === 1;
-}
-
-async function versionConflict(c: Context<TripsEnv>, tripId: string) {
-  const trip = await getTrip(c.env.DB, tripId);
-  return c.json({ error: 'version_conflict', version: trip?.version ?? null }, 409);
+    .bind(tripId)
+    .all<{ day_id: string; n: number }>();
+  return new Map(results.map((r) => [r.day_id, r.n]));
 }
 
 export const trips = new Hono<TripsEnv>();
@@ -189,8 +134,10 @@ trips.patch('/:id', access('write'), async (c) => {
     );
     toAdd = diff.toAdd;
     const removed = days.filter((d) => diff.toRemove.includes(d.date));
-    // Un jour est « non vide » s'il a des notes (les étapes s'y ajouteront au lot 2).
-    const notEmpty = removed.filter((d) => d.notes.trim() !== '').map((d) => d.date);
+    const counts = await stepCountsByDay(db, id);
+    const notEmpty = removed
+      .filter((d) => !isDayEmpty(d, counts.get(d.id) ?? 0))
+      .map((d) => d.date);
     if (notEmpty.length > 0 && c.req.query('force') !== 'true') {
       return c.json({ error: 'days_not_empty', dates: notEmpty }, 409);
     }
@@ -198,6 +145,10 @@ trips.patch('/:id', access('write'), async (c) => {
   }
 
   const ok = await writeWithVersion(db, id, expected, tripSet, (guard, g) => [
+    // Les étapes des jours supprimés passent dans la liste d'idées (dossiers compris).
+    ...removedIds.map((dayId) =>
+      db.prepare(`UPDATE steps SET day_id = NULL WHERE day_id = ? AND ${guard}`).bind(dayId, ...g),
+    ),
     ...removedIds.map((dayId) =>
       db.prepare(`DELETE FROM days WHERE id = ? AND ${guard}`).bind(dayId, ...g),
     ),
@@ -215,6 +166,8 @@ trips.delete('/:id', access('owner'), async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   await db.batch([
+    db.prepare('DELETE FROM steps WHERE trip_id = ?').bind(id),
+    db.prepare('DELETE FROM stays WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM days WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM trip_members WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM trips WHERE id = ?').bind(id),
@@ -282,3 +235,5 @@ trips.delete('/:id/members/:email', access('owner'), async (c) => {
     .run();
   return c.body(null, 204);
 });
+
+registerStepRoutes(trips);

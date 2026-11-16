@@ -77,6 +77,16 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   - autre utilisateur via `browser.newContext({ extraHTTPHeaders: { 'x-dev-user-email': … } })` ;
   - `getByLabel` fait une recherche partielle insensible à la casse : utiliser `{ exact: true }`
     pour des libellés courts (« Du » correspond aussi à « Nom du voyage »).
+- **Écritures sur un voyage (front)** : toujours passer par `apply()` de la page voyage (file
+  `createSerialQueue`) et lire la version au moment de l'exécution (`() => updateStep(id, …, version(), …)`).
+  Deux écritures rapprochées avec la même version donnent un faux conflit.
+- **Zones de dépôt** (`DropZone.svelte`) : hauteur fixe. Une zone qui grandit pendant un glisser décale
+  la liste sous le curseur et le dépôt tombe ailleurs (constaté en e2e).
+- **E2E et géocodage** : Photon est appelé par le Worker, pas par le navigateur ; Playwright lance un
+  Photon factice (`e2e/mock-photon.mjs`, port 8798) et passe `PHOTON_URL` à `wrangler dev`. Après un
+  glisser-déposer, attendre que le résultat soit affiché avant l'action suivante.
+- **Routes d'étapes** (`apps/api/src/routes/steps.ts`) : utilitaires communs (`access`, `parseBody`,
+  `requireVersion`, `writeWithVersion`) dans `routes/shared.ts`.
 - **Ordre des routes Hono** : une route déclarée avant `app.use('*', accessAuth())` reste publique
   (c'est voulu pour `/api/health`). Toute nouvelle route doit être déclarée **après** le middleware.
 - **Déploiement** : `pnpm run deploy` (build + `wrangler deploy`). `pnpm deploy` sans `run` est une

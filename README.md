@@ -36,6 +36,9 @@ pnpm dev
 - Front : http://localhost:5173 (Vite). Les appels `/api` sont relayés vers le Worker local.
 - API : http://localhost:8787 (`wrangler dev`).
 
+La recherche de lieux utilise Photon (`https://photon.komoot.io`) via l'API ; la variable `PHOTON_URL`
+de `apps/api/.dev.vars` permet d'en changer.
+
 Si le port 8787 est déjà pris, lancer l'API sur un autre port et indiquer son URL au front :
 
 ```bash

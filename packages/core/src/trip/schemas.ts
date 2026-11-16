@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Stay, Step } from '../step/schemas';
 import { toDayNumber } from './days';
 
 /** Durée maximale d'un voyage, en jours. */
@@ -148,4 +149,7 @@ export interface TripSnapshot {
   role: TripRole;
   days: Day[];
   members: Member[];
+  /** Étapes et dossiers de tout le voyage (dayId null = liste d'idées). */
+  steps: Step[];
+  stays: Stay[];
 }

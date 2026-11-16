@@ -1,15 +1,50 @@
 <script lang="ts">
-  import type { Role, TripSnapshot } from '@mytrips/core';
+  import {
+    dayTimeline,
+    type Place,
+    type Role,
+    type Step,
+    type StepPatch,
+    type StepType,
+    type StayItem,
+    type TripSnapshot,
+  } from '@mytrips/core';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ApiError, deleteMember, getTrip, putMember, updateTrip } from '#lib/api.ts';
+  import {
+    ApiError,
+    createStay,
+    createStep,
+    deleteMember,
+    deleteStay,
+    deleteStep,
+    getTrip,
+    putMember,
+    reversePlace,
+    searchPlaces,
+    updateStay,
+    updateStep,
+    updateTrip,
+    type StepInput,
+  } from '#lib/api.ts';
   import { dayTitle, formatPeriod, plural } from '#lib/format.ts';
+  import { mapPoints, type MapPoint } from '#lib/map/points.ts';
+  import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
+  import { positionAt, positionShift } from '#lib/steps/moves.ts';
+  import { createSerialQueue } from '#lib/serial.ts';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import DayTabs from '#lib/components/DayTabs.svelte';
   import ShareDialog from '#lib/components/ShareDialog.svelte';
   import SplitPane from '#lib/components/SplitPane.svelte';
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
   import TripMap from '#lib/components/TripMap.svelte';
+  import AddPlaceDialog from '#lib/components/steps/AddPlaceDialog.svelte';
+  import DeleteGroupDialog from '#lib/components/steps/DeleteGroupDialog.svelte';
+  import GroupDialog from '#lib/components/steps/GroupDialog.svelte';
+  import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
+  import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
+  import StepEditor from '#lib/components/steps/StepEditor.svelte';
+  import Timeline from '#lib/components/steps/Timeline.svelte';
 
   let snapshot = $state<TripSnapshot | null>(null);
   let status = $state<'loading' | 'ready' | 'not_found' | 'error'>('loading');
@@ -20,13 +55,41 @@
   let sharing = $state(false);
   /** Modification de période en attente de confirmation (jours non vides à supprimer). */
   let pendingPeriod = $state<{ values: TripFormValues; dates: string[] } | null>(null);
+  /** Fenêtre d'ajout ouverte : lieu du jour, idée, dossier ou séjour. */
+  let adding = $state<
+    { kind: 'place' | 'idea'; type: StepType | null } | { kind: 'group' | 'stay' } | null
+  >(null);
+  let editingStepId = $state<string | null>(null);
+  let editingStayId = $state<string | null>(null);
+  let deletingGroup = $state<Step | null>(null);
+  /** Étape (ou dossier vide) en attente de confirmation de suppression. */
+  let deletingStep = $state<Step | null>(null);
+  let highlighted = $state<string | null>(null);
+  let mapCenter = $state<{ lat: number; lng: number } | null>(null);
+  const writes = createSerialQueue();
 
   const id = $derived(page.params.id ?? '');
   const trip = $derived(snapshot?.trip);
   const canEdit = $derived(snapshot?.role === 'owner' || snapshot?.role === 'editor');
   const isOwner = $derived(snapshot?.role === 'owner');
   const days = $derived(snapshot?.days ?? []);
+  const steps = $derived(snapshot?.steps ?? []);
+  const stays = $derived(snapshot?.stays ?? []);
   const day = $derived(days.find((d) => d.id === selectedDay) ?? null);
+  const items = $derived(
+    day
+      ? dayTimeline(
+          day.date,
+          steps.filter((s) => s.dayId === day.id),
+          stays,
+        )
+      : [],
+  );
+  const ideas = $derived(steps.filter((s) => s.dayId === null && s.parentId === null));
+  const points = $derived(mapPoints({ days, steps, stays }, selectedDay));
+  const labels = $derived(new Map(points.map((p) => [p.key, p.label])));
+  const editingStep = $derived(steps.find((s) => s.id === editingStepId) ?? null);
+  const editingStay = $derived(stays.find((s) => s.id === editingStayId) ?? null);
 
   async function load() {
     try {
@@ -47,20 +110,34 @@
   });
 
   /** Applique une modification ; sur conflit de version, recharge le voyage et prévient. */
-  async function apply(action: () => Promise<TripSnapshot | void>) {
-    try {
-      const next = await action();
-      snapshot = next ?? (await getTrip(id));
-      notice = null;
-    } catch (e) {
-      if (e instanceof ApiError && e.code === 'version_conflict') {
-        await load();
-        notice = e.message;
-        return;
+  function apply(action: () => Promise<TripSnapshot | void>) {
+    // Écritures en file : chacune part avec la version du voyage laissée par la précédente.
+    return writes(async () => {
+      try {
+        const next = await action();
+        snapshot = next ?? (await getTrip(id));
+        notice = null;
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'version_conflict') {
+          await load();
+          notice = e.message;
+          return;
+        }
+        throw e;
       }
-      throw e;
+    });
+  }
+
+  /** Comme apply, mais affiche l'erreur dans le bandeau (actions sans fenêtre : glisser, monter…). */
+  async function applyQuietly(action: () => Promise<TripSnapshot | void>) {
+    try {
+      await apply(action);
+    } catch (e) {
+      notice = e instanceof Error ? e.message : String(e);
     }
   }
+
+  const version = () => snapshot?.trip.version ?? 0;
 
   async function saveTrip(values: TripFormValues, force = false) {
     if (!trip) return;
@@ -84,6 +161,124 @@
 
   async function removeMember(email: string) {
     await apply(() => deleteMember(id, email));
+  }
+
+  /** Recherche biaisée vers le centre de la carte. */
+  const search = (q: string) => searchPlaces(q, mapCenter);
+
+  async function addPlace(place: Place, type: StepType, dayId: string | null) {
+    const input: StepInput = {
+      dayId,
+      type,
+      name: place.name,
+      lat: place.lat,
+      lng: place.lng,
+      address: place.address,
+      osmRef: place.osmRef,
+    };
+    await apply(() => createStep(id, version(), input));
+    adding = null;
+  }
+
+  async function addGroup(name: string) {
+    await apply(() => createStep(id, version(), { dayId: selectedDay, kind: 'group', name }));
+    adding = null;
+  }
+
+  async function saveStay(values: StayValues) {
+    const stayId = editingStayId;
+    if (stayId) await apply(() => updateStay(id, stayId, version(), values));
+    else await apply(() => createStay(id, version(), values));
+    adding = null;
+    editingStayId = null;
+  }
+
+  async function removeStay() {
+    const stayId = editingStayId;
+    if (!stayId) return;
+    await applyQuietly(() => deleteStay(id, stayId, version()));
+    editingStayId = null;
+  }
+
+  async function saveStep(patch: StepPatch) {
+    const stepId = editingStepId;
+    if (!stepId) return;
+    await apply(() => updateStep(id, stepId, version(), patch));
+    editingStepId = null;
+  }
+
+  function askDelete(step: Step) {
+    editingStepId = null;
+    const children = steps.filter((s) => s.parentId === step.id).length;
+    // Pas encore d'annulation (lot 5) : toute suppression est confirmée.
+    if (step.kind === 'group' && children > 0) deletingGroup = step;
+    else deletingStep = step;
+  }
+
+  async function confirmDeleteStep() {
+    const step = deletingStep;
+    if (!step) return;
+    await apply(() => deleteStep(id, step.id, version()));
+    deletingStep = null;
+  }
+
+  async function deleteGroup(children: 'keep' | 'delete') {
+    const group = deletingGroup;
+    if (!group) return;
+    await apply(() => deleteStep(id, group.id, version(), children));
+    deletingGroup = null;
+  }
+
+  /** Frères d'une étape : même jour, même dossier. */
+  function siblingsOf(dayId: string | null, parentId: string | null) {
+    return steps.filter((s) => s.dayId === dayId && s.parentId === parentId);
+  }
+
+  function move(step: Step, delta: -1 | 1) {
+    const position = positionShift(siblingsOf(step.dayId, step.parentId), step.id, delta);
+    if (position) applyQuietly(() => updateStep(id, step.id, version(), { position }));
+  }
+
+  function drop(stepId: string, target: DropTarget) {
+    endDrag();
+    const dayId = target.dayId !== undefined ? target.dayId : selectedDay;
+    const position = positionAt(siblingsOf(dayId, target.parentId), target.index, stepId);
+    applyQuietly(() =>
+      updateStep(id, stepId, version(), { dayId, parentId: target.parentId, position }),
+    );
+  }
+
+  /** Dépôt sur l'onglet d'un jour : à la fin de ce jour. */
+  function dropOnDay(stepId: string, dayId: string) {
+    drop(stepId, { dayId, parentId: null, index: siblingsOf(dayId, null).length });
+  }
+
+  /** Clic droit sur la carte : lieu le plus proche, ajouté au jour affiché (ou aux idées). */
+  async function addHere(point: { lat: number; lng: number }) {
+    const place = await reversePlace(point).catch(() => null);
+    const name = place?.name ?? 'Point sur la carte';
+    await applyQuietly(() =>
+      createStep(id, version(), {
+        dayId: selectedDay,
+        type: place?.type ?? 'other',
+        name,
+        lat: point.lat,
+        lng: point.lng,
+        address: place?.address ?? null,
+        osmRef: place?.osmRef ?? null,
+      }),
+    );
+  }
+
+  function pickPoint(point: MapPoint) {
+    highlighted = point.key;
+    document
+      .querySelector(`[data-step-id="${point.stepId}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function editStay(item: StayItem) {
+    if (canEdit) editingStayId = item.stay.id;
   }
 </script>
 
@@ -130,7 +325,12 @@
           {/if}
         </div>
       </div>
-      <DayTabs days={snapshot.days} selected={selectedDay} onSelect={(d) => (selectedDay = d)} />
+      <DayTabs
+        days={snapshot.days}
+        selected={selectedDay}
+        onSelect={(d) => (selectedDay = d)}
+        onDropStep={canEdit ? dropOnDay : undefined}
+      />
       {#if notice}
         <p class="notice" role="status">{notice}</p>
       {/if}
@@ -141,34 +341,88 @@
         {#snippet left()}
           <section class="panel">
             {#if day}
-              <h2>{dayTitle(day.date)}</h2>
-              <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
+              <div class="day-head">
+                <h2>{dayTitle(day.date)}</h2>
+                <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
+              </div>
               {#if day.notes}
                 <p class="notes">{day.notes}</p>
               {/if}
-              <div class="empty-day">
-                <p>Aucune étape pour ce jour.</p>
-                <p class="muted">
-                  L’ajout d’étapes (hôtels, visites, restaurants…) arrive bientôt.
-                </p>
+              <div data-testid="day-timeline">
+                <Timeline
+                  {items}
+                  {labels}
+                  {canEdit}
+                  {highlighted}
+                  onEdit={(s) => (editingStepId = s.id)}
+                  onEditStay={editStay}
+                  onMove={move}
+                  onDelete={askDelete}
+                  onHover={(k) => (highlighted = k)}
+                  onDrop={drop}
+                />
               </div>
+              {#if canEdit}
+                <div class="add-bar">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    onclick={() => (adding = { kind: 'place', type: null })}>Ajouter un lieu</button
+                  >
+                  <button
+                    type="button"
+                    class="btn btn-soft"
+                    onclick={() => (adding = { kind: 'stay' })}
+                  >
+                    Ajouter un séjour
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-soft"
+                    onclick={() => (adding = { kind: 'group' })}
+                  >
+                    Nouveau dossier
+                  </button>
+                </div>
+              {/if}
             {:else}
               <h2>Tout le voyage</h2>
               <ol class="day-list">
                 {#each days as d, i (d.id)}
+                  {@const count = steps.filter((s) => s.dayId === d.id && s.kind === 'step').length}
                   <li>
                     <button type="button" onclick={() => (selectedDay = d.id)}>
                       <b>J{i + 1}</b>
-                      <span>{dayTitle(d.date)}</span>
+                      <span class="grow">{dayTitle(d.date)}</span>
+                      <span class="count">{plural(count, 'étape')}</span>
                     </button>
                   </li>
                 {/each}
               </ol>
             {/if}
+            <IdeasPanel
+              {ideas}
+              {canEdit}
+              {highlighted}
+              onAdd={() => (adding = { kind: 'idea', type: null })}
+              onEdit={(s) => (editingStepId = s.id)}
+              onMove={move}
+              onDelete={askDelete}
+              onHover={(k) => (highlighted = k)}
+              onDrop={drop}
+            />
           </section>
         {/snippet}
         {#snippet right()}
-          <TripMap />
+          <TripMap
+            {points}
+            {highlighted}
+            fitKey={selectedDay ?? 'all'}
+            onHover={(k) => (highlighted = k)}
+            onPick={pickPoint}
+            onAddHere={canEdit ? addHere : undefined}
+            onCenterChange={(c) => (mapCenter = c)}
+          />
         {/snippet}
       </SplitPane>
     </div>
@@ -186,7 +440,7 @@
     {@const pending = pendingPeriod}
     <ConfirmDialog
       title="Supprimer des jours ?"
-      message={`La nouvelle période retire ${plural(pending.dates.length, 'jour')} contenant des informations (${pending.dates.map(dayTitle).join(', ')}). Elles seront perdues.`}
+      message={`La nouvelle période retire ${plural(pending.dates.length, 'jour')} non vide${pending.dates.length > 1 ? 's' : ''} (${pending.dates.map(dayTitle).join(', ')}). Leurs étapes passeront dans les idées ; leurs notes seront perdues.`}
       confirmLabel="Supprimer ces jours"
       onConfirm={() => saveTrip(pending.values, true)}
       onCancel={() => (pendingPeriod = null)}
@@ -199,6 +453,64 @@
       onAdd={addMember}
       onRemove={removeMember}
       onClose={() => (sharing = false)}
+    />
+  {/if}
+
+  {#if adding?.kind === 'place' || adding?.kind === 'idea'}
+    {@const forIdea = adding.kind === 'idea'}
+    <AddPlaceDialog
+      title={forIdea ? 'Ajouter une idée' : 'Ajouter un lieu'}
+      {search}
+      initialType={adding.type}
+      onPick={(place, type) => addPlace(place, type, forIdea ? null : selectedDay)}
+      onClose={() => (adding = null)}
+    />
+  {/if}
+
+  {#if adding?.kind === 'group'}
+    <GroupDialog onCreate={addGroup} onClose={() => (adding = null)} />
+  {/if}
+
+  {#if adding?.kind === 'stay' || editingStay}
+    <StayDialog
+      stay={editingStay ?? undefined}
+      defaultDate={day?.date ?? trip.startDate}
+      {search}
+      onSave={saveStay}
+      onDelete={editingStay ? removeStay : undefined}
+      onClose={() => {
+        adding = null;
+        editingStayId = null;
+      }}
+    />
+  {/if}
+
+  {#if editingStep}
+    <StepEditor
+      step={editingStep}
+      days={snapshot.days}
+      onSave={saveStep}
+      onDelete={() => askDelete(editingStep)}
+      onClose={() => (editingStepId = null)}
+    />
+  {/if}
+
+  {#if deletingStep}
+    <ConfirmDialog
+      title={deletingStep.kind === 'group' ? 'Supprimer le dossier ?' : 'Supprimer l’étape ?'}
+      message={`« ${deletingStep.name} » sera supprimé${deletingStep.kind === 'group' ? '' : 'e'}, avec ses notes et sa réservation.`}
+      confirmLabel="Supprimer"
+      onConfirm={confirmDeleteStep}
+      onCancel={() => (deletingStep = null)}
+    />
+  {/if}
+
+  {#if deletingGroup}
+    <DeleteGroupDialog
+      name={deletingGroup.name}
+      childCount={steps.filter((s) => s.parentId === deletingGroup?.id).length}
+      onConfirm={deleteGroup}
+      onCancel={() => (deletingGroup = null)}
     />
   {/if}
 {/if}
@@ -299,12 +611,19 @@
   .panel {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-4);
     padding: var(--space-6);
   }
 
   .panel h2 {
     font-size: 20px;
+  }
+
+  .day-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
   }
 
   .hours {
@@ -319,20 +638,10 @@
     white-space: pre-wrap;
   }
 
-  .empty-day {
-    padding: var(--space-6);
-    border: 2px dashed var(--line);
-    border-radius: var(--radius-lg);
-    text-align: center;
-  }
-
-  .empty-day p {
-    margin: 0;
-  }
-
-  .muted {
-    color: var(--muted);
-    font-size: 13px;
+  .add-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   .day-list {
@@ -362,5 +671,14 @@
   .day-list b {
     font-family: var(--font-display);
     color: var(--accent-strong);
+  }
+
+  .grow {
+    flex: 1;
+  }
+
+  .count {
+    font-size: 12px;
+    color: var(--muted);
   }
 </style>
