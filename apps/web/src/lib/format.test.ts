@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countdownLabel, dayTabLabel, formatPeriod } from './format';
+import { countdownLabel, dayTabLabel, formatDuration, formatPeriod } from './format';
 
 describe('formatPeriod', () => {
   it('regroupe le mois et l’année quand ils sont communs', () => {
@@ -41,5 +41,15 @@ describe('countdownLabel', () => {
 describe('dayTabLabel', () => {
   it('donne le jour de la semaine et la date courte', () => {
     expect(dayTabLabel('2026-07-10')).toBe('ven. 10 juil.');
+  });
+});
+
+describe('formatDuration', () => {
+  it('écrit les durées en heures et minutes', () => {
+    expect(formatDuration(0)).toBe('0 min');
+    expect(formatDuration(45)).toBe('45 min');
+    expect(formatDuration(60)).toBe('1 h');
+    expect(formatDuration(90)).toBe('1 h 30');
+    expect(formatDuration(125)).toBe('2 h 05');
   });
 });

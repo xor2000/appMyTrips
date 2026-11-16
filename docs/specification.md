@@ -84,38 +84,55 @@ Monorepo pnpm :
 | ---------------- | ------------------------------------------------ |
 | `0001_init.sql`  | Table technique `meta (key TEXT PK, value TEXT)` |
 | `0002_trips.sql` | `trips`, `trip_members`, `days`                  |
+| `0003_steps.sql` | `steps` (étapes et dossiers), `stays` (séjours)  |
 
 - **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
 - **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
 - **`days`** : `id`, `trip_id`, `date` (unique par voyage), `day_start` et `day_end` (NULL = heures du voyage), `notes`.
+- **`steps`** : étapes et dossiers.
+  - Placement : `id`, `trip_id`, `day_id` (NULL = liste d'idées), `parent_id` (dossier), `position` (clé d'ordre fractionnaire parmi les frères), `kind` (`step` | `group`).
+  - Contenu : `type` (16 types, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
+- **`stays`** : séjours. `id`, `trip_id`, `name`, `lat`, `lng`, `address`, `check_in_date`/`check_in_time` (défaut 17:00), `check_out_date`/`check_out_time` (défaut 10:00), `booking_ref`, `notes`.
 
 **Règles** :
 
 - Les jours suivent la période du voyage : à la création, et à chaque changement de dates, les jours manquants sont créés et les jours hors période supprimés. Les jours conservés gardent leur identifiant et leurs notes.
-- Un jour est **non vide** s'il a des notes. Le lot 2 étendra cette règle aux étapes, qui passeront alors dans la liste d'idées. Supprimer des jours non vides demande `?force=true`, sinon la réponse est `409 days_not_empty`.
+- Un jour est **non vide** s'il a des notes ou des étapes. Supprimer des jours non vides demande `?force=true`, sinon la réponse est `409 days_not_empty` ; avec `force`, leurs étapes (dossiers compris) passent dans la liste d'idées et leurs notes sont perdues.
+- **Ordre** : clés fractionnaires (`fractional-indexing`) comparées comme des chaînes ; un déplacement ne réécrit que l'élément déplacé. Égalité départagée par l'identifiant.
+- **Dossiers** : un seul niveau. Un dossier est à la racine d'un jour (ou des idées) ; ses étapes sont du même jour. Déplacer un dossier de jour emporte ses étapes ; changer une étape de jour sans préciser de dossier la sort de son dossier. Supprimer un dossier non vide exige `?children=keep` (ses étapes reprennent sa place, dans l'ordre) ou `?children=delete`.
+- **Séjours** : non stockés jour par jour. Un séjour couvre les nuits de `check_in_date` à `check_out_date` (exclu). Le matin d'un jour dont la nuit précédente est couverte, il apparaît en « départ » (ou « check-out » le dernier jour) ; le soir d'un jour dont la nuit suivante est couverte, en « retour » (ou « check-in » le premier jour). Clé d'occurrence : `stay:<id>:<date>:start|end`.
+- **Timeline d'un jour** (`core.dayTimeline`) : séjour du matin, racines triées (dossiers avec leurs étapes triées), séjour du soir. `core.dayRoute` l'aplatit en points d'entrée/sortie pour la carte et les trajets (lot 4).
 - Durée maximale d'un voyage : 90 jours. Une journée doit finir après son début : la règle est vérifiée avec les valeurs existantes quand un seul des deux champs change.
 - **Verrou optimiste** : toute modification du voyage ou d'un jour exige `If-Match: <version>` (428 sinon) et incrémente `trips.version`, dans la même transaction D1 que la modification. Une version périmée donne `409 { error: 'version_conflict', version }`. Les changements de membres ne changent pas la version.
 
-Les tables `steps`, `stays`, `legs` et les caches arrivent aux lots suivants.
+Les tables `legs` et les caches arrivent aux lots suivants.
 
 ## 5. Surface API
 
-| Méthode | Route                           | Droit        | Réponse                                           |
-| ------- | ------------------------------- | ------------ | ------------------------------------------------- |
-| GET     | `/api/health`                   | aucun        | `200 { ok: true }`                                |
-| GET     | `/api/me`                       | connecté     | `200 { email }`                                   |
-| GET     | `/api/trips`                    | connecté     | `200 { trips: TripSummary[] }` (avec rôle)        |
-| POST    | `/api/trips`                    | connecté     | `201 TripSnapshot`                                |
-| GET     | `/api/trips/:id`                | lecture      | `200 TripSnapshot` (voyage, rôle, jours, membres) |
-| PATCH   | `/api/trips/:id[?force=true]`   | modification | `200 TripSnapshot` · `If-Match` obligatoire       |
-| DELETE  | `/api/trips/:id`                | propriétaire | `204`                                             |
-| PATCH   | `/api/trips/:id/days/:dayId`    | modification | `200 TripSnapshot` · `If-Match` obligatoire       |
-| PUT     | `/api/trips/:id/members/:email` | propriétaire | `204` · corps `{ role }`                          |
-| DELETE  | `/api/trips/:id/members/:email` | propriétaire | `204`                                             |
+| Méthode | Route                                        | Droit        | Réponse                                                                                   |
+| ------- | -------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| GET     | `/api/health`                                | aucun        | `200 { ok: true }`                                                                        |
+| GET     | `/api/me`                                    | connecté     | `200 { email }`                                                                           |
+| GET     | `/api/trips`                                 | connecté     | `200 { trips: TripSummary[] }` (avec rôle)                                                |
+| POST    | `/api/trips`                                 | connecté     | `201 TripSnapshot`                                                                        |
+| GET     | `/api/trips/:id`                             | lecture      | `200 TripSnapshot` (voyage, rôle, jours, membres, étapes, séjours)                        |
+| PATCH   | `/api/trips/:id[?force=true]`                | modification | `200 TripSnapshot` · `If-Match` obligatoire                                               |
+| DELETE  | `/api/trips/:id`                             | propriétaire | `204`                                                                                     |
+| PATCH   | `/api/trips/:id/days/:dayId`                 | modification | `200 TripSnapshot` · `If-Match` obligatoire                                               |
+| PUT     | `/api/trips/:id/members/:email`              | propriétaire | `204` · corps `{ role }`                                                                  |
+| DELETE  | `/api/trips/:id/members/:email`              | propriétaire | `204`                                                                                     |
+| POST    | `/api/trips/:id/steps`                       | modification | `201 TripSnapshot` · `If-Match` · position absente = fin de liste                         |
+| PATCH   | `/api/trips/:id/steps/:stepId`               | modification | `200 TripSnapshot` · `If-Match` · champs et déplacement (`dayId`, `parentId`, `position`) |
+| DELETE  | `/api/trips/:id/steps/:stepId[?children=keep | delete]`     | modification                                                                              | `200 TripSnapshot` · `If-Match` |
+| POST    | `/api/trips/:id/stays`                       | modification | `201 TripSnapshot` · `If-Match`                                                           |
+| PATCH   | `/api/trips/:id/stays/:stayId`               | modification | `200 TripSnapshot` · `If-Match`                                                           |
+| DELETE  | `/api/trips/:id/stays/:stayId`               | modification | `200 TripSnapshot` · `If-Match`                                                           |
+| GET     | `/api/geocode?q=&lat=&lng=`                  | connecté     | `200 { results: Place[] }` (Photon, biais vers lat/lng)                                   |
+| GET     | `/api/geocode/reverse?lat=&lng=`             | connecté     | `200 { result: Place                                                                      | null }`                         |
 
-- **Erreurs** : `400 invalid` (avec `issues`) ou `invalid_json`, `401`, `403 forbidden`, `404 not_found`, `409 version_conflict` ou `days_not_empty`, `428 version_required`.
+- **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `428 version_required` ; `502 geocoder_unavailable`.
 - Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
-- Les schémas (`TripCreate`, `TripPatch`, `DayPatch`, `MemberPut`) et les types de réponse sont dans `packages/core`.
+- Les schémas (`TripCreate`, `TripPatch`, `DayPatch`, `MemberPut`, `StepCreate`, `StepPatch`, `StayCreate`, `StayPatch`) et les types de réponse (`Step`, `Stay`, `Place`…) sont dans `packages/core`.
 
 ## 6. Intégrations externes
 
@@ -125,9 +142,11 @@ Les tables `steps`, `stays`, `legs` et les caches arrivent aux lots suivants.
   - Les URL sont centralisées dans `apps/web/src/lib/map/styles.ts`.
   - Le worker de MapLibre est émis par Vite et déclaré avec `setWorkerUrl`.
 
+- **Géocodage** : Photon (Komoot), appelé par le Worker (`/api/geocode`), en français, User-Agent identifié sans donnée personnelle. URL configurable par la variable `PHOTON_URL` (défaut `https://photon.komoot.io`). Le type d'étape est deviné depuis les tags OSM (`core.stepTypeFromOsm`).
+- **Fuseau horaire** : déduit du point à l'enregistrement d'une étape (`@photostructure/tz-lookup`, côté Worker).
+
 Prévues :
 
-- Photon (géocodage) ;
 - OpenRouteService et Transitous (routage) ;
 - Overpass, Geoapify et Wikipédia (lieux).
 
@@ -149,11 +168,16 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 - **Données en ligne d'abord** : D1 fait foi, hors ligne en lecture seule (lot 7).
 - **Fabrique `createApp({ auth })`** (`apps/api/src/app.ts`) : les tests d'API injectent une identité, et tournent sur la vraie D1 de workerd, migrations appliquées.
 - **Pas de couleur stockée par voyage** (prévue dans le plan) : la teinte de la carte de voyage est dérivée de l'identifiant, ce qui évite un champ et un sélecteur sans valeur métier.
+- **Glisser-déposer HTML5 natif** (plutôt que `svelte-dnd-action` prévu dans le plan) : zones de dépôt imbriquées simples (jour, dossier, onglet de jour, idées) et e2e fiables avec Playwright ; complété par des actions monter/descendre et le choix du jour dans l'éditeur.
+- **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
 
 ## 9. Limites connues et reste à faire
 
 - **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour que le partage fonctionne avec d'autres personnes, la politique doit devenir une liste d'e-mails (Zero Trust → Access → Applications).
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
-- **Carte** : sans étapes, la carte montre une vue d'ensemble de l'Europe ; le recentrage sur le voyage arrive avec les étapes (lot 2).
-- **Lots restants** : 2. étapes ; 3. lieux ; 4. trajets ; 5. horaires ; 6. GPX ; 7. hors ligne.
+- **Migration `0003_steps.sql`** à appliquer en production avant de déployer le lot 2.
+- **Ranger une étape dans un dossier** ne se fait qu'au glisser-déposer (pas d'équivalent clavier ; monter/descendre et changer de jour ont le leur).
+- **Suppression** : confirmée, mais sans annulation avant le lot 5.
+- **Géocodage** : Photon est fourni sans garantie ; certains lieux reviennent en type « Autre » (tags OSM non reconnus) : l'utilisateur peut imposer le type à l'ajout ou le changer ensuite.
+- **Lots restants** : 3. lieux ; 4. trajets ; 5. horaires ; 6. GPX ; 7. hors ligne.

@@ -6,6 +6,8 @@ export interface Bindings {
   ACCESS_TEAM_DOMAIN?: string;
   /** Audience (AUD) de l'application Access. Sa présence désactive DEV_USER_EMAIL. */
   ACCESS_AUD?: string;
+  /** URL du service Photon (géocodage) ; défaut https://photon.komoot.io. */
+  PHOTON_URL?: string;
   /** Développement local uniquement : e-mail utilisé sans JWT quand ACCESS_AUD est absent. */
   DEV_USER_EMAIL?: string;
 }

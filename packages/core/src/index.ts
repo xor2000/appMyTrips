@@ -10,3 +10,8 @@ export type Email = z.infer<typeof Email>;
 
 export * from './trip/days';
 export * from './trip/schemas';
+export * from './step/order';
+export * from './step/schemas';
+export * from './step/timeline';
+export * from './step/types';
+export * from './step/osm';

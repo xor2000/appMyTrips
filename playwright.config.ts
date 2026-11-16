@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 8788;
+const PHOTON_PORT = 8798;
 
 // Les e2e tournent sur le build de production servi par le Worker (wrangler dev),
 // pour que le service worker et le fallback SPA se comportent comme en production.
@@ -15,15 +16,24 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    // Base D1 locale dédiée aux e2e (.wrangler/e2e), migrée avant le démarrage.
-    command: [
-      'pnpm build',
-      'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
-      `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test`,
-    ].join(' && '),
-    url: `http://localhost:${PORT}/api/health`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      // Photon factice : le géocodage est appelé par le Worker, pas par le navigateur.
+      command: `node e2e/mock-photon.mjs`,
+      url: `http://localhost:${PHOTON_PORT}/health`,
+      env: { MOCK_PHOTON_PORT: String(PHOTON_PORT) },
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // Base D1 locale dédiée aux e2e (.wrangler/e2e), migrée avant le démarrage.
+      command: [
+        'pnpm build',
+        'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
+        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test --var PHOTON_URL:http://localhost:${PHOTON_PORT}`,
+      ].join(' && '),
+      url: `http://localhost:${PORT}/api/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+    },
+  ],
 });

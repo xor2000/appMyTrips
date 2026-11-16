@@ -1,4 +1,5 @@
 import type { Day, Member, Role, Trip, TripRole, TripSnapshot, TripSummary } from '@mytrips/core';
+import { getStays, getSteps } from './steps';
 
 interface TripRow {
   id: string;
@@ -90,13 +91,15 @@ export async function getSnapshot(
   tripId: string,
   role: TripRole,
 ): Promise<TripSnapshot> {
-  const [trip, days, members] = await Promise.all([
+  const [trip, days, members, steps, stays] = await Promise.all([
     getTrip(db, tripId),
     getDays(db, tripId),
     getMembers(db, tripId),
+    getSteps(db, tripId),
+    getStays(db, tripId),
   ]);
   if (!trip) throw new Error(`Voyage ${tripId} introuvable`);
-  return { trip, role, days, members };
+  return { trip, role, days, members, steps, stays };
 }
 
 /** Voyages possédés par `email` ou partagés avec lui, triés par date de début. */

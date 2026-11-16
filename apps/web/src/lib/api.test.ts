@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  createStay,
+  createStep,
+  deleteStay,
+  deleteStep,
+  reversePlace,
+  searchPlaces,
+  updateStay,
+  updateStep,
   createTrip,
   deleteMember,
   deleteTrip,
@@ -107,5 +115,71 @@ describe('client des voyages', () => {
       code: 'days_not_empty',
       body: { dates: ['2026-07-12'] },
     });
+  });
+});
+
+describe('client des étapes et séjours', () => {
+  it('ajoute une étape avec If-Match', async () => {
+    const fetcher = json(201, {});
+    await createStep('t1', 2, { dayId: null, type: 'museum', name: 'X', lat: 1, lng: 2 }, fetcher);
+    const [url, init] = firstCall(fetcher);
+    expect(url).toBe('/api/trips/t1/steps');
+    expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('if-match')).toBe('2');
+  });
+
+  it('modifie une étape', async () => {
+    const fetcher = json(200, {});
+    await updateStep('t1', 's1', 3, { durationMin: 30 }, fetcher);
+    const [url, init] = firstCall(fetcher);
+    expect(url).toBe('/api/trips/t1/steps/s1');
+    expect(init.method).toBe('PATCH');
+    expect(new Headers(init.headers).get('if-match')).toBe('3');
+  });
+
+  it('supprime un dossier en précisant le sort de ses étapes', async () => {
+    const fetcher = json(200, {});
+    await deleteStep('t1', 'g1', 4, 'keep', fetcher);
+    expect(firstCall(fetcher)[0]).toBe('/api/trips/t1/steps/g1?children=keep');
+    const plain = json(200, {});
+    await deleteStep('t1', 's1', 4, undefined, plain);
+    expect(firstCall(plain)[0]).toBe('/api/trips/t1/steps/s1');
+  });
+
+  it('gère les séjours', async () => {
+    const create = json(201, {});
+    await createStay(
+      't1',
+      1,
+      { name: 'H', lat: 1, lng: 2, checkInDate: '2026-07-10', checkOutDate: '2026-07-11' },
+      create,
+    );
+    expect(firstCall(create)[0]).toBe('/api/trips/t1/stays');
+    const update = json(200, {});
+    await updateStay('t1', 'h1', 2, { name: 'H2' }, update);
+    expect(firstCall(update)[0]).toBe('/api/trips/t1/stays/h1');
+    const del = json(200, {});
+    await deleteStay('t1', 'h1', 3, del);
+    expect(firstCall(del)[1].method).toBe('DELETE');
+  });
+});
+
+describe('recherche de lieux', () => {
+  it('cherche avec le centre de la carte', async () => {
+    const fetcher = json(200, { results: [{ name: 'Louvre' }] });
+    expect(await searchPlaces('Musée du Louvre', { lat: 48.8, lng: 2.3 }, fetcher)).toEqual([
+      { name: 'Louvre' },
+    ]);
+    const url = new URL(firstCall(fetcher)[0], 'http://x');
+    expect(url.pathname).toBe('/api/geocode');
+    expect(url.searchParams.get('q')).toBe('Musée du Louvre');
+    expect(url.searchParams.get('lat')).toBe('48.8');
+    expect(url.searchParams.get('lng')).toBe('2.3');
+  });
+
+  it('géocode un point', async () => {
+    const fetcher = json(200, { result: { name: 'Ici' } });
+    expect(await reversePlace({ lat: 1, lng: 2 }, fetcher)).toEqual({ name: 'Ici' });
+    expect(firstCall(fetcher)[0]).toBe('/api/geocode/reverse?lat=1&lng=2');
   });
 });
