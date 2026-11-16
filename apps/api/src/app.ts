@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { accessAuth, type AuthEnv } from './auth';
 import { geocodeRoutes } from './routes/geocode';
+import { legRoutes, routeRoutes } from './routes/legs';
 import { poiRoutes } from './routes/poi';
 import { trips } from './routes/trips';
 
@@ -24,6 +25,8 @@ export function createApp(
   const outbound = options.fetch ?? ((input, init) => fetch(input, init));
   app.route('/geocode', geocodeRoutes(outbound));
   app.route('/poi', poiRoutes(outbound));
+  app.route('/trips', legRoutes(outbound));
+  app.route('/route', routeRoutes(outbound));
 
   return app;
 }

@@ -64,7 +64,8 @@ function geoapifyProvider(base: string, apiKey: string, fetchImpl: typeof fetch)
     name: 'geoapify',
     url: base,
     async search(bbox, categories) {
-      const url = new URL('/v2/places', base);
+      // Concaténation : une base avec chemin (relais) est gardée.
+      const url = new URL(`${base.replace(/\/+$/, '')}/v2/places`);
       for (const [k, v] of Object.entries(geoapifyParams(bbox, categories))) {
         url.searchParams.set(k, v);
       }

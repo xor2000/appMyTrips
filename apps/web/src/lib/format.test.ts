@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { countdownLabel, dayTabLabel, formatDuration, formatPeriod } from './format';
+import {
+  countdownLabel,
+  dayTabLabel,
+  formatDuration,
+  formatPeriod,
+  formatDistance,
+} from './format';
 
 describe('formatPeriod', () => {
   it('regroupe le mois et l’année quand ils sont communs', () => {
@@ -51,5 +57,14 @@ describe('formatDuration', () => {
     expect(formatDuration(60)).toBe('1 h');
     expect(formatDuration(90)).toBe('1 h 30');
     expect(formatDuration(125)).toBe('2 h 05');
+  });
+});
+
+describe('formatDistance', () => {
+  it('mètres, kilomètres avec une décimale sous 10 km, puis arrondis', () => {
+    expect(formatDistance(850)).toBe('850 m');
+    expect(formatDistance(1_234)).toBe('1,2 km');
+    expect(formatDistance(12_345)).toBe('12 km');
+    expect(formatDistance(72_000)).toBe('72 km');
   });
 });

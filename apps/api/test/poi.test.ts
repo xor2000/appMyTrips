@@ -176,6 +176,19 @@ describe('GET /api/poi', () => {
     expect(geo.searchParams.get('categories')).toContain('entertainment.museum');
   });
 
+  it('GEOAPIFY_URL avec un chemin (relais) : le chemin est conservé', async () => {
+    const a = area();
+    const fetcher = fakeFetch((url) =>
+      url.includes('relais.test') ? json(JSON.stringify({ features: [] })) : json('panne', 500),
+    );
+    await poiCaller(fetcher, {
+      GEOAPIFY_API_KEY: 'cle',
+      GEOAPIFY_URL: 'http://relais.test/geoapify',
+    })(ALICE, 'GET', `/api/poi?bbox=${bboxParam(a)}&zoom=15&categories=museum`);
+    const geo = new URL(fetcher.mock.calls[2]![0]);
+    expect(geo.origin + geo.pathname).toBe('http://relais.test/geoapify/v2/places');
+  });
+
   it('répond 503 avec un message clair quand tous les fournisseurs échouent', async () => {
     const a = area();
     const fetcher = fakeFetch(() => json('panne', 500));

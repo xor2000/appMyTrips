@@ -21,3 +21,7 @@ export * from './poi/types';
 export * from './poi/overpass';
 export * from './poi/geoapify';
 export * from './poi/rank';
+export * from './leg/geo';
+export * from './leg/modes';
+export * from './leg/required';
+export * from './leg/schemas';

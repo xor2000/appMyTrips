@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Step, StayItem, TimelineItem } from '@mytrips/core';
+  import type { Snippet } from 'svelte';
   import type { DropTarget } from '#lib/steps/dnd.svelte.ts';
   import DropZone from './DropZone.svelte';
   import GroupCard from './GroupCard.svelte';
@@ -18,6 +19,8 @@
     onDelete: (step: Step) => void;
     onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
+    /** Rendu après chaque point de passage (clé d'étape ou de séjour) : tuile de trajet. */
+    after?: Snippet<[string]>;
   }
 
   let {
@@ -31,6 +34,7 @@
     onDelete,
     onHover,
     onDrop,
+    after,
   }: Props = $props();
 
   /** Étapes et dossiers à la racine du jour (sans les séjours), dans l'ordre. */
@@ -70,6 +74,7 @@
           />
         {/if}
         <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} {onHover} />
+        {@render after?.(item.key)}
       {:else}
         {#if canEdit}
           <DropZone
@@ -89,6 +94,7 @@
             {onDelete}
             {onHover}
           />
+          {@render after?.(item.step.id)}
         {:else}
           <GroupCard
             {item}
@@ -99,6 +105,7 @@
             {onMove}
             {onDelete}
             {onHover}
+            {after}
             onDropInto={(id, index) => onDrop(id, { parentId: item.group.id, index })}
           />
         {/if}

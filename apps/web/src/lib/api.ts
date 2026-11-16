@@ -1,6 +1,8 @@
 import type {
   Bbox,
   DayPatch,
+  LegCreate,
+  LegPatch,
   Place,
   Poi,
   PoiCategory,
@@ -36,6 +38,8 @@ const MESSAGES: Record<string, string> = {
   area_too_large: 'Zone trop grande : zoomez pour explorer.',
   poi_unavailable: 'La découverte de lieux est indisponible pour le moment. Réessayez plus tard.',
   wiki_unavailable: 'Wikipédia ne répond pas pour le moment.',
+  no_route: 'Aucun itinéraire trouvé : indiquez la durée à la main.',
+  invalid_leg: 'Ces deux étapes ne se suivent plus : le jour a changé entre-temps.',
   owner_cannot_be_member: 'Le propriétaire a déjà tous les droits sur ce voyage.',
   unauthorized: 'Session expirée : rechargez la page pour vous reconnecter.',
 };
@@ -282,4 +286,33 @@ export async function poiWiki(ref: string, fetcher: Fetcher = fetch): Promise<Wi
   const params = new URLSearchParams({ ref });
   return (await request<{ summary: WikiSummary | null }>(fetcher, `/api/poi/wiki?${params}`))
     .summary;
+}
+
+/** Crée (ou remplace) le trajet d'une paire d'étapes consécutives. */
+export function createLeg(
+  tripId: string,
+  version: number,
+  leg: z.input<typeof LegCreate>,
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(fetcher, `/api/trips/${tripId}/legs`, versioned(version, 'POST', leg));
+}
+
+export function updateLeg(
+  tripId: string,
+  legId: string,
+  version: number,
+  patch: LegPatch,
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(fetcher, `/api/trips/${tripId}/legs/${legId}`, versioned(version, 'PATCH', patch));
+}
+
+export function deleteLeg(
+  tripId: string,
+  legId: string,
+  version: number,
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(fetcher, `/api/trips/${tripId}/legs/${legId}`, versioned(version, 'DELETE'));
 }

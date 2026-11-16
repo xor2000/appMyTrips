@@ -1,4 +1,4 @@
-import type { Day, Poi, Stay, Step } from '@mytrips/core';
+import type { Day, Leg, Poi, Stay, Step } from '@mytrips/core';
 
 /** Données de test partagées par les tests de composants. */
 export const days: Day[] = [
@@ -66,6 +66,26 @@ export function makePoi(overrides: Partial<Poi> = {}): Poi {
     wikidata: null,
     wikipedia: null,
     source: 'overpass',
+    ...overrides,
+  };
+}
+
+export function makeLeg(overrides: Partial<Leg> = {}): Leg {
+  return {
+    id: 'l1',
+    fromKey: 'a',
+    toKey: 'b',
+    mode: 'car',
+    distanceM: 72_000,
+    durationMin: 75,
+    distanceSource: 'router',
+    durationSource: 'router',
+    geometry: null,
+    summary: null,
+    departAt: null,
+    bookingRef: null,
+    notes: '',
+    computedAt: null,
     ...overrides,
   };
 }

@@ -3,6 +3,9 @@
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
+    type Leg,
+    type LegMode,
+    type LegPatch,
     type Place,
     type Poi,
     type PoiCategory,
@@ -17,8 +20,10 @@
   import { page } from '$app/state';
   import {
     ApiError,
+    createLeg,
     createStay,
     createStep,
+    deleteLeg,
     deleteMember,
     deleteStay,
     deleteStep,
@@ -28,6 +33,7 @@
     putMember,
     reversePlace,
     searchPlaces,
+    updateLeg,
     updateStay,
     updateStep,
     updateTrip,
@@ -37,6 +43,7 @@
   import { dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
   import { poiStepInput, sameView } from '#lib/poi/explore.ts';
+  import { dayLegLines, dayPairs, isManual, suggestionFor, type DayPair } from '#lib/legs/legs.ts';
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { positionAt, positionShift } from '#lib/steps/moves.ts';
   import { createSerialQueue } from '#lib/serial.ts';
@@ -47,6 +54,8 @@
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
   import TripMap from '#lib/components/TripMap.svelte';
   import ExplorePanel from '#lib/components/poi/ExplorePanel.svelte';
+  import LegEditor from '#lib/components/legs/LegEditor.svelte';
+  import LegTile from '#lib/components/legs/LegTile.svelte';
   import AddPlaceDialog from '#lib/components/steps/AddPlaceDialog.svelte';
   import DeleteGroupDialog from '#lib/components/steps/DeleteGroupDialog.svelte';
   import GroupDialog from '#lib/components/steps/GroupDialog.svelte';
@@ -87,6 +96,11 @@
   let selectedPoi = $state<string | null>(null);
   let hoveredPoi = $state<string | null>(null);
   let poiRequest = 0;
+  let editingLegId = $state<string | null>(null);
+  /** Saisie manuelle d'un trajet sans itinéraire trouvé. */
+  let manualLeg = $state<{ pair: DayPair; mode: LegMode } | null>(null);
+  /** Trajets saisis à la main retirés par un réordonnancement : proposés à la reprise. */
+  let removedLegs = $state<Leg[]>([]);
   const writes = createSerialQueue();
 
   const id = $derived(page.params.id ?? '');
@@ -112,6 +126,10 @@
   const editingStep = $derived(steps.find((s) => s.id === editingStepId) ?? null);
   const editingStay = $derived(stays.find((s) => s.id === editingStayId) ?? null);
   const dayLabel = $derived(day ? `J${days.indexOf(day) + 1}` : null);
+  const legs = $derived(snapshot?.legs ?? []);
+  const pairs = $derived(dayPairs(items, legs));
+  const legLines = $derived(exploring ? [] : dayLegLines(items, legs));
+  const editingLeg = $derived(legs.find((l) => l.id === editingLegId) ?? null);
   const addedRefs = $derived(
     new Set(steps.map((s) => s.osmRef).filter((r): r is string => r !== null)),
   );
@@ -143,9 +161,13 @@
     // Écritures en file : chacune part avec la version du voyage laissée par la précédente.
     return writes(async () => {
       try {
+        const before = snapshot?.legs ?? [];
         const next = await action();
         snapshot = next ?? (await getTrip(id));
         notice = null;
+        const after = new Set(snapshot.legs.map((l) => l.id));
+        const gone = before.filter((l) => !after.has(l.id) && isManual(l));
+        if (gone.length > 0) removedLegs = [...gone, ...removedLegs].slice(0, 10);
       } catch (e) {
         if (e instanceof ApiError && e.code === 'version_conflict') {
           await load();
@@ -364,6 +386,63 @@
     hoveredPoi = null;
   }
 
+  async function addLeg(
+    pair: DayPair,
+    input: { mode: LegMode; distanceM?: number; durationMin?: number },
+  ) {
+    try {
+      await apply(() =>
+        createLeg(id, version(), { fromKey: pair.fromKey, toKey: pair.toKey, ...input }),
+      );
+      removedLegs = removedLegs.filter(
+        (l) => !(l.fromKey === pair.fromKey || l.toKey === pair.toKey),
+      );
+    } catch (e) {
+      // Aucun itinéraire : saisie manuelle proposée.
+      if (e instanceof ApiError && e.code === 'no_route') manualLeg = { pair, mode: input.mode };
+      else notice = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function saveLeg(patch: LegPatch) {
+    const legId = editingLegId;
+    if (!legId) return;
+    await apply(() => updateLeg(id, legId, version(), patch));
+    editingLegId = null;
+  }
+
+  async function recomputeLeg() {
+    const legId = editingLegId;
+    if (!legId) return;
+    await apply(() =>
+      updateLeg(id, legId, version(), { distanceM: null, durationMin: null, recompute: true }),
+    );
+    editingLegId = null;
+  }
+
+  async function removeLeg() {
+    const legId = editingLegId;
+    if (!legId) return;
+    editingLegId = null;
+    await applyQuietly(() => deleteLeg(id, legId, version()));
+    removedLegs = removedLegs.filter((l) => l.id !== legId);
+  }
+
+  async function saveManualLeg(patch: LegPatch) {
+    const pending = manualLeg;
+    if (!pending || patch.durationMin == null) return;
+    await apply(() =>
+      createLeg(id, version(), {
+        fromKey: pending.pair.fromKey,
+        toKey: pending.pair.toKey,
+        mode: patch.mode ?? pending.mode,
+        durationMin: patch.durationMin ?? undefined,
+        distanceM: patch.distanceM ?? undefined,
+      }),
+    );
+    manualLeg = null;
+  }
+
   function editStay(item: StayItem) {
     if (canEdit) editingStayId = item.stay.id;
   }
@@ -372,6 +451,22 @@
 <svelte:head>
   <title>{trip ? `${trip.name} · MyTrips` : 'Voyage · MyTrips'}</title>
 </svelte:head>
+
+{#snippet legAfter(key: string)}
+  {@const pair = pairs.get(key)}
+  {#if pair}
+    <LegTile
+      {pair}
+      leg={pair.leg}
+      {canEdit}
+      highlighted={highlighted === `${pair.fromKey}>${pair.toKey}`}
+      suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
+      onCreate={(input) => addLeg(pair, input)}
+      onEdit={(leg) => (editingLegId = leg.id)}
+      onHover={(k) => (highlighted = k)}
+    />
+  {/if}
+{/snippet}
 
 {#if status === 'loading'}
   <p class="state">Chargement du voyage…</p>
@@ -468,6 +563,7 @@
                     onDelete={askDelete}
                     onHover={(k) => (highlighted = k)}
                     onDrop={drop}
+                    after={legAfter}
                   />
                 </div>
                 {#if canEdit}
@@ -541,6 +637,7 @@
             onHoverPoi={(poiId) => (hoveredPoi = poiId)}
             {exploring}
             onToggleExplore={toggleExplore}
+            lines={legLines}
           />
         {/snippet}
       </SplitPane>
@@ -611,6 +708,44 @@
       onSave={saveStep}
       onDelete={() => askDelete(editingStep)}
       onClose={() => (editingStepId = null)}
+    />
+  {/if}
+
+  {#if editingLeg}
+    <LegEditor
+      leg={editingLeg}
+      onSave={saveLeg}
+      onRecompute={recomputeLeg}
+      onDelete={removeLeg}
+      onClose={() => (editingLegId = null)}
+    />
+  {/if}
+
+  {#if manualLeg}
+    {@const pending = manualLeg}
+    <LegEditor
+      isNew
+      message="Aucun itinéraire trouvé : indiquez la durée (et la distance si vous la connaissez)."
+      leg={{
+        id: '',
+        fromKey: pending.pair.fromKey,
+        toKey: pending.pair.toKey,
+        mode: pending.mode,
+        distanceM: null,
+        durationMin: 60,
+        distanceSource: 'manual',
+        durationSource: 'manual',
+        geometry: null,
+        summary: null,
+        departAt: null,
+        bookingRef: null,
+        notes: '',
+        computedAt: null,
+      }}
+      onSave={saveManualLeg}
+      onRecompute={async () => {}}
+      onDelete={() => {}}
+      onClose={() => (manualLeg = null)}
     />
   {/if}
 

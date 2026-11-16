@@ -18,7 +18,8 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      // Photon et Overpass factices : ils sont appelés par le Worker, pas par le navigateur.
+      // Services externes factices (Photon, Overpass, ORS, Transitous) : ils sont appelés par le
+      // Worker, pas par le navigateur.
       command: `node e2e/mock-services.mjs`,
       url: `http://localhost:${MOCK_PORT}/health`,
       env: { MOCK_SERVICES_PORT: String(MOCK_PORT) },
@@ -29,7 +30,7 @@ export default defineConfig({
       command: [
         'pnpm build',
         'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
-        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test --var PHOTON_URL:http://localhost:${MOCK_PORT} --var OVERPASS_URLS:http://localhost:${MOCK_PORT}/overpass/api/interpreter`,
+        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test --var PHOTON_URL:http://localhost:${MOCK_PORT} --var OVERPASS_URLS:http://localhost:${MOCK_PORT}/overpass/api/interpreter --var ORS_URL:http://localhost:${MOCK_PORT}/ors --var ORS_API_KEY:cle-e2e --var TRANSITOUS_URL:http://localhost:${MOCK_PORT}/transitous`,
       ].join(' && '),
       url: `http://localhost:${PORT}/api/health`,
       reuseExistingServer: !process.env.CI,
