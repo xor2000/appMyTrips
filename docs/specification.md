@@ -43,11 +43,11 @@ Monorepo pnpm :
 
 **Bindings** :
 
-| Binding      | Type   | Usage                                                             |
-| ------------ | ------ | ----------------------------------------------------------------- |
-| `ASSETS`     | Assets | Build du front                                                    |
-| `DB`         | D1     | Données (base `mytrips`)                                          |
-| R2 (`FILES`) | —      | Reporté au lot 6 (GPX) : R2 n'est pas encore activé sur le compte |
+| Binding      | Type   | Usage                                                                                |
+| ------------ | ------ | ------------------------------------------------------------------------------------ |
+| `ASSETS`     | Assets | Build du front                                                                       |
+| `DB`         | D1     | Données (base `mytrips`)                                                             |
+| R2 (`FILES`) | —      | Non utilisé : R2 n'est pas activé sur le compte (le GPX original n'est pas conservé) |
 
 **PWA** :
 
@@ -88,6 +88,7 @@ Monorepo pnpm :
 | `0003_steps.sql`     | `steps` (étapes et dossiers), `stays` (séjours)  |
 | `0004_poi_cache.sql` | `poi_cache` (cache de la découverte de lieux)    |
 | `0005_legs.sql`      | `legs` (trajets), `route_cache` (itinéraires)    |
+| `0006_gpx.sql`       | colonnes GPX des étapes (randonnées)             |
 
 - **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
 - **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
@@ -110,6 +111,7 @@ Monorepo pnpm :
 - **Verrou optimiste** : toute modification du voyage ou d'un jour exige `If-Match: <version>` (428 sinon) et incrémente `trips.version`, dans la même transaction D1 que la modification. Une version périmée donne `409 { error: 'version_conflict', version }`. Les changements de membres ne changent pas la version.
 
 - **`legs`** : trajets. `id`, `trip_id`, `from_key` et `to_key` (clé d'étape ou d'occurrence de séjour ; unique par voyage), `mode` (`car`, `bike`, `walk`, `bus`, `train`, `plane`, `ferry`), `distance_m` (NULL si inconnue), `duration_min`, `distance_source` et `duration_source` (`router`, `estimate` ou `manual`), `geometry` (polyligne encodée, précision 5), `summary` (lignes empruntées), `depart_at` (HH:mm fixé), `booking_ref`, `notes`, `computed_at`.
+- **Randonnées GPX** (colonnes de `steps`, `0006`) : `gpx_stats` (JSON : `distanceM`, `ascentM`, `descentM`, `minEle`, `maxEle`, `isLoop`, `pointCount`), `gpx_track` (JSON : `[[lat, lng, ele|null], …]`, 500 points au plus), `use_elevation`, `duration_manual`.
 - **`route_cache`** : `key` (mode, points arrondis à 5 décimales, tranche horaire pour bus et train), `payload` (`RouteResult`), `created_at`. Valable 30 jours, 6 h pour bus et train. Seuls les calculs des fournisseurs sont mis en cache (pas les estimations, ni l'avion et le ferry, calculés localement).
 
 **Trajets** :
@@ -119,6 +121,17 @@ Monorepo pnpm :
 - **Lieu déplacé** : changer le point d'une étape ou d'un séjour retire, dans la même transaction, ses trajets calculés ; ceux qui contiennent une saisie manuelle sont gardés.
 - **Saisie manuelle** : une durée saisie est gardée ; une distance saisie seule donne une durée à la vitesse moyenne du mode (voiture 60 km/h, vélo 15, marche 4,5, bus 30, train 80, avion 750, ferry 30) ; « Recalculer » revient au routeur. Sans itinéraire, la durée saisie suffit (distance inconnue).
 - **Départ des bus et trains** : heure fixée du trajet, sinon fin de l'étape de départ selon les horaires calculés du jour (moteur ci-dessous), dans le fuseau de cette étape.
+
+**Randonnées GPX** (`core/gpx`) :
+
+- **Analyse dans le navigateur** (`prepareGpx`, `fast-xml-parser`) : le Worker gratuit n'a que 10 ms de CPU par requête (un GPX de 4,8 Mo et 50 000 points prend environ 1,7 s). L'API reçoit `{ stats, track }` (`GpxData`, validé par Zod) ; le fichier original n'est pas conservé.
+- **Lecture** : `trk/trkseg/trkpt` (segments concaténés dans l'ordre), sinon `rte/rtept` ; nom de la trace, sinon des métadonnées, sinon du fichier ; 10 Mo au plus, XML valide, au moins 2 points.
+- **Statistiques** : distance en haversine cumulée ; D+ et D− sur des altitudes lissées (moyenne glissante sur 5 points) avec un seuil de 3 m ; sans altitude sur au moins la moitié des points, dénivelé inconnu ; boucle si départ et arrivée à moins de 200 m.
+- **Tracé simplifié** : Ramer–Douglas–Peucker jusqu'à 500 points au plus, départ et arrivée conservés.
+- **Points** : le premier point du tracé devient l'entrée de l'étape (`lat`/`lng`), le dernier sa sortie (`exit_lat`/`exit_lng`) ; le trajet suivant part de la sortie.
+- **Durée** : distance ÷ `hike_speed_kmh` (3,5 km/h par défaut), plus 1 h par 600 m de D+ si l'option est cochée, arrondie aux 5 min. Une durée saisie devient manuelle (`duration_manual`) ; changer l'option dénivelé recalcule et repasse en automatique.
+- **Import** : bouton « Importer une randonnée (GPX) », ou fichier glissé sur la timeline du jour ; dans l'éditeur d'une randonnée : importer, remplacer ou retirer le GPX. Remplacer ou retirer le tracé déplace les points : les trajets calculés adjacents sont retirés.
+- **Affichage** : pastilles « GPX 12,4 km » et « D+ 620 m », profil altimétrique (SVG) dans l'éditeur, tracé vert sur la carte, marqueur d'arrivée « ⚑ » quand ce n'est pas une boucle.
 
 **Horaires** (`core.scheduleDay`, en minutes et en heure locale avec Luxon, fuseau toujours explicite) :
 
@@ -171,6 +184,8 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 | DELETE  | `/api/trips/:id/legs/:legId`                 | modification | `200 TripSnapshot` · `If-Match`                                                           |
 | POST    | `/api/route`                                 | connecté     | `200 { route: RouteResult }` · corps `{ mode, from, to, departAt? }`                      |
 | POST    | `/api/trips/:id/batch`                       | modification | `200 TripSnapshot` · `If-Match` · `{ ops: BatchOp[] }` (1 à 50), atomique                 |
+| PUT     | `/api/trips/:id/steps/:stepId/gpx`           | modification | `200 TripSnapshot` · `If-Match` · corps `{ gpx: GpxData }` (randonnée)                    |
+| DELETE  | `/api/trips/:id/steps/:stepId/gpx`           | modification | `200 TripSnapshot` · `If-Match`                                                           |
 
 - **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates`, `invalid_bbox`, `invalid_zoom`, `invalid_categories`, `zoom_too_low`, `area_too_large`, `invalid_ref`, `invalid_leg` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `422 no_route` ; `428 version_required` ; `502 geocoder_unavailable` ou `wiki_unavailable` ; `503 poi_unavailable`.
 - Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
@@ -231,6 +246,9 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 - **Éditeur de trajet en fenêtre** (le plan prévoyait un panneau latéral) : même composant `Modal` que les autres éditeurs.
 - **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
+- **GPX sans R2** (choix de l'utilisateur, R2 n'étant pas activé) : statistiques, tracé simplifié et profil dans D1, sans le fichier original ni son téléchargement. R2 pourra s'ajouter sans changer le reste.
+- **GPX analysé dans le navigateur** (le plan le prévoyait en repli) : limite CPU du Worker gratuit. `StepCreate` accepte directement `gpx`, en une écriture.
+- **`fast-xml-parser`** (5.11.2, dans `core`) : parseur XML sans DOM, utilisable dans le navigateur et le Worker.
 - **Luxon** (3.7.2, dans `core`) pour les heures locales et les fuseaux du moteur d'horaires : aucun calcul en `Date` natif sans fuseau.
 - **Annuler / rétablir limité aux modifications et déplacements** (choix de l'utilisateur) : annuler une suppression demanderait de recréer l'objet avec un nouvel identifiant, et ses trajets seraient perdus. Créations et suppressions restent confirmées, sans annulation.
 - **Logique d'écriture partagée** (`apps/api/src/routes/plans.ts` : `planStepUpdate`, `planDayUpdate`) par les routes unitaires et le lot atomique.
@@ -264,4 +282,8 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
   - couverture de `core/schedule` non mesurée (pas d'outil de couverture installé) ;
   - deux modifications du même jour dans un lot sont validées chacune contre l'état en base, pas l'une contre l'autre.
 - **E2E sous charge** : quand d'autres serveurs tournent sur la machine, des tests dépassent leurs délais (création de voyage) ; lancer alors `pnpm test:e2e -- --workers=1`.
-- **Lots restants** : 6. GPX ; 7. hors ligne.
+- **Randonnées GPX** :
+  - le fichier original n'est pas conservé (pas de R2) : pas de téléchargement ni de recalcul avec d'autres réglages de lissage ;
+  - les statistiques viennent du navigateur ; l'API en valide la forme, pas l'exactitude ;
+  - une durée annulée (Ctrl+Z) sur une randonnée reste marquée manuelle jusqu'au prochain changement de l'option dénivelé.
+- **Lots restants** : 7. hors ligne.

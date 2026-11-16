@@ -29,9 +29,29 @@ function step(id: string, overrides: Partial<Step> = {}): Step {
     bookingRef: null,
     bookingUrl: null,
     notes: '',
+    gpx: null,
+    useElevation: false,
+    durationManual: false,
     ...overrides,
   };
 }
+
+const HIKE_GPX = {
+  stats: {
+    distanceM: 12_400,
+    ascentM: 620,
+    descentM: 20,
+    minEle: 450,
+    maxEle: 1070,
+    isLoop: false,
+    pointCount: 1200,
+  },
+  track: [
+    [45.9, 6.13, 450],
+    [45.92, 6.16, 760],
+    [45.95, 6.2, 1070],
+  ] as [number, number, number | null][],
+};
 
 const stay: Stay = {
   id: 'h',
@@ -79,6 +99,30 @@ describe('mapPoints', () => {
       ['b', 'J2'],
       ['stay:h', 'H'],
     ]);
+  });
+
+  it('randonnée linéaire : un marqueur d’arrivée distinct ; aucun pour une boucle', () => {
+    const hike = step('r', {
+      type: 'hike',
+      lat: 45.9,
+      lng: 6.13,
+      exitLat: 45.95,
+      exitLng: 6.2,
+      gpx: HIKE_GPX,
+    });
+    const points = mapPoints({ days, steps: [hike], stays: [] }, 'd1');
+    expect(points.map((p) => [p.key, p.label])).toEqual([
+      ['r', '1'],
+      ['r:exit', '⚑'],
+    ]);
+    expect(points[1]).toMatchObject({ lat: 45.95, lng: 6.2, stepId: 'r', color: '--type-hike' });
+    const loop = step('b', {
+      type: 'hike',
+      exitLat: 45,
+      exitLng: 6,
+      gpx: { ...HIKE_GPX, stats: { ...HIKE_GPX.stats, isLoop: true } },
+    });
+    expect(mapPoints({ days, steps: [loop], stays: [] }, 'd1')).toHaveLength(1);
   });
 
   it('ignore les étapes sans coordonnées', () => {

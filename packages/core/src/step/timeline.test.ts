@@ -26,6 +26,9 @@ function step(overrides: Partial<Step> = {}): Step {
     bookingRef: null,
     bookingUrl: null,
     notes: '',
+    gpx: null,
+    useElevation: false,
+    durationManual: false,
     ...overrides,
   };
 }

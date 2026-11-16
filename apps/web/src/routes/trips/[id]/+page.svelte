@@ -29,6 +29,8 @@
     ApiError,
     applyBatch,
     createLeg,
+    deleteGpx,
+    putGpx,
     createStay,
     createStep,
     deleteLeg,
@@ -50,11 +52,19 @@
   import { dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
   import { poiStepInput, sameView } from '#lib/poi/explore.ts';
-  import { dayLegLines, dayPairs, isManual, suggestionFor, type DayPair } from '#lib/legs/legs.ts';
+  import {
+    dayHikeLines,
+    dayLegLines,
+    dayPairs,
+    isManual,
+    suggestionFor,
+    type DayPair,
+  } from '#lib/legs/legs.ts';
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { positionAt, positionShift } from '#lib/steps/moves.ts';
   import { createSerialQueue } from '#lib/serial.ts';
   import { createHistory, inverseOps } from '#lib/schedule/history.ts';
+  import { isGpxFile, readGpxFile } from '#lib/gpx/import.ts';
   import Redo2 from 'lucide-svelte/icons/redo-2';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
@@ -149,7 +159,7 @@
   const dayLabel = $derived(day ? `J${days.indexOf(day) + 1}` : null);
   const legs = $derived(snapshot?.legs ?? []);
   const pairs = $derived(dayPairs(items, legs));
-  const legLines = $derived(exploring ? [] : dayLegLines(items, legs));
+  const legLines = $derived(exploring ? [] : [...dayHikeLines(items), ...dayLegLines(items, legs)]);
   const editingLeg = $derived(legs.find((l) => l.id === editingLegId) ?? null);
 
   /** Données d'un jour pour le moteur d'horaires. */
@@ -310,6 +320,58 @@
     };
     await apply(() => createStep(id, version(), input));
     adding = null;
+  }
+
+  /** Randonnée créée depuis un fichier GPX (analysé dans le navigateur), dans le jour affiché. */
+  async function addHikeFromFile(file: File) {
+    try {
+      const { name, gpx } = await readGpxFile(file);
+      await apply(() =>
+        createStep(id, version(), {
+          dayId: selectedDay,
+          type: 'hike',
+          name: name.slice(0, 200),
+          gpx,
+        }),
+      );
+    } catch (e) {
+      notice = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  function pickHikeFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) addHikeFromFile(file);
+  }
+
+  /** Fichiers GPX glissés depuis l'ordinateur sur la timeline (pas les étapes déplacées). */
+  function onFileDragOver(event: DragEvent) {
+    if (canEdit && event.dataTransfer?.types.includes('Files')) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  function onFileDrop(event: DragEvent) {
+    const files = [...(event.dataTransfer?.files ?? [])].filter(isGpxFile);
+    if (!canEdit || files.length === 0) return;
+    event.preventDefault();
+    for (const file of files) addHikeFromFile(file);
+  }
+
+  async function importGpx(file: File) {
+    const stepId = editingStepId;
+    if (!stepId) return;
+    const { gpx } = await readGpxFile(file);
+    await apply(() => putGpx(id, stepId, version(), gpx));
+  }
+
+  async function removeGpx() {
+    const stepId = editingStepId;
+    if (!stepId) return;
+    await apply(() => deleteGpx(id, stepId, version()));
   }
 
   async function addGroup(name: string) {
@@ -722,7 +784,12 @@
                 {#if day.notes}
                   <p class="notes">{day.notes}</p>
                 {/if}
-                <div data-testid="day-timeline">
+                <div
+                  data-testid="day-timeline"
+                  role="presentation"
+                  ondragover={onFileDragOver}
+                  ondrop={onFileDrop}
+                >
                   <Timeline
                     {items}
                     {labels}
@@ -760,6 +827,14 @@
                     >
                       Nouveau dossier
                     </button>
+                    <label class="btn btn-soft file">
+                      Importer une randonnée (GPX)
+                      <input
+                        type="file"
+                        accept=".gpx,application/gpx+xml"
+                        onchange={pickHikeFile}
+                      />
+                    </label>
                   </div>
                 {/if}
               {:else}
@@ -879,6 +954,8 @@
       days={snapshot.days}
       onSave={saveStep}
       onDelete={() => askDelete(editingStep)}
+      onImportGpx={importGpx}
+      onRemoveGpx={removeGpx}
       onClose={() => (editingStepId = null)}
     />
   {/if}
@@ -1016,6 +1093,18 @@
   .readonly {
     background: var(--warn-soft);
     color: var(--warn);
+  }
+
+  .file {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .file input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
   }
 
   .icon-btn {

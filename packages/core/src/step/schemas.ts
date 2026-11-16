@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoDate, TimeOfDay } from '../trip/schemas';
+import { GpxData } from '../gpx/gpx';
 import { STEP_TYPES, defaultDuration, type StepType } from './types';
 
 export const StepTypeSchema = z.enum(STEP_TYPES);
@@ -44,20 +45,41 @@ export const StepCreate = z
     osmRef: z.string().max(100).nullable().optional(),
     /** Position parmi les frères ; absente = en fin de liste. */
     position: Position.optional(),
+    /** Tracé d'une randonnée : ses points donnent l'entrée et la sortie de l'étape. */
+    gpx: GpxData.optional(),
+    /** Durée de randonnée avec le dénivelé (+1 h par 600 m de D+). */
+    useElevation: z.boolean().default(false),
   })
   .superRefine((v, ctx) => {
+    if (v.gpx && v.type !== 'hike') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gpx'],
+        message: 'Un GPX ne va qu’avec une randonnée',
+      });
+    }
     if (v.kind === 'step') {
       if (!v.type) ctx.addIssue({ code: 'custom', path: ['type'], message: 'Type obligatoire' });
-      if (v.lat === undefined || v.lng === undefined) {
+      if (!v.gpx && (v.lat === undefined || v.lng === undefined)) {
         ctx.addIssue({ code: 'custom', path: ['lat'], message: 'Coordonnées obligatoires' });
       }
     }
   })
-  .transform((v) => ({
-    ...v,
-    type: v.kind === 'group' ? null : (v.type as StepType),
-    durationMin: v.durationMin ?? (v.kind === 'group' || !v.type ? 0 : defaultDuration(v.type)),
-  }));
+  .transform((v) => {
+    const first = v.gpx?.track[0];
+    const last = v.gpx?.track[v.gpx.track.length - 1];
+    return {
+      ...v,
+      type: v.kind === 'group' ? null : (v.type as StepType),
+      lat: first ? first[0] : v.lat,
+      lng: first ? first[1] : v.lng,
+      exitLat: last ? last[0] : null,
+      exitLng: last ? last[1] : null,
+      durationMin: v.durationMin ?? (v.kind === 'group' || !v.type ? 0 : defaultDuration(v.type)),
+      /** Durée saisie : une randonnée GPX ne la recalcule pas. */
+      durationManual: v.durationMin !== undefined,
+    };
+  });
 export type StepCreate = z.infer<typeof StepCreate>;
 
 /** Modification d'une étape, y compris son déplacement (jour, dossier, position). */
@@ -79,6 +101,7 @@ export const StepPatch = z
     bookingRef: z.string().max(200).nullable(),
     bookingUrl: HttpUrl.nullable(),
     openingHours: z.string().max(500).nullable(),
+    useElevation: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Aucune modification')
@@ -157,6 +180,11 @@ export interface Step {
   bookingRef: string | null;
   bookingUrl: string | null;
   notes: string;
+  /** Tracé GPX d'une randonnée (statistiques et tracé simplifié), ou null. */
+  gpx: GpxData | null;
+  useElevation: boolean;
+  /** Durée saisie à la main : non recalculée depuis le GPX. */
+  durationManual: boolean;
 }
 
 /** Séjour tel que renvoyé par l'API. */

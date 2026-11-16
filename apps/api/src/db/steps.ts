@@ -1,4 +1,4 @@
-import type { Stay, Step, StepKind, StepType } from '@mytrips/core';
+import type { GpxData, Stay, Step, StepKind, StepType } from '@mytrips/core';
 
 export interface StepRow {
   id: string;
@@ -21,6 +21,10 @@ export interface StepRow {
   booking_ref: string | null;
   booking_url: string | null;
   notes: string;
+  gpx_stats: string | null;
+  gpx_track: string | null;
+  use_elevation: number;
+  duration_manual: number;
 }
 
 interface StayRow {
@@ -59,6 +63,12 @@ export function toStep(r: StepRow): Step {
     bookingRef: r.booking_ref,
     bookingUrl: r.booking_url,
     notes: r.notes,
+    gpx:
+      r.gpx_stats && r.gpx_track
+        ? (JSON.parse(`{"stats":${r.gpx_stats},"track":${r.gpx_track}}`) as GpxData)
+        : null,
+    useElevation: r.use_elevation === 1,
+    durationManual: r.duration_manual === 1,
   };
 }
 
@@ -79,7 +89,8 @@ function toStay(r: StayRow): Stay {
 }
 
 const STEP_COLUMNS = `id, day_id, parent_id, position, kind, type, name, lat, lng, address, exit_lat,
-  exit_lng, duration_min, fixed_start, timezone, opening_hours, osm_ref, booking_ref, booking_url, notes`;
+  exit_lng, duration_min, fixed_start, timezone, opening_hours, osm_ref, booking_ref, booking_url, notes,
+  gpx_stats, gpx_track, use_elevation, duration_manual`;
 
 export async function getSteps(db: D1Database, tripId: string): Promise<Step[]> {
   const { results } = await db

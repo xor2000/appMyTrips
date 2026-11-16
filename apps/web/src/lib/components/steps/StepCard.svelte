@@ -4,7 +4,7 @@
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import Lock from 'lucide-svelte/icons/lock';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import { formatDuration } from '#lib/format.ts';
+  import { formatDuration, formatKm } from '#lib/format.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
   import { GROUP_ICON, STEP_ICONS } from '#lib/steps/icons.ts';
 
@@ -89,6 +89,12 @@
       {#if step.fixedStart}
         <span class="chip fixed" title="Heure fixe"><Lock size={11} />{step.fixedStart}</span>
       {/if}
+      {#if step.gpx}
+        <span class="chip gpx">GPX {formatKm(step.gpx.stats.distanceM)}</span>
+        {#if step.gpx.stats.ascentM !== null}
+          <span class="chip gpx">D+ {step.gpx.stats.ascentM} m</span>
+        {/if}
+      {/if}
       {#if step.bookingRef}
         <span class="chip booking">Résa {step.bookingRef}</span>
       {/if}
@@ -140,6 +146,11 @@
   .times {
     font: 600 12px var(--font-mono);
     color: var(--fg);
+  }
+
+  .gpx {
+    background: color-mix(in srgb, var(--type-hike) 16%, transparent);
+    color: var(--type-hike);
   }
 
   .late {

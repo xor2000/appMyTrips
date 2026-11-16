@@ -89,6 +89,32 @@ describe('StepCard', () => {
     expect(screen.getByText('01:00 → 01:30 (+1 j)')).toBeTruthy();
   });
 
+  it('randonnée GPX : pastilles de distance et de dénivelé', () => {
+    setup({
+      step: makeStep({
+        type: 'hike',
+        name: 'Tournette',
+        gpx: {
+          stats: {
+            distanceM: 12_400,
+            ascentM: 620,
+            descentM: 20,
+            minEle: 450,
+            maxEle: 1070,
+            isLoop: false,
+            pointCount: 1200,
+          },
+          track: [
+            [45.9, 6.13, 450],
+            [45.95, 6.2, 1070],
+          ],
+        },
+      }),
+    });
+    expect(screen.getByText('GPX 12,4 km')).toBeTruthy();
+    expect(screen.getByText('D+ 620 m')).toBeTruthy();
+  });
+
   it('ouvre l’éditeur au clic sur la carte', async () => {
     const props = setup();
     await fireEvent.click(screen.getByRole('button', { name: /Musée du Louvre Musée/ }));

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="MyTrips tests" xmlns="http://www.topografix.com/GPX/1/1">
+<metadata><name>Tour test</name></metadata>
+<rte><name>Itinéraire</name>
+<rtept lat="45.9000000" lon="6.1300000"><ele>500.0</ele></rtept>
+<rtept lat="45.9247475" lon="6.1646465"><ele>648.5</ele></rtept>
+<rtept lat="45.9500000" lon="6.2000000"><ele>800.0</ele></rtept>
+</rte>
+</gpx>

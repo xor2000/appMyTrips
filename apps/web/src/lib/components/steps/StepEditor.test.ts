@@ -10,6 +10,8 @@ function setup(step = makeStep()) {
     onSave: vi.fn().mockResolvedValue(undefined),
     onDelete: vi.fn(),
     onClose: vi.fn(),
+    onImportGpx: vi.fn().mockResolvedValue(undefined),
+    onRemoveGpx: vi.fn().mockResolvedValue(undefined),
   };
   render(StepEditor, { props });
   return props;
@@ -81,5 +83,63 @@ describe('StepEditor', () => {
     const props = setup();
     await fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
     expect(props.onDelete).toHaveBeenCalled();
+  });
+});
+
+const HIKE = makeStep({
+  type: 'hike',
+  name: 'Tournette',
+  durationMin: 215,
+  gpx: {
+    stats: {
+      distanceM: 12_400,
+      ascentM: 620,
+      descentM: 20,
+      minEle: 450,
+      maxEle: 1070,
+      isLoop: false,
+      pointCount: 1200,
+    },
+    track: [
+      [45.9, 6.13, 450],
+      [45.95, 6.2, 1070],
+    ],
+  },
+});
+
+describe('StepEditor · randonnée', () => {
+  it('affiche distance, D+, profil, et coche le dénivelé', async () => {
+    const props = setup(HIKE);
+    expect(screen.getByText(/12,4 km · D\+ 620 m · D− 20 m/)).toBeTruthy();
+    expect(screen.getByRole('img', { name: /Profil altimétrique/ })).toBeTruthy();
+    await fireEvent.click(screen.getByLabelText('Inclure le dénivelé (+1 h / 600 m)'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(props.onSave).toHaveBeenCalledWith({ useElevation: true });
+  });
+
+  it('dénivelé inconnu : option désactivée', () => {
+    setup(
+      makeStep({
+        type: 'hike',
+        gpx: { ...HIKE.gpx!, stats: { ...HIKE.gpx!.stats, ascentM: null } },
+      }),
+    );
+    expect(
+      (screen.getByLabelText('Inclure le dénivelé (+1 h / 600 m)') as HTMLInputElement).disabled,
+    ).toBe(true);
+  });
+
+  it('importe un GPX et retire le tracé', async () => {
+    const props = setup(HIKE);
+    const file = new File(['<gpx/>'], 'tour.gpx', { type: 'application/gpx+xml' });
+    await fireEvent.change(screen.getByLabelText('Importer un GPX'), { target: { files: [file] } });
+    expect(props.onImportGpx).toHaveBeenCalledWith(file);
+    await fireEvent.click(screen.getByRole('button', { name: 'Retirer le GPX' }));
+    expect(props.onRemoveGpx).toHaveBeenCalled();
+  });
+
+  it('une étape qui n’est pas une randonnée n’a pas d’import GPX', () => {
+    setup();
+    expect(screen.queryByLabelText('Importer un GPX')).toBeNull();
   });
 });

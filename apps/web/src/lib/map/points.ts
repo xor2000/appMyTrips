@@ -72,6 +72,18 @@ export function mapPoints(
         if (p) {
           n += 1;
           points.push(p);
+          // Randonnée qui ne boucle pas : marqueur d'arrivée distinct.
+          if (s.gpx && !s.gpx.stats.isLoop && s.exitLat !== null && s.exitLng !== null) {
+            points.push({
+              ...p,
+              key: `${s.id}:exit`,
+              lat: s.exitLat,
+              lng: s.exitLng,
+              label: '⚑',
+              name: `${s.name} (arrivée)`,
+              color: '--type-hike',
+            });
+          }
         }
       }
     }
