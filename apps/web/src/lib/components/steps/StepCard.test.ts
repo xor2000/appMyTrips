@@ -41,6 +41,54 @@ describe('StepCard', () => {
     expect(screen.getByText('Résa AB12')).toBeTruthy();
   });
 
+  it('affiche ses heures calculées', () => {
+    setup({
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '08:35', dayOffset: 0 },
+        end: { time: '10:35', dayOffset: 0 },
+        timezone: 'Europe/Paris',
+        freeBeforeMin: 0,
+        issues: [],
+      },
+    });
+    expect(screen.getByText('08:35 → 10:35')).toBeTruthy();
+  });
+
+  it('signale un conflit (retard) et le temps libre avant une heure fixe', () => {
+    setup({
+      step: makeStep({ fixedStart: '10:30' }),
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '10:30', dayOffset: 0 },
+        end: { time: '12:30', dayOffset: 0 },
+        timezone: 'Europe/Paris',
+        freeBeforeMin: 75,
+        issues: [{ kind: 'conflict', lateMin: 20 }],
+      },
+    });
+    expect(screen.getByText('Conflit +20 min')).toBeTruthy();
+    expect(screen.getByTestId('step-card').classList.contains('conflict')).toBe(true);
+    expect(screen.getByText('⧗ 1 h 15 libre')).toBeTruthy();
+  });
+
+  it('arrivée le lendemain : « +1 j »', () => {
+    setup({
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '01:00', dayOffset: 1 },
+        end: { time: '01:30', dayOffset: 1 },
+        timezone: 'America/New_York',
+        freeBeforeMin: 0,
+        issues: [],
+      },
+    });
+    expect(screen.getByText('01:00 → 01:30 (+1 j)')).toBeTruthy();
+  });
+
   it('ouvre l’éditeur au clic sur la carte', async () => {
     const props = setup();
     await fireEvent.click(screen.getByRole('button', { name: /Musée du Louvre Musée/ }));

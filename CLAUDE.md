@@ -71,8 +71,12 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   cherché à côté du chunk et le Worker Cloudflare renvoie le fallback HTML. L'e2e « la carte charge
   son web worker sans erreur » le vérifie.
 - **E2E** :
-  - base D1 locale dédiée (`apps/api/.wrangler/e2e`), migrée au démarrage et conservée entre les
-    exécutions : noms de voyages uniques (`uniqueName`) ;
+  - base D1 locale dédiée (`apps/api/.wrangler/e2e`), **effacée puis migrée à chaque démarrage**
+    (accumulée, la liste des voyages finissait par dépasser les délais) ; noms de voyages uniques
+    (`uniqueName`), les tests tournant en parallèle sur la même base ;
+  - fenêtre de 1280 × 900 : un glisser-déposer ne doit jamais demander de défilement (Playwright
+    fait défiler jusqu'à la cible pendant le glisser et Chromium perd alors le dépôt) ;
+  - machine chargée (autres serveurs) : délais dépassés en série ; relancer avec `--workers=1` ;
   - tuiles de carte interceptées (style vide) ;
   - autre utilisateur via `browser.newContext({ extraHTTPHeaders: { 'x-dev-user-email': … } })` ;
   - `getByLabel` fait une recherche partielle insensible à la casse : utiliser `{ exact: true }`

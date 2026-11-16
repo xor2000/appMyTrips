@@ -89,3 +89,7 @@ export function makeLeg(overrides: Partial<Leg> = {}): Leg {
     ...overrides,
   };
 }
+
+export function makeDay(overrides: Partial<Day> = {}): Day {
+  return { id: 'd1', date: '2026-07-10', dayStart: null, dayEnd: null, notes: '', ...overrides };
+}

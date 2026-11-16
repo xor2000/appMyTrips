@@ -191,7 +191,7 @@ describe('trajets : création', () => {
     });
   });
 
-  it('train : itinéraire Transitous (départ estimé 09:00 heure locale), lignes résumées', async () => {
+  it('train : itinéraire Transitous (départ à la fin de A, 10:00 heure locale), lignes résumées', async () => {
     const t = await tripWithSteps();
     const fetcher = fakeFetch(() => json(transitousResponse([TER_ITINERARY])));
     const res = await routeCaller(fetcher, { CONTACT_URL: 'https://example.test/mytrips' })(
@@ -210,11 +210,36 @@ describe('trajets : création', () => {
     const [url, init] = fetcher.mock.calls[0]!;
     const u = new URL(url);
     expect(u.origin + u.pathname).toBe('https://api.transitous.org/api/v5/plan');
-    // 10 juillet 2026, 09:00 à Paris (UTC+2).
-    expect(u.searchParams.get('time')).toBe('2026-07-10T07:00:00.000Z');
+    // A (musée, 2 h) commence à 08:00 : départ le 10 juillet 2026 à 10:00 à Paris (UTC+2).
+    expect(u.searchParams.get('time')).toBe('2026-07-10T08:00:00.000Z');
     expect(u.searchParams.get('fromPlace')).toMatch(/^45\.\d+,5\.\d+$/);
     expect(new Headers(init.headers).get('user-agent')).toBe(
       'MyTrips/0.1 (+https://example.test/mytrips)',
+    );
+  });
+
+  it('train : départ à la fin de l’étape précédente selon les horaires calculés', async () => {
+    const t = await createTrip();
+    const dayId = t.days[0].id;
+    // A dure 2 h 30 depuis 08:00 : le train part à 10:30, heure de Paris (08:30 UTC).
+    let s = await addStep(t.trip.id, t.trip.version, {
+      dayId,
+      type: 'museum',
+      name: 'A',
+      durationMin: 150,
+      ...place(),
+    });
+    s = await addStep(t.trip.id, s.trip.version, { dayId, type: 'station', name: 'B', ...place() });
+    const fetcher = fakeFetch(() => json(transitousResponse([TER_ITINERARY])));
+    await routeCaller(fetcher)(
+      ALICE,
+      'POST',
+      `/api/trips/${t.trip.id}/legs`,
+      { fromKey: s.steps[0].id, toKey: s.steps[1].id, mode: 'train' },
+      v(s),
+    );
+    expect(new URL(fetcher.mock.calls[0]![0]).searchParams.get('time')).toBe(
+      '2026-07-10T08:30:00.000Z',
     );
   });
 

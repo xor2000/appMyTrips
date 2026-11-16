@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  applyBatch,
   createLeg,
   createStay,
   createStep,
@@ -256,5 +257,18 @@ describe('trajets', () => {
         json(422, { error: 'no_route' }),
       ),
     ).rejects.toThrow('Aucun itinéraire trouvé : indiquez la durée à la main.');
+  });
+});
+
+describe('lot atomique', () => {
+  it('envoie les opérations avec la version du voyage', async () => {
+    const fetcher = json(200, { trip: { version: 5 } });
+    await applyBatch('t1', 4, [{ kind: 'step', id: 's1', patch: { durationMin: 90 } }], fetcher);
+    expect(firstCall(fetcher)[0]).toBe('/api/trips/t1/batch');
+    expect(firstCall(fetcher)[1].method).toBe('POST');
+    expect(new Headers(firstCall(fetcher)[1].headers).get('if-match')).toBe('4');
+    expect(JSON.parse(String(firstCall(fetcher)[1].body))).toEqual({
+      ops: [{ kind: 'step', id: 's1', patch: { durationMin: 90 } }],
+    });
   });
 });

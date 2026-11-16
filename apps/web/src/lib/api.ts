@@ -1,4 +1,5 @@
 import type {
+  BatchOp,
   Bbox,
   DayPatch,
   LegCreate,
@@ -315,4 +316,14 @@ export function deleteLeg(
   fetcher: Fetcher = fetch,
 ): Promise<TripSnapshot> {
   return request(fetcher, `/api/trips/${tripId}/legs/${legId}`, versioned(version, 'DELETE'));
+}
+
+/** Lot atomique de modifications d'étapes et de jours, en une seule version du voyage. */
+export function applyBatch(
+  tripId: string,
+  version: number,
+  ops: BatchOp[],
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(fetcher, `/api/trips/${tripId}/batch`, versioned(version, 'POST', { ops }));
 }

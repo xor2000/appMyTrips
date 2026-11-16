@@ -10,9 +10,11 @@
     onSelect: (dayId: string | null) => void;
     /** Dépôt d'une étape glissée sur l'onglet d'un jour (fin de ce jour). */
     onDropStep?: (stepId: string, dayId: string) => void;
+    /** Jours en conflit ou qui débordent (pastille d'alerte). */
+    alerts?: Set<string>;
   }
 
-  let { days, selected, onSelect, onDropStep }: Props = $props();
+  let { days, selected, onSelect, onDropStep, alerts = new Set() }: Props = $props();
 
   let over = $state<string | null>(null);
 
@@ -50,7 +52,13 @@
       ondragleave={() => (over = null)}
       ondrop={(e) => onDrop(e, day.id)}
     >
-      <b>J{i + 1}</b>
+      <b
+        >J{i + 1}{#if alerts.has(day.id)}<span class="alert" aria-hidden="true"></span><span
+            class="visually-hidden"
+          >
+            · à revoir</span
+          >{/if}</b
+      >
       <span>{dayTabLabel(day.date)}</span>
     </button>
   {/each}
@@ -91,6 +99,25 @@
     font-weight: 600;
     font-size: 13px;
     color: var(--fg);
+  }
+
+  .alert {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: var(--bad);
+    vertical-align: middle;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .tab.over {

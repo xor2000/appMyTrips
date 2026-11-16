@@ -25,3 +25,6 @@ export * from './leg/geo';
 export * from './leg/modes';
 export * from './leg/required';
 export * from './leg/schemas';
+export * from './schedule/schedule';
+export * from './schedule/fixes';
+export * from './schedule/batch';

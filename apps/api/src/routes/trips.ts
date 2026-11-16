@@ -20,19 +20,12 @@ import {
   writeWithVersion,
   type TripsEnv,
 } from './shared';
+import { registerBatchRoute } from './batch';
+import { dayBoundsOk, invalidDayBoundsBody, planDayUpdate } from './plans';
 import { registerStepRoutes } from './steps';
 
-/** La journée doit finir après son début (heures HH:mm comparables en texte). */
-const dayBoundsOk = (start: string, end: string) => start < end;
-
 function invalidDayBounds(c: Context) {
-  return c.json(
-    {
-      error: 'invalid',
-      issues: [{ path: ['dayEnd'], message: 'La journée doit finir après son début' }],
-    },
-    400,
-  );
+  return c.json(invalidDayBoundsBody, 400);
 }
 
 /** Nombre d'étapes par jour du voyage. */
@@ -188,27 +181,12 @@ trips.patch('/:id/days/:dayId', access('write'), async (c) => {
   const expected = expectedVersion(c);
   if (expected === null) return c.json({ error: 'version_required' }, 428);
 
-  const day = await db
-    .prepare('SELECT day_start, day_end FROM days WHERE id = ? AND trip_id = ?')
-    .bind(dayId, id)
-    .first<{ day_start: string | null; day_end: string | null }>();
-  if (!day) return c.json({ error: 'not_found' }, 404);
   const trip = await getTrip(db, id);
   if (!trip) return c.json({ error: 'not_found' }, 404);
+  const plan = await planDayUpdate(db, trip, dayId, body.data);
+  if ('error' in plan) return c.json(plan.error.body, plan.error.status);
 
-  const p = body.data;
-  const effectiveStart = (p.dayStart !== undefined ? p.dayStart : day.day_start) ?? trip.dayStart;
-  const effectiveEnd = (p.dayEnd !== undefined ? p.dayEnd : day.day_end) ?? trip.dayEnd;
-  if (!dayBoundsOk(effectiveStart, effectiveEnd)) return invalidDayBounds(c);
-  const columns = { notes: 'notes', dayStart: 'day_start', dayEnd: 'day_end' } as const;
-  const keys = (Object.keys(columns) as (keyof typeof columns)[]).filter((k) => p[k] !== undefined);
-  const set = keys.map((k) => `${columns[k]} = ?`).join(', ');
-
-  const ok = await writeWithVersion(db, id, expected, null, (guard, g) => [
-    db
-      .prepare(`UPDATE days SET ${set} WHERE id = ? AND ${guard}`)
-      .bind(...keys.map((k) => p[k]), dayId, ...g),
-  ]);
+  const ok = await writeWithVersion(db, id, expected, null, plan.statements);
   if (!ok) return versionConflict(c, id);
   return c.json(await getSnapshot(db, id, c.get('role')));
 });
@@ -241,3 +219,4 @@ trips.delete('/:id/members/:email', access('owner'), async (c) => {
 });
 
 registerStepRoutes(trips);
+registerBatchRoute(trips);

@@ -55,10 +55,18 @@ describe('poiCounts', () => {
 describe('sameView', () => {
   const view = { bbox: { west: 2.3, south: 48.84, east: 2.38, north: 48.88 }, zoom: 13 };
 
-  it('compare deux vues de carte (tolérance d’arrondi)', () => {
+  it('même vue à l’arrondi près, ou après un léger redimensionnement de la carte', () => {
     expect(sameView(view, { ...view, bbox: { ...view.bbox, west: 2.3000001 } })).toBe(true);
-    expect(sameView(view, { ...view, bbox: { ...view.bbox, west: 2.31 } })).toBe(false);
-    expect(sameView(view, { ...view, zoom: 13.5 })).toBe(false);
+    // Barre de défilement apparue : la zone perd quelques pixels sur un bord.
+    expect(sameView(view, { ...view, bbox: { ...view.bbox, east: 2.378 } })).toBe(true);
     expect(sameView(view, null)).toBe(false);
+  });
+
+  it('vue changée : zoom d’au moins un demi-niveau, ou centre décalé de plus de 15 %', () => {
+    expect(sameView(view, { ...view, zoom: 13.5 })).toBe(false);
+    expect(sameView(view, { ...view, zoom: 13.2 })).toBe(true);
+    // Décalage de 0,016° vers l'est sur une zone large de 0,08° : 20 %.
+    const shifted = { west: 2.316, south: 48.84, east: 2.396, north: 48.88 };
+    expect(sameView(view, { ...view, bbox: shifted })).toBe(false);
   });
 });
