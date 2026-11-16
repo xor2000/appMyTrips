@@ -150,10 +150,9 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
 
 Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev.
 
-**Bascule depuis Cloudflare Access** (une fois) : `AUTH_SECRET` et `ADMIN_EMAILS` (étape 4),
-migration `0007` (`db:migrate:remote`), déploiement, création de son compte, vérification, puis
-suppression de l'application Access (Zero Trust → Access → Applications). Tant qu'elle existe, les
-deux protections se cumulent ; ensuite, seule l'authentification de l'application protège `/api`.
+Cloudflare Access n'est plus utilisé (bascule faite le 16/11/2026) : seule l'authentification de
+l'application protège `/api`. Ne pas réactiver Access sur le Worker : il bloquerait les liens
+d'invitation et de réinitialisation pour les personnes sans compte Cloudflare.
 
 ### Commandes de secours
 
