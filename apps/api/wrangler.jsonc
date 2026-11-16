@@ -24,6 +24,8 @@
   // URL Preview désactivées : Access ne protège que l'URL de production (workers.dev).
   // Sans cette ligne, chaque `wrangler deploy` les réactive.
   "preview_urls": false,
+  // Contact du projet dans le User-Agent du routage (politique d'usage de Transitous) : public.
+  "vars": { "CONTACT_URL": "https://github.com/xor2000/appMyTrips" },
   // Secrets et variables de production (wrangler secret put) : ACCESS_TEAM_DOMAIN, ACCESS_AUD.
   // DEV_USER_EMAIL est réservé au développement local (.dev.vars) et ignoré si ACCESS_AUD est défini.
 }
