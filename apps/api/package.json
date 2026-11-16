@@ -9,13 +9,14 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "reset-link": "node scripts/reset-link.mjs",
+    "unban-ip": "node scripts/unban-ip.mjs"
   },
   "dependencies": {
     "@mytrips/core": "workspace:*",
     "@photostructure/tz-lookup": "11.7.0",
     "hono": "4.13.18",
-    "jose": "6.2.17",
     "zod": "4.6.7"
   },
   "devDependencies": {

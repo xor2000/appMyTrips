@@ -6,7 +6,7 @@ test('la page d’accueil affiche MyTrips', async ({ page }) => {
   await expect(page.getByRole('link', { name: /mytrips/i })).toBeVisible();
 });
 
-test('l’e-mail de l’utilisateur (mode dev) est affiché via /api/me', async ({ page }) => {
+test('l’e-mail de l’utilisateur connecté est affiché via /api/me', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('user-email')).toHaveText('dev@example.test');
 });

@@ -1,0 +1,99 @@
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import PasswordForm from '#lib/components/auth/PasswordForm.svelte';
+  import { changePassword, logout } from '#lib/api.ts';
+  import { session } from '#lib/auth/session.svelte.ts';
+  import { clearOfflineData } from '#lib/offline/instance.ts';
+
+  let error = $state<string | null>(null);
+
+  async function signOut() {
+    error = null;
+    try {
+      await logout();
+      // Les copies hors ligne appartiennent au compte : elles sont effacées de l'appareil.
+      await clearOfflineData().catch(() => undefined);
+      session.me = null;
+      await goto(resolve('/connexion'), { replaceState: true });
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+</script>
+
+<svelte:head>
+  <title>Mon compte · MyTrips</title>
+</svelte:head>
+
+<div class="page">
+  <h1>Mon compte</h1>
+  {#if session.me}
+    <p class="email">Connecté avec <strong>{session.me.email}</strong></p>
+  {/if}
+
+  <section class="panel">
+    <h2>Changer de mot de passe</h2>
+    <p class="muted">Les sessions ouvertes sur tes autres appareils seront fermées.</p>
+    <PasswordForm
+      askCurrent
+      submitLabel="Changer le mot de passe"
+      onSubmit={(next, current) => changePassword(current, next)}
+    />
+  </section>
+
+  <section class="panel">
+    <h2>Déconnexion</h2>
+    <p class="muted">Les copies hors ligne de tes voyages sont effacées de cet appareil.</p>
+    {#if error}
+      <p class="form-error" role="alert">{error}</p>
+    {/if}
+    <div>
+      <button type="button" class="btn btn-soft" onclick={signOut}>Se déconnecter</button>
+    </div>
+  </section>
+</div>
+
+<style>
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 560px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-4);
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 28px;
+  }
+
+  .email {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-6);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 18px;
+  }
+
+  .muted {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+</style>

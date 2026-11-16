@@ -20,8 +20,21 @@ import {
   createTrip,
   deleteMember,
   deleteTrip,
-  fetchMe,
+  fetchSession,
   getTrip,
+  acceptInvitation,
+  adminCreateReset,
+  adminListBans,
+  adminUnban,
+  changePassword,
+  createInvitation,
+  getCaptcha,
+  getInvitation,
+  login,
+  logout,
+  resetPassword,
+  setUnauthorizedHandler,
+  signup,
   listTrips,
   putMember,
   updateDay,
@@ -38,23 +51,121 @@ function firstCall(fetcher: ReturnType<typeof vi.fn>): [string, RequestInit] {
   return fetcher.mock.calls[0] as [string, RequestInit];
 }
 
-describe('fetchMe', () => {
-  it('renvoie l’e-mail de l’utilisateur', async () => {
-    const fetcher = json(200, { email: 'alice@example.test' });
-    expect(await fetchMe(fetcher)).toEqual({ email: 'alice@example.test' });
+describe('fetchSession', () => {
+  it('connecté : renvoie l’utilisateur', async () => {
+    const fetcher = json(200, { email: 'alice@example.test', isAdmin: true });
+    expect(await fetchSession(fetcher)).toEqual({
+      state: 'signed-in',
+      me: { email: 'alice@example.test', isAdmin: true },
+    });
     expect(firstCall(fetcher)[0]).toBe('/api/me');
   });
 
-  it('renvoie null sur une réponse 401', async () => {
-    expect(await fetchMe(json(401, { error: 'unauthorized' }))).toBeNull();
+  it('401 : non connecté', async () => {
+    expect(await fetchSession(json(401, { error: 'unauthorized' }))).toEqual({
+      state: 'signed-out',
+    });
   });
 
-  it('renvoie null sur une réponse inattendue', async () => {
-    expect(await fetchMe(json(200, { mail: 'x' }))).toBeNull();
+  it('réseau en panne ou réponse inattendue : état inconnu (hors ligne)', async () => {
+    expect(await fetchSession(vi.fn().mockRejectedValue(new TypeError('offline')))).toEqual({
+      state: 'unknown',
+    });
+    expect(await fetchSession(json(200, { mail: 'x' }))).toEqual({ state: 'unknown' });
+  });
+});
+
+describe('session expirée', () => {
+  it('un 401 « unauthorized » appelle le gestionnaire, puis l’erreur est levée', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    await expect(listTrips(json(401, { error: 'unauthorized' }))).rejects.toBeInstanceOf(ApiError);
+    expect(handler).toHaveBeenCalledTimes(1);
+    setUnauthorizedHandler(null);
   });
 
-  it('renvoie null quand le réseau échoue', async () => {
-    expect(await fetchMe(vi.fn().mockRejectedValue(new TypeError('offline')))).toBeNull();
+  it('un échec de connexion (401 invalid_credentials) ne l’appelle pas', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    await expect(
+      login('a@example.test', 'x', json(401, { error: 'invalid_credentials' })),
+    ).rejects.toMatchObject({ code: 'invalid_credentials' });
+    expect(handler).not.toHaveBeenCalled();
+    setUnauthorizedHandler(null);
+  });
+});
+
+describe('client d’authentification', () => {
+  it('captcha, inscription, connexion et déconnexion', async () => {
+    const captcha = json(200, { question: 'Combien font 2 + 3 ?', token: 't' });
+    expect(await getCaptcha(captcha)).toEqual({ question: 'Combien font 2 + 3 ?', token: 't' });
+    expect(firstCall(captcha)[0]).toBe('/api/auth/captcha');
+
+    const up = json(201, { email: 'a@example.test', isAdmin: false });
+    await signup('a@example.test', 'mot-de-passe-1', { token: 't', answer: '5' }, up);
+    expect(firstCall(up)[0]).toBe('/api/auth/signup');
+    expect(JSON.parse(firstCall(up)[1].body as string)).toEqual({
+      email: 'a@example.test',
+      password: 'mot-de-passe-1',
+      captcha: { token: 't', answer: '5' },
+    });
+
+    const inn = json(200, { email: 'a@example.test', isAdmin: false });
+    expect(await login('a@example.test', 'mot-de-passe-1', inn)).toEqual({
+      email: 'a@example.test',
+      isAdmin: false,
+    });
+    expect(firstCall(inn)[1].method).toBe('POST');
+
+    const out = empty(204);
+    await logout(out);
+    expect(firstCall(out)[0]).toBe('/api/auth/logout');
+  });
+
+  it('messages d’erreur en français', async () => {
+    await expect(login('a@example.test', 'x', json(403, { error: 'ip_banned' }))).rejects.toThrow(
+      /bloquée/i,
+    );
+    await expect(
+      login('a@example.test', 'x', json(401, { error: 'invalid_credentials' })),
+    ).rejects.toThrow(/e-mail ou mot de passe incorrect/i);
+  });
+
+  it('mot de passe : changement et réinitialisation', async () => {
+    const change = empty(204);
+    await changePassword('ancien', 'nouveau-mot-1', change);
+    expect(firstCall(change)[0]).toBe('/api/auth/password');
+    expect(JSON.parse(firstCall(change)[1].body as string)).toEqual({
+      current: 'ancien',
+      next: 'nouveau-mot-1',
+    });
+    const reset = empty(204);
+    await resetPassword('jeton/à encoder', 'nouveau-mot-1', reset);
+    expect(firstCall(reset)[0]).toBe(`/api/auth/reset/${encodeURIComponent('jeton/à encoder')}`);
+  });
+
+  it('invitations : création, aperçu, acceptation', async () => {
+    const create = json(201, { token: 'abc', role: 'viewer', expiresAt: 'x' });
+    expect((await createInvitation('t1', 'viewer', create)).token).toBe('abc');
+    expect(firstCall(create)[0]).toBe('/api/trips/t1/invitations');
+    const preview = json(200, { tripId: 't1', tripName: 'V', ownerEmail: 'o', role: 'viewer' });
+    await getInvitation('abc', preview);
+    expect(firstCall(preview)[0]).toBe('/api/invitations/abc');
+    const accept = json(200, { tripId: 't1' });
+    expect(await acceptInvitation('abc', accept)).toEqual({ tripId: 't1' });
+    expect(firstCall(accept)[0]).toBe('/api/invitations/abc/accept');
+  });
+
+  it('administration : lien de réinitialisation, IP bannies', async () => {
+    const reset = json(201, { token: 'r', expiresAt: 'x' });
+    await adminCreateReset('a@example.test', reset);
+    expect(firstCall(reset)[0]).toBe('/api/admin/resets');
+    const bans = json(200, { bans: [{ ip: '1.2.3.4' }] });
+    expect(await adminListBans(bans)).toEqual([{ ip: '1.2.3.4' }]);
+    const unban = empty(204);
+    await adminUnban('2001:db8::1', unban);
+    expect(firstCall(unban)[0]).toBe(`/api/admin/bans/${encodeURIComponent('2001:db8::1')}`);
+    expect(firstCall(unban)[1].method).toBe('DELETE');
   });
 });
 

@@ -21,6 +21,7 @@ import {
   type TripsEnv,
 } from './shared';
 import { registerBatchRoute } from './batch';
+import { registerInvitationRoutes } from './invitations';
 import { dayBoundsOk, invalidDayBoundsBody, planDayUpdate } from './plans';
 import { registerStepRoutes } from './steps';
 
@@ -200,12 +201,14 @@ trips.put('/:id/members/:email', access('owner'), async (c) => {
   if (email.data === c.get('userEmail')) {
     return c.json({ error: 'owner_cannot_be_member' }, 400);
   }
-  await c.env.DB.prepare(
-    `INSERT INTO trip_members (trip_id, email, role, created_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT (trip_id, email) DO UPDATE SET role = excluded.role`,
+  // Change le rôle d'un membre existant. On devient membre en acceptant une invitation : l'ajout
+  // direct par e-mail donnerait accès à quiconque s'inscrit avec cette adresse.
+  const res = await c.env.DB.prepare(
+    'UPDATE trip_members SET role = ? WHERE trip_id = ? AND email = ?',
   )
-    .bind(id, email.data, body.data.role, now())
+    .bind(body.data.role, id, email.data)
     .run();
+  if (res.meta.changes !== 1) return c.json({ error: 'not_member' }, 404);
   return c.body(null, 204);
 });
 
@@ -219,4 +222,5 @@ trips.delete('/:id/members/:email', access('owner'), async (c) => {
 });
 
 registerStepRoutes(trips);
+registerInvitationRoutes(trips);
 registerBatchRoute(trips);

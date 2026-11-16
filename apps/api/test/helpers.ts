@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import type { MiddlewareHandler } from 'hono';
 import { createApp } from '../src/app';
-import type { AuthEnv } from '../src/auth';
+import type { AuthEnv } from '../src/auth/session';
 
 /** Authentification de test : l'e-mail vient de l'en-tête x-test-user. */
 const testAuth: MiddlewareHandler<AuthEnv> = async (c, next) => {
@@ -44,7 +44,13 @@ export function makeCaller(
       path,
       {
         method,
-        headers: { 'x-test-user': user, 'content-type': 'application/json', ...headers },
+        headers: {
+          'x-test-user': user,
+          'content-type': 'application/json',
+          // Contrôle CSRF : les écritures doivent venir de la même origine.
+          origin: 'http://localhost',
+          ...headers,
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
       },
       { ...env, ...bindings },
@@ -80,4 +86,17 @@ export async function addStep(
   });
   if (res.status !== 201) throw new Error(`ajout impossible : ${JSON.stringify(res.body)}`);
   return res.body;
+}
+
+/**
+ * Ajoute directement un membre au voyage, comme le ferait l'acceptation d'une invitation (l'ajout
+ * par e-mail n'existe plus dans l'API).
+ */
+export async function addMember(tripId: string, email: string, role: 'viewer' | 'editor') {
+  await env.DB.prepare(
+    `INSERT INTO trip_members (trip_id, email, role, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (trip_id, email) DO UPDATE SET role = excluded.role`,
+  )
+    .bind(tripId, email, role, new Date().toISOString())
+    .run();
 }

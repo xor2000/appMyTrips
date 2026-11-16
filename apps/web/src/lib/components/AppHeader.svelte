@@ -1,12 +1,13 @@
 <script lang="ts">
+  import type { Me } from '@mytrips/core';
   import { resolve } from '$app/paths';
 
   interface Props {
-    /** E-mail de l'utilisateur connecté, s'il est connu. */
-    userEmail?: string | null;
+    /** Utilisateur connecté, s'il est connu. */
+    me?: Me | null;
   }
 
-  let { userEmail = null }: Props = $props();
+  let { me = null }: Props = $props();
 </script>
 
 <header class="app-header">
@@ -14,8 +15,15 @@
     <img src="/favicon.svg" alt="" width="36" height="36" />
     <span>MyTrips</span>
   </a>
-  {#if userEmail}
-    <span class="user" data-testid="user-email">{userEmail}</span>
+  {#if me}
+    <nav class="account" aria-label="Compte">
+      {#if me.isAdmin}
+        <a class="link" href={resolve('/admin')}>Administration</a>
+      {/if}
+      <a class="user" href={resolve('/compte')} data-testid="user-email" title="Mon compte"
+        >{me.email}</a
+      >
+    </nav>
   {/if}
 </header>
 
@@ -45,11 +53,34 @@
     border-radius: 11px;
   }
 
+  .account {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .link {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .link:hover {
+    color: var(--fg);
+  }
+
   .user {
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-pill);
     background: var(--surface-2);
     color: var(--muted);
     font-size: 13px;
+    text-decoration: none;
+  }
+
+  .user:hover {
+    background: var(--line);
+    color: var(--fg);
   }
 </style>

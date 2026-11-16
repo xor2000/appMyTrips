@@ -9,12 +9,21 @@ describe('AppHeader', () => {
     expect(link.getAttribute('href')).toBe('/');
   });
 
-  it('affiche l’e-mail de l’utilisateur connecté quand il est connu', () => {
-    render(AppHeader, { props: { userEmail: 'alice@example.test' } });
-    expect(screen.getByText('alice@example.test')).toBeTruthy();
+  it('connecté : l’e-mail mène à la page du compte', () => {
+    render(AppHeader, { props: { me: { email: 'alice@example.test', isAdmin: false } } });
+    const account = screen.getByRole('link', { name: /alice@example.test/ });
+    expect(account.getAttribute('href')).toBe('/compte');
+    expect(screen.queryByRole('link', { name: 'Administration' })).toBeNull();
   });
 
-  it('n’affiche aucun e-mail quand l’utilisateur est inconnu', () => {
+  it('administrateur : lien vers l’administration', () => {
+    render(AppHeader, { props: { me: { email: 'admin@example.test', isAdmin: true } } });
+    expect(screen.getByRole('link', { name: 'Administration' }).getAttribute('href')).toBe(
+      '/admin',
+    );
+  });
+
+  it('n’affiche aucun compte quand l’utilisateur est inconnu', () => {
     render(AppHeader);
     expect(screen.queryByTestId('user-email')).toBeNull();
   });

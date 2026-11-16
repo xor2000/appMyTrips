@@ -21,11 +21,11 @@
   ],
   // R2 (binding FILES, bucket mytrips-files) sera ajouté au lot 6 (GPX) : R2 n'est pas encore activé sur le compte.
   "observability": { "enabled": true },
-  // URL Preview désactivées : Access ne protège que l'URL de production (workers.dev).
-  // Sans cette ligne, chaque `wrangler deploy` les réactive.
+  // URL Preview désactivées : une seule URL publique (workers.dev), qui partage la base D1 de
+  // production. Sans cette ligne, chaque `wrangler deploy` les réactive.
   "preview_urls": false,
   // Contact du projet dans le User-Agent du routage (politique d'usage de Transitous) : public.
   "vars": { "CONTACT_URL": "https://github.com/xor2000/appMyTrips" },
-  // Secrets et variables de production (wrangler secret put) : ACCESS_TEAM_DOMAIN, ACCESS_AUD.
-  // DEV_USER_EMAIL est réservé au développement local (.dev.vars) et ignoré si ACCESS_AUD est défini.
+  // Secrets et variables de production (wrangler secret put) : AUTH_SECRET (signature des
+  // captchas), ADMIN_EMAILS (administrateurs, e-mails séparés par des virgules).
 }

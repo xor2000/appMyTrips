@@ -18,8 +18,9 @@ pnpm install
 cp apps/api/.dev.vars.example apps/api/.dev.vars
 ```
 
-`apps/api/.dev.vars` (ignoré par git) définit `DEV_USER_EMAIL`, l'identité utilisée en local à la place
-de Cloudflare Access.
+`apps/api/.dev.vars` (ignoré par git) définit `AUTH_SECRET` (signature des captchas) et
+`ADMIN_EMAILS` (administrateurs, e-mails séparés par des virgules). En local, créer son compte sur
+`/connexion` (onglet « Créer un compte ») avec un e-mail de `ADMIN_EMAILS` pour accéder à `/admin`.
 
 Créer ou mettre à jour la base D1 locale (à refaire après chaque nouvelle migration) :
 
@@ -114,20 +115,22 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
 2. Appliquer les migrations : `pnpm --filter @mytrips/api db:migrate:remote`. À faire **avant** chaque
    déploiement qui ajoute une migration.
 3. Déployer : `pnpm run deploy` (et non `pnpm deploy`, commande intégrée de pnpm).
-4. Protéger le Worker avec **Cloudflare Access** : Workers & Pages → mytrips → **Domains** → ligne
-   **Production** (workers.dev) → **Enable Access** :
-   - **Scope** : « All traffic » ;
-   - **Authentication policy** : « Cloudflare account » (membres du compte), ou une liste d'e-mails
-     dans Zero Trust → Access → Applications ;
-   - désactiver les URL **Preview** (elles exposeraient d'autres versions sans cette protection) ;
-   - noter l'**AUD** affiché. Le **domaine d'équipe** est l'hôte vers lequel l'URL du Worker redirige
-     (`curl -I https://mytrips.<sous-domaine>.workers.dev` → `https://<équipe>.cloudflareaccess.com/…`).
-5. Déclarer les secrets du Worker :
+4. Déclarer le secret d'authentification (une longue valeur aléatoire, ex.
+   `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`) et les
+   administrateurs :
 
    ```bash
-   pnpm --filter @mytrips/api exec wrangler secret put ACCESS_TEAM_DOMAIN
-   pnpm --filter @mytrips/api exec wrangler secret put ACCESS_AUD
+   pnpm --filter @mytrips/api exec wrangler secret put AUTH_SECRET
+   pnpm --filter @mytrips/api exec wrangler secret put ADMIN_EMAILS
    ```
+
+   `ADMIN_EMAILS` peut aussi aller dans les `vars` de `wrangler.jsonc` (il n'est pas secret, mais le
+   dépôt est public).
+
+5. Créer son compte sur `/connexion` avec un e-mail de `ADMIN_EMAILS`. Un compte créé avec l'e-mail
+   d'un ancien utilisateur retrouve ses voyages et ses partages.
+
+   Autres secrets :
 
    Facultatif mais recommandé : la clé Geoapify, secours de la découverte de lieux quand les
    instances publiques d'Overpass sont saturées (compte gratuit sur https://myprojects.geoapify.com) :
@@ -145,11 +148,27 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
    Pour Transitous (bus, train), le dépôt est public et `CONTACT_URL` (URL du dépôt) est défini
    dans les `vars` de `apps/api/wrangler.jsonc`.
 
-Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev (équipe Access
-`mytraces-pages.cloudflareaccess.com`).
+Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev.
 
-`DEV_USER_EMAIL` ne doit jamais être défini en production. Il est de toute façon ignoré dès que
-`ACCESS_AUD` est défini.
+**Bascule depuis Cloudflare Access** (une fois) : `AUTH_SECRET` et `ADMIN_EMAILS` (étape 4),
+migration `0007` (`db:migrate:remote`), déploiement, création de son compte, vérification, puis
+suppression de l'application Access (Zero Trust → Access → Applications). Tant qu'elle existe, les
+deux protections se cumulent ; ensuite, seule l'authentification de l'application protège `/api`.
+
+### Commandes de secours
+
+Sans session (base distante ; `--local` pour la base locale) :
+
+```bash
+pnpm --filter @mytrips/api run reset-link moi@example.com
+```
+
+```bash
+pnpm --filter @mytrips/api run unban-ip 203.0.113.7
+```
+
+`reset-link` affiche un lien de réinitialisation du mot de passe (24 h, usage unique) ; `unban-ip`
+réactive une adresse bannie après 3 mots de passe faux (aussi possible depuis la page `/admin`).
 
 ## Licence
 

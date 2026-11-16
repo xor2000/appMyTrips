@@ -2,10 +2,10 @@
 export interface Bindings {
   ASSETS: Fetcher;
   DB: D1Database;
-  /** Domaine d'équipe Cloudflare Access, ex. « mytrips.cloudflareaccess.com ». */
-  ACCESS_TEAM_DOMAIN?: string;
-  /** Audience (AUD) de l'application Access. Sa présence désactive DEV_USER_EMAIL. */
-  ACCESS_AUD?: string;
+  /** Secret (wrangler secret put) : signature HMAC des captchas. */
+  AUTH_SECRET?: string;
+  /** Administrateurs : e-mails séparés par des virgules. */
+  ADMIN_EMAILS?: string;
   /** URL du service Photon (géocodage) ; défaut https://photon.komoot.io. */
   PHOTON_URL?: string;
   /** Clé OpenRouteService (secret) ; sans elle, voiture, vélo et marche sont estimés. */
@@ -22,6 +22,4 @@ export interface Bindings {
   GEOAPIFY_API_KEY?: string;
   /** URL de l'API Places de Geoapify ; défaut https://api.geoapify.com. */
   GEOAPIFY_URL?: string;
-  /** Développement local uniquement : e-mail utilisé sans JWT quand ACCESS_AUD est absent. */
-  DEV_USER_EMAIL?: string;
 }

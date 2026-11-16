@@ -5,18 +5,35 @@
   import '#lib/styles/controls.css';
   import { onMount, type Snippet } from 'svelte';
   import { pwaInfo } from 'virtual:pwa-info';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import AppHeader from '#lib/components/AppHeader.svelte';
   import UpdatePrompt from '#lib/components/UpdatePrompt.svelte';
-  import { fetchMe } from '#lib/api.ts';
+  import { fetchSession, setUnauthorizedHandler } from '#lib/api.ts';
+  import { isPublicPath, loginUrl } from '#lib/auth/next.ts';
+  import { session } from '#lib/auth/session.svelte.ts';
 
   let { children }: { children: Snippet } = $props();
 
-  let userEmail = $state<string | null>(null);
   let needRefresh = $state(false);
   let updateSW: ((reload?: boolean) => Promise<void>) | undefined;
 
+  /** Session absente ou expirée : vers la connexion, en gardant la page où revenir. */
+  function toLogin() {
+    session.me = null;
+    const { pathname, search } = page.url;
+    if (isPublicPath(pathname)) return;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- chemin interne vérifié par loginUrl
+    goto(loginUrl(pathname + search), { replaceState: true });
+  }
+
   onMount(() => {
-    fetchMe().then((me) => (userEmail = me?.email ?? null));
+    setUnauthorizedHandler(toLogin);
+    // Hors ligne (état inconnu), on reste sur la page : les copies restent consultables.
+    fetchSession().then((s) => {
+      if (s.state === 'signed-in') session.me = s.me;
+      else if (s.state === 'signed-out') toLogin();
+    });
 
     // Enregistrement du service worker (build uniquement : pwaInfo est indéfini en dev),
     // avec invite de mise à jour. Le manifeste est lié en dur dans app.html.
@@ -28,11 +45,12 @@
         });
       });
     }
+    return () => setUnauthorizedHandler(null);
   });
 </script>
 
 <div class="app">
-  <AppHeader {userEmail} />
+  <AppHeader me={session.me} />
   <main>
     {@render children()}
   </main>

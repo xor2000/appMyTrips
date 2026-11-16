@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-
-const BOB = 'bob@example.test';
+import { anonymousContext, signupViaUi, uniqueEmail } from './auth-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -85,17 +84,33 @@ test('partager en lecture seule : l’invité voit le voyage sans pouvoir le mod
   await createTrip(page, name);
   await page.getByRole('button', { name: 'Partager' }).click();
   const dialog = page.getByRole('dialog', { name: /partager/i });
-  await dialog.getByLabel('E-mail').fill(BOB);
-  await dialog.getByLabel('Rôle').selectOption('viewer');
-  await dialog.getByRole('button', { name: 'Inviter' }).click();
-  await expect(dialog.getByText(BOB)).toBeVisible();
+  await dialog.getByLabel('Rôle de l’invité').selectOption('viewer');
+  await dialog.getByRole('button', { name: 'Créer un lien' }).click();
+  const link = await dialog.getByLabel('Lien d’invitation').inputValue();
+  expect(link).toMatch(/\/invitation\/[\w-]+$/);
   await dialog.getByRole('button', { name: 'Fermer' }).click();
 
-  // Bob, dans un autre contexte de navigateur (en-tête de dev x-dev-user-email).
-  const bob = await browser.newContext({ extraHTTPHeaders: { 'x-dev-user-email': BOB } });
+  // Bob, sans compte, ouvre le lien dans un autre contexte : connexion demandée, il s'inscrit,
+  // revient sur l'invitation et l'accepte.
+  const bob = await anonymousContext(browser);
   await bob.route('https://tiles.openfreemap.org/**', (route) =>
     route.fulfill({ json: EMPTY_STYLE }),
   );
+  const invited = await bob.newPage();
+  await invited.goto(new URL(link).pathname);
+  await expect(invited).toHaveURL(/\/connexion\?suite=/);
+  const bobEmail = uniqueEmail('bob');
+  await signupViaUi(invited, bobEmail);
+  await expect(invited.getByText(name)).toBeVisible();
+  await invited.getByRole('button', { name: 'Rejoindre le voyage' }).click();
+  await expect(invited.getByRole('heading', { level: 1, name })).toBeVisible();
+  await expect(invited.getByText('Lecture seule')).toBeVisible();
+
+  // Le propriétaire voit Bob parmi les membres.
+  await page.reload();
+  await page.getByRole('button', { name: 'Partager' }).click();
+  await expect(page.getByRole('dialog', { name: /partager/i }).getByText(bobEmail)).toBeVisible();
+
   const bobPage = await bob.newPage();
   await bobPage.goto('/');
   const card = bobPage.getByRole('article').filter({ hasText: name });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALICE, CAROL, call, createTrip } from './helpers';
+import { ALICE, CAROL, call, createTrip, addMember } from './helpers';
 
 const CHALET = {
   name: 'Chalet de Cotagne',
@@ -59,7 +59,7 @@ describe('séjours', () => {
 
   it('un lecteur ne peut pas ajouter de séjour (403)', async () => {
     const t = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${t.trip.id}/members/${CAROL}`, { role: 'viewer' });
+    await addMember(t.trip.id, CAROL, 'viewer');
     const res = await call(CAROL, 'POST', `/api/trips/${t.trip.id}/stays`, CHALET, {
       'if-match': '1',
     });
