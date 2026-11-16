@@ -68,6 +68,12 @@ describe('inverseOps', () => {
     ).toEqual([{ kind: 'step', id: 's1', patch: { dayId: 'd1', parentId: null, position: 'a1' } }]);
   });
 
+  it('option dénivelé d’une randonnée : remise à son ancienne valeur', () => {
+    expect(
+      inverseOps({ steps, days }, [{ kind: 'step', id: 's1', patch: { useElevation: true } }]),
+    ).toEqual([{ kind: 'step', id: 's1', patch: { useElevation: false } }]);
+  });
+
   it('heures du jour : retour à la valeur héritée (null)', () => {
     expect(
       inverseOps({ steps, days }, [{ kind: 'day', id: 'd1', patch: { dayStart: '07:40' } }]),

@@ -1,6 +1,14 @@
-import { keyAt, type DayPatch, type Step, type StepPatch, type Trip } from '@mytrips/core';
+import {
+  hikeDurationMin,
+  keyAt,
+  type DayPatch,
+  type Step,
+  type StepPatch,
+  type Trip,
+} from '@mytrips/core';
 import tzLookup from '@photostructure/tz-lookup';
 import { getStep } from '../db/steps';
+import { getTrip } from '../db/trips';
 import { now } from './shared';
 
 /**
@@ -123,6 +131,18 @@ export async function planStepUpdate(
     if (p[k] !== undefined) fields[STEP_COLUMNS[k]] = p[k];
   }
   if (p.lat !== undefined && p.lng !== undefined) fields.timezone = timezoneAt(p.lat, p.lng);
+  // Randonnée GPX : une durée saisie devient manuelle ; l'option dénivelé recalcule la durée.
+  if (p.useElevation !== undefined) fields.use_elevation = p.useElevation ? 1 : 0;
+  if (step.gpx && p.durationMin !== undefined) fields.duration_manual = 1;
+  else if (step.gpx && p.useElevation !== undefined) {
+    const trip = await getTrip(db, tripId);
+    fields.duration_manual = 0;
+    fields.duration_min = hikeDurationMin(
+      step.gpx.stats,
+      trip?.hikeSpeedKmh ?? 3.5,
+      p.useElevation,
+    );
+  }
   fields.updated_at = now();
   const cols = Object.keys(fields);
   const moved = p.lat !== undefined || p.exitLat !== undefined || p.exitLng !== undefined;

@@ -1,5 +1,6 @@
 import type {
   BatchOp,
+  GpxData,
   Bbox,
   DayPatch,
   LegCreate,
@@ -326,4 +327,28 @@ export function applyBatch(
   fetcher: Fetcher = fetch,
 ): Promise<TripSnapshot> {
   return request(fetcher, `/api/trips/${tripId}/batch`, versioned(version, 'POST', { ops }));
+}
+
+/** Tracé GPX d'une randonnée (analysé dans le navigateur) : points, statistiques et durée. */
+export function putGpx(
+  tripId: string,
+  stepId: string,
+  version: number,
+  gpx: GpxData,
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(
+    fetcher,
+    `/api/trips/${tripId}/steps/${stepId}/gpx`,
+    versioned(version, 'PUT', { gpx }),
+  );
+}
+
+export function deleteGpx(
+  tripId: string,
+  stepId: string,
+  version: number,
+  fetcher: Fetcher = fetch,
+): Promise<TripSnapshot> {
+  return request(fetcher, `/api/trips/${tripId}/steps/${stepId}/gpx`, versioned(version, 'DELETE'));
 }

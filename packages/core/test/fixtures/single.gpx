@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="MyTrips tests" xmlns="http://www.topografix.com/GPX/1/1">
+<metadata><name>Tour test</name></metadata>
+<trk><trkseg><trkpt lat="45.9000000" lon="6.1300000"><ele>500.0</ele></trkpt></trkseg></trk>
+</gpx>

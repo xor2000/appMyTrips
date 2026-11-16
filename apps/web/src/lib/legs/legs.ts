@@ -98,3 +98,18 @@ export function dayLegLines(items: readonly TimelineItem[], legs: readonly Leg[]
   }
   return lines;
 }
+
+/** Tracés GPX des randonnées du jour (vert), clé = identifiant de l'étape. */
+export function dayHikeLines(items: readonly TimelineItem[]): LegLine[] {
+  const steps = items.flatMap((i) =>
+    i.kind === 'step' ? [i.step] : i.kind === 'group' ? i.children : [],
+  );
+  return steps
+    .filter((s) => s.gpx !== null)
+    .map((s) => ({
+      key: s.id,
+      color: '--type-hike',
+      dashed: false,
+      coordinates: s.gpx!.track.map(([lat, lng]) => [lng, lat] as [number, number]),
+    }));
+}

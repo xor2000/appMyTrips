@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   applyBatch,
+  deleteGpx,
+  putGpx,
   createLeg,
   createStay,
   createStep,
@@ -270,5 +272,33 @@ describe('lot atomique', () => {
     expect(JSON.parse(String(firstCall(fetcher)[1].body))).toEqual({
       ops: [{ kind: 'step', id: 's1', patch: { durationMin: 90 } }],
     });
+  });
+});
+
+describe('GPX', () => {
+  it('envoie le tracé d’une randonnée et le retire', async () => {
+    const put = json(200, {});
+    const gpx = {
+      stats: {
+        distanceM: 1000,
+        ascentM: null,
+        descentM: null,
+        minEle: null,
+        maxEle: null,
+        isLoop: false,
+        pointCount: 2,
+      },
+      track: [
+        [45, 6, null],
+        [45.1, 6.1, null],
+      ] as [number, number, number | null][],
+    };
+    await putGpx('t1', 's1', 3, gpx, put);
+    expect(firstCall(put)[0]).toBe('/api/trips/t1/steps/s1/gpx');
+    expect(firstCall(put)[1].method).toBe('PUT');
+    expect(JSON.parse(String(firstCall(put)[1].body))).toEqual({ gpx });
+    const del = json(200, {});
+    await deleteGpx('t1', 's1', 4, del);
+    expect(firstCall(del)[1].method).toBe('DELETE');
   });
 });

@@ -1,8 +1,11 @@
+import { z } from 'zod';
 import {
   StayCreate,
   StayPatch,
   StepCreate,
+  GpxData,
   StepPatch,
+  hikeDurationMin,
   keysBetween,
   sortByPosition,
 } from '@mytrips/core';
@@ -10,7 +13,7 @@ import type { Context, Hono } from 'hono';
 import { pruneStaleLegs } from '../db/legs';
 import { getStep, getSteps } from '../db/steps';
 import { dayBelongsToTrip, lastPosition, parentIsValid, planStepUpdate, timezoneAt } from './plans';
-import { getSnapshot } from '../db/trips';
+import { getSnapshot, getTrip } from '../db/trips';
 import {
   access,
   now,
@@ -45,15 +48,23 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
     }
     const position = s.position ?? (await lastPosition(db, id, s.dayId, s.parentId));
     const hasPoint = s.kind === 'step' && s.lat !== undefined && s.lng !== undefined;
+    // Randonnée GPX : durée tirée du tracé, à la vitesse du voyage, sauf durée saisie.
+    let durationMin = s.durationMin;
+    if (s.gpx && !s.durationManual) {
+      const trip = await getTrip(db, id);
+      durationMin = hikeDurationMin(s.gpx.stats, trip?.hikeSpeedKmh ?? 3.5, s.useElevation);
+    }
     const ts = now();
 
     const ok = await writeWithVersion(db, id, expected, null, (guard, g) => [
       db
         .prepare(
           `INSERT INTO steps (id, trip_id, day_id, parent_id, position, kind, type, name, lat, lng,
-             address, duration_min, fixed_start, timezone, opening_hours, osm_ref, booking_ref,
-             booking_url, notes, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`,
+             address, exit_lat, exit_lng, duration_min, fixed_start, timezone, opening_hours,
+             osm_ref, booking_ref, booking_url, notes, gpx_stats, gpx_track, use_elevation,
+             duration_manual, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE ${guard}`,
         )
         .bind(
           crypto.randomUUID(),
@@ -67,7 +78,9 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
           hasPoint ? s.lat : null,
           hasPoint ? s.lng : null,
           s.address ?? null,
-          s.durationMin,
+          s.exitLat,
+          s.exitLng,
+          durationMin,
           s.fixedStart,
           hasPoint ? timezoneAt(s.lat!, s.lng!) : null,
           s.openingHours ?? null,
@@ -75,6 +88,10 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
           s.bookingRef ?? null,
           s.bookingUrl ?? null,
           s.notes,
+          s.gpx ? JSON.stringify(s.gpx.stats) : null,
+          s.gpx ? JSON.stringify(s.gpx.track) : null,
+          s.useElevation ? 1 : 0,
+          s.gpx && s.durationManual ? 1 : 0,
           ts,
           ts,
           ...g,
@@ -139,6 +156,64 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
       ),
       db.prepare(`DELETE FROM steps WHERE parent_id = ? AND ${guard}`).bind(step.id, ...g),
       db.prepare(`DELETE FROM steps WHERE id = ? AND ${guard}`).bind(step.id, ...g),
+    ]);
+    if (!ok) return versionConflict(c, id);
+    return snapshot(c);
+  });
+
+  /** Tracé GPX d'une randonnée : analysé dans le navigateur, statistiques et tracé simplifié ici. */
+  trips.put('/:id/steps/:stepId/gpx', access('write'), async (c) => {
+    const id = c.req.param('id');
+    const db = c.env.DB;
+    const body = await parseBody(c, z.object({ gpx: GpxData }));
+    if ('error' in body) return body.error;
+    const expected = requireVersion(c);
+    if (expected instanceof Response) return expected;
+    const step = await getStep(db, id, c.req.param('stepId'));
+    if (!step || step.kind !== 'step') return c.json({ error: 'not_found' }, 404);
+    const { gpx } = body.data;
+    const first = gpx.track[0]!;
+    const last = gpx.track[gpx.track.length - 1]!;
+    // Points déplacés : le plan retire les trajets calculés adjacents.
+    const plan = await planStepUpdate(db, id, step, {
+      type: 'hike',
+      lat: first[0],
+      lng: first[1],
+      exitLat: last[0],
+      exitLng: last[1],
+    });
+    if ('error' in plan) return c.json(plan.error.body, plan.error.status);
+    const trip = await getTrip(db, id);
+    const duration = step.durationManual
+      ? step.durationMin
+      : hikeDurationMin(gpx.stats, trip?.hikeSpeedKmh ?? 3.5, step.useElevation);
+    const ok = await writeWithVersion(db, id, expected, null, (guard, g) => [
+      ...plan.statements(guard, g),
+      db
+        .prepare(
+          `UPDATE steps SET gpx_stats = ?, gpx_track = ?, duration_min = ? WHERE id = ? AND ${guard}`,
+        )
+        .bind(JSON.stringify(gpx.stats), JSON.stringify(gpx.track), duration, step.id, ...g),
+    ]);
+    if (!ok) return versionConflict(c, id);
+    return snapshot(c);
+  });
+
+  trips.delete('/:id/steps/:stepId/gpx', access('write'), async (c) => {
+    const id = c.req.param('id');
+    const db = c.env.DB;
+    const expected = requireVersion(c);
+    if (expected instanceof Response) return expected;
+    const step = await getStep(db, id, c.req.param('stepId'));
+    if (!step || !step.gpx) return c.json({ error: 'not_found' }, 404);
+    // Plus de point de sortie distinct : les trajets calculés adjacents sont retirés.
+    const plan = await planStepUpdate(db, id, step, { exitLat: null, exitLng: null });
+    if ('error' in plan) return c.json(plan.error.body, plan.error.status);
+    const ok = await writeWithVersion(db, id, expected, null, (guard, g) => [
+      ...plan.statements(guard, g),
+      db
+        .prepare(`UPDATE steps SET gpx_stats = NULL, gpx_track = NULL WHERE id = ? AND ${guard}`)
+        .bind(step.id, ...g),
     ]);
     if (!ok) return versionConflict(c, id);
     return snapshot(c);

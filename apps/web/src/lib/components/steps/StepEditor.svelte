@@ -1,7 +1,8 @@
 <script lang="ts">
   import { STEP_TYPES, STEP_TYPE_INFO, type Day, type Step, type StepPatch } from '@mytrips/core';
   import { untrack } from 'svelte';
-  import { dayTitle } from '#lib/format.ts';
+  import { dayTitle, formatKm } from '#lib/format.ts';
+  import ElevationProfile from '../gpx/ElevationProfile.svelte';
   import Modal from '../Modal.svelte';
 
   interface Props {
@@ -10,9 +11,12 @@
     onSave: (patch: StepPatch) => Promise<void>;
     onDelete: () => void;
     onClose: () => void;
+    /** Import d'un GPX sur une randonnée (enregistré aussitôt). */
+    onImportGpx?: (file: File) => Promise<void>;
+    onRemoveGpx?: () => Promise<void>;
   }
 
-  let { step, days, onSave, onDelete, onClose }: Props = $props();
+  let { step, days, onSave, onDelete, onClose, onImportGpx, onRemoveGpx }: Props = $props();
 
   // Valeurs de départ, lues une seule fois à l'ouverture.
   const start = untrack(() => step);
@@ -26,6 +30,41 @@
   let bookingRef = $state(start.bookingRef ?? '');
   let bookingUrl = $state(start.bookingUrl ?? '');
   let openingHours = $state(start.openingHours ?? '');
+  let useElevation = $state(start.useElevation);
+  /** Tracé à jour (un import pendant l'édition met l'étape à jour). */
+  const gpx = $derived(step.gpx);
+  const isHike = $derived(type === 'hike');
+  const gpxSummary = $derived(
+    gpx
+      ? [
+          formatKm(gpx.stats.distanceM),
+          gpx.stats.ascentM !== null && `D+ ${gpx.stats.ascentM} m`,
+          gpx.stats.descentM !== null && `D− ${gpx.stats.descentM} m`,
+          gpx.stats.isLoop && 'boucle',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '',
+  );
+
+  async function runGpx(action: () => Promise<void>) {
+    error = null;
+    busy = true;
+    try {
+      await action();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function importFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file && onImportGpx) runGpx(() => onImportGpx(file));
+  }
   let notes = $state(start.notes);
   /** '' = liste d'idées. */
   let dayId = $state(start.dayId ?? '');
@@ -57,6 +96,7 @@
       if (orNull(bookingRef) !== start.bookingRef) patch.bookingRef = orNull(bookingRef);
       if (orNull(bookingUrl) !== start.bookingUrl) patch.bookingUrl = orNull(bookingUrl);
       if (orNull(openingHours) !== start.openingHours) patch.openingHours = orNull(openingHours);
+      if (useElevation !== start.useElevation) patch.useElevation = useElevation;
     }
     if (Object.keys(patch).length === 0) {
       onClose();
@@ -127,6 +167,43 @@
           placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
         />
       </label>
+      {#if isHike}
+        <fieldset class="hike">
+          <legend>Randonnée</legend>
+          {#if gpx}
+            <p class="stats">{gpxSummary}</p>
+            <ElevationProfile track={gpx.track} />
+          {/if}
+          <label class="check">
+            <input
+              type="checkbox"
+              bind:checked={useElevation}
+              disabled={!gpx || gpx.stats.ascentM === null}
+            />
+            Inclure le dénivelé (+1 h / 600 m)
+          </label>
+          <div class="gpx-actions">
+            {#if onImportGpx}
+              <label class="btn btn-soft file">
+                Importer un GPX
+                <input type="file" accept=".gpx,application/gpx+xml" onchange={importFile} />
+              </label>
+            {/if}
+            {#if gpx && onRemoveGpx}
+              <button
+                type="button"
+                class="btn btn-ghost"
+                disabled={busy}
+                onclick={() => runGpx(onRemoveGpx)}>Retirer le GPX</button
+              >
+            {/if}
+          </div>
+          <p class="hint">
+            La durée se calcule depuis le tracé, à la vitesse du voyage ; une durée saisie reste
+            manuelle jusqu’au prochain changement d’option.
+          </p>
+        </fieldset>
+      {/if}
     {/if}
     <label class="field">
       Jour
@@ -200,6 +277,50 @@
     color: var(--fg);
     font: 500 14px var(--font-body);
     resize: vertical;
+  }
+
+  .hike {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-3);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-md);
+  }
+
+  .hike legend {
+    padding: 0 var(--space-1);
+    font-weight: 700;
+  }
+
+  .stats,
+  .hint {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .stats {
+    color: var(--fg);
+    font-family: var(--font-mono);
+  }
+
+  .gpx-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .file {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .file input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
   }
 
   .danger {

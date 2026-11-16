@@ -67,6 +67,7 @@ const STEP_FIELDS = [
   'bookingRef',
   'bookingUrl',
   'openingHours',
+  'useElevation',
 ] as const;
 
 /**

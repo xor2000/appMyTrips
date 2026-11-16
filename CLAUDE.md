@@ -96,6 +96,9 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - **Trajets** (`apps/api/src/routes/legs.ts`) : toute écriture qui change l'ordre ou les jours des
   étapes doit finir par `pruneStaleLegs` (fait par `snapshot()` dans `routes/steps.ts` et par le
   PATCH du voyage). Le front n'affiche que les trajets des paires requises (`dayPairs`).
+- **Travail lourd côté navigateur** : le Worker gratuit n'a que 10 ms de CPU par requête. Un calcul
+  coûteux sur des données de l'utilisateur (ex. analyse GPX, `core/gpx`) se fait dans le navigateur
+  avec le même code `core`, et l'API n'en valide que le résultat.
 - **Découverte de lieux** (`apps/api/src/routes/poi.ts`) : jamais de requête automatique au
   déplacement de la carte (politique d'usage d'Overpass) ; le cache `poi_cache` (case de zoom 13 ×
   catégorie, 7 jours) ne doit recevoir que des réponses complètes. Les tests d'API fixent

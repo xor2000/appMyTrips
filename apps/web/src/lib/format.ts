@@ -76,3 +76,8 @@ export function formatDistance(meters: number): string {
   const km = meters / 1000;
   return km < 10 ? `${km.toFixed(1).replace('.', ',')} km` : `${Math.round(km)} km`;
 }
+
+/** Distance en kilomètres avec une décimale : « 12,4 km ». */
+export function formatKm(meters: number): string {
+  return `${(meters / 1000).toFixed(1).replace('.', ',')} km`;
+}

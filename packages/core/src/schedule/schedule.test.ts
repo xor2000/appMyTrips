@@ -28,6 +28,9 @@ function step(id: string, durationMin: number, extra: Partial<Step> = {}): Step 
     bookingRef: null,
     bookingUrl: null,
     notes: '',
+    gpx: null,
+    useElevation: false,
+    durationManual: false,
     ...extra,
   };
 }

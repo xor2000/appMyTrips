@@ -1,7 +1,14 @@
 import { dayTimeline, encodePolyline } from '@mytrips/core';
 import { describe, expect, it } from 'vitest';
 import { makeLeg, makeStep } from '#lib/test/fixtures.ts';
-import { dayLegLines, dayPairs, isManual, legSourceLabel, suggestionFor } from './legs.ts';
+import {
+  dayHikeLines,
+  dayLegLines,
+  dayPairs,
+  isManual,
+  legSourceLabel,
+  suggestionFor,
+} from './legs.ts';
 
 const steps = [
   makeStep({ id: 'a', position: 'a0', lat: 45.9, lng: 6.1 }),
@@ -76,6 +83,44 @@ describe('dayLegLines', () => {
         coordinates: [
           [6.87, 45.92],
           [7, 46],
+        ],
+      },
+    ]);
+  });
+});
+
+describe('dayHikeLines', () => {
+  it('tracé vert des randonnées GPX du jour', () => {
+    const hike = makeStep({
+      id: 'r',
+      type: 'hike',
+      gpx: {
+        stats: {
+          distanceM: 1000,
+          ascentM: null,
+          descentM: null,
+          minEle: null,
+          maxEle: null,
+          isLoop: false,
+          pointCount: 2,
+        },
+        track: [
+          [45.9, 6.1, null],
+          [45.95, 6.2, null],
+        ],
+      },
+    });
+    const lines = dayHikeLines(
+      dayTimeline('2026-07-10', [hike, makeStep({ id: 'm', position: 'b' })], []),
+    );
+    expect(lines).toEqual([
+      {
+        key: 'r',
+        color: '--type-hike',
+        dashed: false,
+        coordinates: [
+          [6.1, 45.9],
+          [6.2, 45.95],
         ],
       },
     ]);
