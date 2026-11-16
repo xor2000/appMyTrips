@@ -47,6 +47,14 @@ secours. Variables de `apps/api/.dev.vars` (toutes facultatives) :
 - `GEOAPIFY_API_KEY` : clé Geoapify (gratuite, 3 000 crédits par jour). Sans elle, pas de secours
   quand Overpass est saturé.
 
+Les trajets sont calculés par l'API :
+
+- voiture, vélo, marche : OpenRouteService, avec `ORS_API_KEY` (clé gratuite sur
+  https://openrouteservice.org, utilisée sur `api.heigit.org`). Sans clé, la durée est estimée ;
+- bus, train : Transitous, sans clé. Sa politique d'usage impose un projet open source publié,
+  un usage non commercial et un contact dans le User-Agent : `CONTACT_URL` (URL du projet) ;
+- avion, ferry : calcul local.
+
 Si le port 8787 est déjà pris, lancer l'API sur un autre port et indiquer son URL au front :
 
 ```bash
@@ -122,6 +130,15 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
    ```bash
    pnpm --filter @mytrips/api exec wrangler secret put GEOAPIFY_API_KEY
    ```
+
+   Recommandé aussi : la clé OpenRouteService (sinon voiture, vélo et marche sont estimés) :
+
+   ```bash
+   pnpm --filter @mytrips/api exec wrangler secret put ORS_API_KEY
+   ```
+
+   Pour Transitous (bus, train), le dépôt doit être public et `CONTACT_URL` défini (variable
+   `vars` de `apps/api/wrangler.jsonc`, ex. l'URL du dépôt).
 
 Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev (équipe Access
 `mytraces-pages.cloudflareaccess.com`).

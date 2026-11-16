@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GroupItem, Step } from '@mytrips/core';
+  import type { Snippet } from 'svelte';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
@@ -18,10 +19,22 @@
     onHover: (key: string | null) => void;
     /** Dépôt dans le dossier, à l'index donné parmi ses étapes (sans l'élément déplacé). */
     onDropInto: (stepId: string, index: number) => void;
+    /** Rendu après chaque étape du dossier : tuile de trajet. */
+    after?: Snippet<[string]>;
   }
 
-  let { item, labels, canEdit, highlighted, onEdit, onMove, onDelete, onHover, onDropInto }: Props =
-    $props();
+  let {
+    item,
+    labels,
+    canEdit,
+    highlighted,
+    onEdit,
+    onMove,
+    onDelete,
+    onHover,
+    onDropInto,
+    after,
+  }: Props = $props();
 
   let open = $state(true);
   const Icon = GROUP_ICON;
@@ -75,6 +88,7 @@
           {onDelete}
           {onHover}
         />
+        {@render after?.(child.id)}
       {/each}
       {#if canEdit}
         <DropZone

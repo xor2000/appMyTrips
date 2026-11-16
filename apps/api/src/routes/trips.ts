@@ -9,6 +9,7 @@ import {
   isDayEmpty,
 } from '@mytrips/core';
 import { Hono, type Context } from 'hono';
+import { pruneStaleLegs } from '../db/legs';
 import { getDays, getSnapshot, getTrip, listTrips } from '../db/trips';
 import {
   access,
@@ -159,6 +160,8 @@ trips.patch('/:id', access('write'), async (c) => {
     ),
   ]);
   if (!ok) return versionConflict(c, id);
+  // Jours retirés : leurs étapes passent dans les idées, leurs trajets deviennent caducs.
+  await pruneStaleLegs(db, id);
   return c.json(await getSnapshot(db, id, c.get('role')));
 });
 
@@ -166,6 +169,7 @@ trips.delete('/:id', access('owner'), async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   await db.batch([
+    db.prepare('DELETE FROM legs WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM steps WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM stays WHERE trip_id = ?').bind(id),
     db.prepare('DELETE FROM days WHERE trip_id = ?').bind(id),

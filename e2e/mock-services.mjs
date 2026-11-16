@@ -1,4 +1,5 @@
-// Services externes factices pour les e2e (Photon, Overpass) : réponses déterministes, sans
+// Services externes factices pour les e2e (Photon, Overpass, OpenRouteService, Transitous) :
+// réponses déterministes, sans
 // dépendre des services réels. Ils sont appelés par le Worker, pas par le navigateur.
 import { createServer } from 'node:http';
 
@@ -149,6 +150,35 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   res.setHeader('content-type', 'application/json');
   if (url.pathname === '/health') return res.end('{"ok":true}');
+  // OpenRouteService : itinéraire fixe de 12,3 km en 25 min, tracé en trois points.
+  const ors = /^\/ors\/v2\/directions\/([a-z-]+)\/geojson$/.exec(url.pathname);
+  if (ors && req.method === 'POST') {
+    const { coordinates } = JSON.parse((await readBody(req)) || '{}');
+    const [[lng1, lat1], [lng2, lat2]] = coordinates;
+    return res.end(
+      JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { summary: { distance: 12_345, duration: 1_500 } },
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [lng1, lat1],
+                [(lng1 + lng2) / 2, (lat1 + lat2) / 2 + 0.002],
+                [lng2, lat2],
+              ],
+            },
+          },
+        ],
+      }),
+    );
+  }
+  // Transitous : aucun itinéraire (la saisie manuelle prend le relais).
+  if (url.pathname === '/transitous/api/v5/plan') {
+    return res.end(JSON.stringify({ itineraries: [], direct: [] }));
+  }
   if (url.pathname === '/overpass/api/interpreter') {
     const query = new URLSearchParams(await readBody(req)).get('data') ?? '';
     return res.end(JSON.stringify(overpass(query)));

@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  createLeg,
   createStay,
   createStep,
+  deleteLeg,
   deleteStay,
   deleteStep,
   explorePois,
   poiWiki,
   reversePlace,
   searchPlaces,
+  updateLeg,
   updateStay,
   updateStep,
   createTrip,
@@ -223,5 +226,35 @@ describe('découverte de lieux', () => {
     const fetcher = json(200, { summary: { title: 'Louvre' } });
     expect(await poiWiki('fr:Musée du Louvre', fetcher)).toEqual({ title: 'Louvre' });
     expect(firstCall(fetcher)[0]).toBe('/api/poi/wiki?ref=fr%3AMus%C3%A9e+du+Louvre');
+  });
+});
+
+describe('trajets', () => {
+  it('crée, modifie et supprime un trajet avec la version du voyage', async () => {
+    const create = json(201, { trip: { version: 3 } });
+    await createLeg('t1', 2, { fromKey: 'a', toKey: 'b', mode: 'car' }, create);
+    expect(firstCall(create)[0]).toBe('/api/trips/t1/legs');
+    expect(firstCall(create)[1].method).toBe('POST');
+    expect(new Headers(firstCall(create)[1].headers).get('if-match')).toBe('2');
+
+    const update = json(200, {});
+    await updateLeg('t1', 'l1', 3, { durationMin: 45 }, update);
+    expect(firstCall(update)[0]).toBe('/api/trips/t1/legs/l1');
+    expect(JSON.parse(String(firstCall(update)[1].body))).toEqual({ durationMin: 45 });
+
+    const remove = json(200, {});
+    await deleteLeg('t1', 'l1', 4, remove);
+    expect(firstCall(remove)[1].method).toBe('DELETE');
+  });
+
+  it('aucun itinéraire : message invitant à la saisie manuelle', async () => {
+    await expect(
+      createLeg(
+        't1',
+        2,
+        { fromKey: 'a', toKey: 'b', mode: 'bus' },
+        json(422, { error: 'no_route' }),
+      ),
+    ).rejects.toThrow('Aucun itinéraire trouvé : indiquez la durée à la main.');
   });
 });

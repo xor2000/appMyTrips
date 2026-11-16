@@ -5,6 +5,7 @@
   import Compass from 'lucide-svelte/icons/compass';
   import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
   import type { MapView } from '#lib/api.ts';
+  import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
   import { styleFor, type MapStyleId } from '#lib/map/styles.ts';
 
@@ -29,6 +30,8 @@
     /** Mode « Explorer » ; le bouton n'apparaît que si `onToggleExplore` est fourni. */
     exploring?: boolean;
     onToggleExplore?: () => void;
+    /** Tracés des trajets du jour, colorés par mode ; `highlighted` met en évidence leur clé. */
+    lines?: LegLine[];
   }
 
   let {
@@ -46,6 +49,7 @@
     onHoverPoi = () => {},
     exploring = false,
     onToggleExplore,
+    lines = [],
   }: Props = $props();
 
   let container: HTMLDivElement;
@@ -84,7 +88,17 @@
         attributionControl: false,
       });
       m.addControl(new lib.NavigationControl({ showCompass: false }), 'bottom-right');
-      m.addControl(new lib.AttributionControl({ compact: true }), 'bottom-left');
+      m.addControl(
+        new lib.AttributionControl({
+          compact: true,
+          // Mentions exigées par les services de routage (politiques d'usage d'ORS et Transitous).
+          customAttribution: [
+            'Itinéraires © <a href="https://openrouteservice.org/" target="_blank" rel="noopener">openrouteservice.org</a> (HeiGIT)',
+            'Transports en commun : <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous</a>',
+          ],
+        }),
+        'bottom-left',
+      );
       m.on('contextmenu', (e) => {
         if (!onAddHere) return;
         menu = { x: e.point.x, y: e.point.y, lat: e.lngLat.lat, lng: e.lngLat.lng };
@@ -99,6 +113,8 @@
       };
       m.on('load', emitView);
       m.on('moveend', emitView);
+      // Un changement de fond (setStyle) efface les sources : on remet les tracés.
+      m.on('style.load', () => syncLines(m));
       // Le panneau gauche est redimensionnable : la carte suit la taille de son conteneur.
       observer = new ResizeObserver(() => m.resize());
       observer.observe(container);
@@ -150,6 +166,65 @@
       entry.el.style.setProperty('--c', `var(${p.color})`);
       entry.el.classList.toggle('faded', p.faded);
     }
+  });
+
+  /** Couleur réelle d'une variable CSS (MapLibre ne lit pas les variables). */
+  function cssColor(name: string) {
+    const style = getComputedStyle(container);
+    return style.getPropertyValue(name).trim() || style.getPropertyValue('--muted').trim();
+  }
+
+  /** Met à jour (ou crée) la source et les couches des tracés de trajets. */
+  function syncLines(m: MapLibreMap) {
+    if (!m.isStyleLoaded()) return;
+    const data: Parameters<import('maplibre-gl').GeoJSONSource['setData']>[0] = {
+      type: 'FeatureCollection',
+      features: lines.map((l) => ({
+        type: 'Feature',
+        properties: {
+          key: l.key,
+          color: cssColor(l.color),
+          dashed: l.dashed,
+          highlighted: l.key === highlighted,
+        },
+        geometry: { type: 'LineString', coordinates: l.coordinates },
+      })),
+    };
+    const source = m.getSource('legs') as import('maplibre-gl').GeoJSONSource | undefined;
+    if (source) {
+      source.setData(data);
+      return;
+    }
+    m.addSource('legs', { type: 'geojson', data });
+    const paint: import('maplibre-gl').LineLayerSpecification['paint'] = {
+      'line-color': ['get', 'color'],
+      'line-width': ['case', ['get', 'highlighted'], 7, 4],
+      'line-opacity': ['case', ['get', 'highlighted'], 1, 0.8],
+    };
+    m.addLayer({
+      id: 'legs',
+      type: 'line',
+      source: 'legs',
+      filter: ['!', ['get', 'dashed']],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint,
+    });
+    m.addLayer({
+      id: 'legs-dashed',
+      type: 'line',
+      source: 'legs',
+      filter: ['get', 'dashed'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { ...paint, 'line-dasharray': [1, 1.6] },
+    });
+  }
+
+  // Tracés des trajets (et mise en évidence au survol de leur tuile).
+  $effect(() => {
+    const m = map;
+    void lines;
+    void highlighted;
+    if (m) syncLines(m);
   });
 
   // Synchronise les marqueurs des lieux de la découverte.
@@ -224,7 +299,8 @@
   }
 </script>
 
-<div class="map-wrap">
+<!-- data-leg-lines : nombre de tracés (le canevas WebGL n'est pas lisible par les e2e). -->
+<div class="map-wrap" data-testid="trip-map" data-leg-lines={lines.length}>
   <div class="map" bind:this={container}></div>
   <div class="tools">
     {#if onToggleExplore}

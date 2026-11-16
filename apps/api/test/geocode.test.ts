@@ -52,6 +52,17 @@ describe('GET /api/geocode', () => {
     expect(new Headers(init.headers).get('user-agent')).toMatch(/MyTrips/);
   });
 
+  it('PHOTON_URL avec un chemin (relais) : le chemin est conservé', async () => {
+    const fetcher = photon([]);
+    await makeCaller(fetcher, { PHOTON_URL: 'http://relais.test/photon/' })(
+      ALICE,
+      'GET',
+      '/api/geocode?q=Louvre',
+    );
+    const u = new URL((fetcher.mock.calls[0] as [string])[0]);
+    expect(u.origin + u.pathname).toBe('http://relais.test/photon/api/');
+  });
+
   it('refuse une recherche vide (400) sans appeler Photon', async () => {
     const fetcher = photon([]);
     const res = await makeCaller(fetcher)(ALICE, 'GET', '/api/geocode?q=%20');

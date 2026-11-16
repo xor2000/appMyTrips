@@ -50,7 +50,9 @@ export function geocodeRoutes(fetchImpl: typeof fetch) {
     path: string,
     params: Record<string, string>,
   ) {
-    const url = new URL(path, c.env.PHOTON_URL ?? DEFAULT_PHOTON_URL);
+    // Concaténation : une base avec chemin (relais) est gardée.
+    const base = (c.env.PHOTON_URL ?? DEFAULT_PHOTON_URL).replace(/\/+$/, '');
+    const url = new URL(`${base}${path}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     const res = await fetchImpl(url.toString(), {
       headers: { 'user-agent': USER_AGENT, accept: 'application/json' },

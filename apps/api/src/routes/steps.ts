@@ -10,6 +10,7 @@ import {
 } from '@mytrips/core';
 import tzLookup from '@photostructure/tz-lookup';
 import type { Context, Hono } from 'hono';
+import { pruneStaleLegs } from '../db/legs';
 import { getStep, getSteps } from '../db/steps';
 import { getSnapshot } from '../db/trips';
 import {
@@ -23,7 +24,7 @@ import {
 } from './shared';
 
 /** Fuseau IANA du point, ou null si indéterminable. */
-function timezoneAt(lat: number, lng: number): string | null {
+export function timezoneAt(lat: number, lng: number): string | null {
   try {
     return tzLookup(lat, lng);
   } catch {
@@ -79,8 +80,11 @@ async function lastPosition(
   return keyAt(row?.last ? [row.last] : [], row?.last ? 1 : 0);
 }
 
+/** Voyage complet après une écriture, trajets devenus caducs retirés. */
 async function snapshot(c: Context<TripsEnv>, status: 200 | 201 = 200) {
-  return c.json(await getSnapshot(c.env.DB, c.req.param('id') ?? '', c.get('role')), status);
+  const id = c.req.param('id') ?? '';
+  await pruneStaleLegs(c.env.DB, id);
+  return c.json(await getSnapshot(c.env.DB, id, c.get('role')), status);
 }
 
 /** Routes des étapes, dossiers et séjours, montées sur le routeur des voyages. */
@@ -204,6 +208,17 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
           `UPDATE steps SET ${cols.map((col) => `${col} = ?`).join(', ')} WHERE id = ? AND ${guard}`,
         )
         .bind(...cols.map((col) => fields[col]), step.id, ...g),
+      // Lieu déplacé : ses trajets calculés sont faux (ceux saisis à la main sont gardés).
+      ...(p.lat !== undefined || p.exitLat !== undefined || p.exitLng !== undefined
+        ? [
+            db
+              .prepare(
+                `DELETE FROM legs WHERE trip_id = ? AND (from_key = ? OR to_key = ?)
+                 AND distance_source != 'manual' AND duration_source != 'manual' AND ${guard}`,
+              )
+              .bind(id, step.id, step.id, ...g),
+          ]
+        : []),
       // Un dossier emporte ses étapes quand il change de jour.
       ...(step.kind === 'group' && dayChanged
         ? [
@@ -335,6 +350,17 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
       db
         .prepare(`UPDATE stays SET ${set} WHERE id = ? AND ${guard}`)
         .bind(...keys.map((k) => p[k]), now(), stayId, ...g),
+      // Lieu déplacé : trajets calculés de ses occurrences retirés (saisies manuelles gardées).
+      ...(p.lat !== undefined
+        ? [
+            db
+              .prepare(
+                `DELETE FROM legs WHERE trip_id = ? AND (from_key LIKE ? OR to_key LIKE ?)
+                 AND distance_source != 'manual' AND duration_source != 'manual' AND ${guard}`,
+              )
+              .bind(id, `stay:${stayId}:%`, `stay:${stayId}:%`, ...g),
+          ]
+        : []),
     ]);
     if (!ok) return versionConflict(c, id);
     return snapshot(c);
