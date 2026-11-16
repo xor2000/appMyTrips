@@ -142,11 +142,15 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
    pnpm --filter @mytrips/api exec wrangler secret put ORS_API_KEY
    ```
 
-   Pour Transitous (bus, train), le dépôt doit être public et `CONTACT_URL` défini (variable
-   `vars` de `apps/api/wrangler.jsonc`, ex. l'URL du dépôt).
+   Pour Transitous (bus, train), le dépôt est public et `CONTACT_URL` (URL du dépôt) est défini
+   dans les `vars` de `apps/api/wrangler.jsonc`.
 
 Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev (équipe Access
 `mytraces-pages.cloudflareaccess.com`).
 
 `DEV_USER_EMAIL` ne doit jamais être défini en production. Il est de toute façon ignoré dès que
 `ACCESS_AUD` est défini.
+
+## Licence
+
+[MIT](LICENSE).

@@ -269,9 +269,8 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 - **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour que le partage fonctionne avec d'autres personnes, la politique doit devenir une liste d'e-mails (Zero Trust → Access → Applications).
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
-- **Migration `0005_legs.sql`** à appliquer en production avant de déployer le lot 4.
 - **Trajets** :
-  - **Transitous** : le dépôt doit être **public et sous licence open source** (politique d'usage), et `CONTACT_URL` défini, avant tout usage en production ;
+  - **Transitous** : conditions de sa politique d'usage remplies le 16/11/2026 : dépôt public sous licence MIT, `CONTACT_URL` (URL du dépôt) dans les `vars` de `wrangler.jsonc`, lien vers ses sources dans l'attribution de la carte ;
   - **ORS non vérifié avec une vraie clé** (aucune clé) : sans elle, voiture, vélo et marche sont estimés ;
   - un dossier replié masque les tuiles de trajet de ses étapes ;
   - la proposition « Reprendre » ne vit que pendant la session (non stockée) ;
