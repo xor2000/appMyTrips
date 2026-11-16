@@ -313,7 +313,7 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (r
 
 ## 9. Limites connues et reste à faire
 
-- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, URL Preview désactivées. **Bascule vers l'authentification maison à faire** (issue #19) : secret `AUTH_SECRET`, variable `ADMIN_EMAILS`, migration `0007`, déploiement, création du compte, puis suppression de l'application Access (tant qu'elle existe, les deux protections se cumulent ; ensuite, seule la nouvelle authentification protège `/api`).
+- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, URL Preview désactivées. **Authentification maison en production depuis le 16/11/2026** (version `755e0b45`) : secrets `AUTH_SECRET` et `ADMIN_EMAILS`, migration `0007` appliquée, application Access supprimée ainsi que les secrets `ACCESS_*`. Seule l'authentification de l'application protège `/api` : vérifié de l'extérieur (`401` sans session, `403 bad_origin` sans `Origin`). Non vérifiés en production : attributs du cookie (vérifiés en e2e) et consommation CPU réelle.
 - **Authentification** :
   - hachage limité par les 10 ms de CPU du Worker gratuit (5000 répétitions PBKDF2, bien moins que les recommandations actuelles) ; format prêt à être renforcé ;
   - deux calculs PBKDF2 dans une même requête (environ 12 ms mesurés en local) pour le changement de mot de passe (vérification puis nouvelle empreinte) et pour le renforcement d'une ancienne empreinte à la connexion : au-dessus de la limite nominale, non vérifié en production ;

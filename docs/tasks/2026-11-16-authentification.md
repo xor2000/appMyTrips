@@ -84,7 +84,12 @@ unauthorized` vers la connexion.
 - Suites complètes : lint et typecheck propres ; unitaires core 220, API 170, web 216 ; build ;
   e2e 39/39 avec `--workers=1`. En parallèle, la machine chargée faisait dépasser les délais
   (23 échecs par délai, dont des tests sans rapport, et le smoke du service worker déjà instable).
-- Non vérifié : production (bascule à faire), consommation CPU réelle du Worker.
+- Production (après la bascule) : `/` et `/connexion` 200 sans Access, `/api/health` 200,
+  `/api/me`, `/api/trips`, `/api/admin/bans` et route inconnue 401, faux cookie 401, écriture sans
+  `Origin` ou d'une origine étrangère `403 bad_origin`, captcha servi ; compte admin créé
+  (empreinte `pbkdf2-sha256$5000$…`).
+- Non vérifié : attributs du cookie en production (vérifiés en e2e), consommation CPU réelle du
+  Worker.
 
 ## Revue
 
@@ -96,5 +101,7 @@ unauthorized` vers la connexion.
 
 ## Reste à faire
 
-- Bascule en production avec l'utilisateur : `AUTH_SECRET`, `ADMIN_EMAILS`, migration `0007`,
-  déploiement, création du compte, vérifications manuelles, suppression de l'application Access.
+- Rien pour cette issue. Bascule faite le 16/11/2026 : `AUTH_SECRET` (généré, jamais affiché),
+  `ADMIN_EMAILS`, migration `0007`, déploiement (version `755e0b45`), compte admin créé par
+  l'utilisateur, application Access puis secrets `ACCESS_*` supprimés.
+- À surveiller : erreurs de dépassement CPU (changement de mot de passe) dans les journaux du Worker.
