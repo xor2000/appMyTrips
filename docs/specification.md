@@ -118,7 +118,29 @@ Monorepo pnpm :
 - **Trajet caduc** : après toute écriture sur les étapes, les séjours ou la période, les trajets dont la paire n'est plus consécutive sont supprimés (`pruneStaleLegs`), juste après l'écriture et conditionnés à la version. Le front propose de **reprendre** un trajet saisi à la main ainsi retiré (« Reprendre : Voiture 45 min ») sur une tuile vide qui touche l'une de ses étapes.
 - **Lieu déplacé** : changer le point d'une étape ou d'un séjour retire, dans la même transaction, ses trajets calculés ; ceux qui contiennent une saisie manuelle sont gardés.
 - **Saisie manuelle** : une durée saisie est gardée ; une distance saisie seule donne une durée à la vitesse moyenne du mode (voiture 60 km/h, vélo 15, marche 4,5, bus 30, train 80, avion 750, ferry 30) ; « Recalculer » revient au routeur. Sans itinéraire, la durée saisie suffit (distance inconnue).
-- **Départ des bus et trains** : heure fixée du trajet, sinon fin de l'étape précédente si son heure est fixe, sinon 09:00 (départ d'un séjour : heure du check-out), dans le fuseau de l'étape de départ. Le moteur d'horaires (lot 5) affinera.
+- **Départ des bus et trains** : heure fixée du trajet, sinon fin de l'étape de départ selon les horaires calculés du jour (moteur ci-dessous), dans le fuseau de cette étape.
+
+**Horaires** (`core.scheduleDay`, en minutes et en heure locale avec Luxon, fuseau toujours explicite) :
+
+- Départ au début du jour (`day_start` du jour, sinon du voyage : `resolveDayBounds`), puis on enchaîne arrivée, fin de l'étape (arrivée + durée), trajet, etc. ; dossiers aplatis, séjours compris (durée 0).
+- **Heure fixe = ancre** : arrivée en avance = temps libre ; en retard = **conflit** avec le retard en minutes ; l'étape commence à son heure fixe dans les deux cas. Même règle pour le départ fixé d'un trajet (`depart_at`).
+- **Fuseaux** : l'arrivée d'un trajet s'exprime dans le fuseau de l'étape d'arrivée ; « +1 j » au-delà de minuit. Un séjour prend le fuseau de l'étape voisine, sinon celui du voyage ; fuseau inconnu = UTC.
+- **Dépassement** : fin de la dernière activité (ou arrivée au séjour du soir) après `day_end`.
+- **Trajet manquant** : compté 0 min et signalé ; le calcul continue.
+- **Dossier** : du début de son premier enfant à la fin du dernier.
+- Résultat : `start`, `end`, `freeBeforeMin`, `issues` par élément et par trajet ; résumé du jour (sur place, trajets, libre, dépassement, conflits, retard total, trajets manquants). Calculé côté front à chaque changement (`$derived`), et côté Worker pour le départ des bus et trains.
+
+**Réorganisation** (`core.proposeFixes`) : chaque règle est simulée par le moteur ; seules les propositions qui réduisent « retard + dépassement » sont gardées, triées par gain, 4 au plus.
+
+1. Raccourcir les étapes souples avant la première ancre en conflit, en proportion de leur marge (jamais sous 50 % de leur durée ni sous 15 min).
+2. Avancer le début du jour (2 h au plus, par pas de 5 min).
+3. Déplacer une étape souple (la plus courte qui suffit, sinon la plus longue) vers le jour qui a le plus de temps disponible, sinon vers les idées.
+4. Permuter deux étapes souples adjacentes si les trajets connus du nouvel ordre sont plus courts (pas de proposition sans durées connues).
+5. Dépassement : retarder la fin du jour (23:59 au plus), ou reporter la dernière étape souple au lendemain.
+
+Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`) : modifications d'étapes (`StepPatch`) et de jours (`DayPatch`), toutes validées avant d'écrire, en une seule version ; trajets caducs nettoyés ensuite.
+
+**Annuler / rétablir** (Ctrl+Z, Ctrl+Y ou Ctrl+Maj+Z, boutons de l'en-tête) : pile côté front (`lib/schedule/history.ts`). Chaque commande garde ses opérations de lot et leurs inverses, calculés sur l'état avant application. Périmètre : modifications d'étape, déplacements (glisser-déposer, monter/descendre, changement de jour), propositions de réorganisation. La pile est vidée après un conflit de version et au changement de voyage. Les raccourcis ne s'appliquent pas dans un champ de saisie ni dans une fenêtre.
 
 ## 5. Surface API
 
@@ -148,6 +170,7 @@ Monorepo pnpm :
 | PATCH   | `/api/trips/:id/legs/:legId`                 | modification | `200 TripSnapshot` · `If-Match` · `null` remet au routeur, `recompute: true`              |
 | DELETE  | `/api/trips/:id/legs/:legId`                 | modification | `200 TripSnapshot` · `If-Match`                                                           |
 | POST    | `/api/route`                                 | connecté     | `200 { route: RouteResult }` · corps `{ mode, from, to, departAt? }`                      |
+| POST    | `/api/trips/:id/batch`                       | modification | `200 TripSnapshot` · `If-Match` · `{ ops: BatchOp[] }` (1 à 50), atomique                 |
 
 - **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates`, `invalid_bbox`, `invalid_zoom`, `invalid_categories`, `zoom_too_low`, `area_too_large`, `invalid_ref`, `invalid_leg` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `422 no_route` ; `428 version_required` ; `502 geocoder_unavailable` ou `wiki_unavailable` ; `503 poi_unavailable`.
 - Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
@@ -208,6 +231,10 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 - **Éditeur de trajet en fenêtre** (le plan prévoyait un panneau latéral) : même composant `Modal` que les autres éditeurs.
 - **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
+- **Luxon** (3.7.2, dans `core`) pour les heures locales et les fuseaux du moteur d'horaires : aucun calcul en `Date` natif sans fuseau.
+- **Annuler / rétablir limité aux modifications et déplacements** (choix de l'utilisateur) : annuler une suppression demanderait de recréer l'objet avec un nouvel identifiant, et ses trajets seraient perdus. Créations et suppressions restent confirmées, sans annulation.
+- **Logique d'écriture partagée** (`apps/api/src/routes/plans.ts` : `planStepUpdate`, `planDayUpdate`) par les routes unitaires et le lot atomique.
+- **« Rechercher dans cette zone »** n'est reproposé qu'après un vrai déplacement de la carte (zoom d'au moins un demi-niveau, ou centre décalé de plus de 15 %) : un redimensionnement ne compte pas.
 
 ## 9. Limites connues et reste à faire
 
@@ -230,4 +257,11 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 - **Ranger une étape dans un dossier** ne se fait qu'au glisser-déposer (pas d'équivalent clavier ; monter/descendre et changer de jour ont le leur).
 - **Suppression** : confirmée, mais sans annulation avant le lot 5.
 - **Géocodage** : Photon est fourni sans garantie ; certains lieux reviennent en type « Autre » (tags OSM non reconnus) : l'utilisateur peut imposer le type à l'ajout ou le changer ensuite.
-- **Lots restants** : 5. horaires ; 6. GPX ; 7. hors ligne.
+- **Horaires** :
+  - pas d'optimiseur global : les propositions sont des règles locales simulées ;
+  - pas de conflit avec les horaires d'ouverture ;
+  - la pile annuler/rétablir ne vit qu'en mémoire (perdue au rechargement) et ne couvre ni les créations, ni les suppressions, ni les trajets, ni les séjours ;
+  - couverture de `core/schedule` non mesurée (pas d'outil de couverture installé) ;
+  - deux modifications du même jour dans un lot sont validées chacune contre l'état en base, pas l'une contre l'autre.
+- **E2E sous charge** : quand d'autres serveurs tournent sur la machine, des tests dépassent leurs délais (création de voyage) ; lancer alors `pnpm test:e2e -- --workers=1`.
+- **Lots restants** : 6. GPX ; 7. hors ligne.

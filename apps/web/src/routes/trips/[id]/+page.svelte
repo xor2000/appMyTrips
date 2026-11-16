@@ -3,6 +3,12 @@
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
+    proposeFixes,
+    resolveDayBounds,
+    scheduleDay,
+    type BatchOp,
+    type Day,
+    type Fix,
     type Leg,
     type LegMode,
     type LegPatch,
@@ -16,10 +22,12 @@
     type StayItem,
     type TripSnapshot,
   } from '@mytrips/core';
+  import { untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import {
     ApiError,
+    applyBatch,
     createLeg,
     createStay,
     createStep,
@@ -35,7 +43,6 @@
     searchPlaces,
     updateLeg,
     updateStay,
-    updateStep,
     updateTrip,
     type MapView,
     type StepInput,
@@ -47,6 +54,9 @@
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { positionAt, positionShift } from '#lib/steps/moves.ts';
   import { createSerialQueue } from '#lib/serial.ts';
+  import { createHistory, inverseOps } from '#lib/schedule/history.ts';
+  import Redo2 from 'lucide-svelte/icons/redo-2';
+  import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import DayTabs from '#lib/components/DayTabs.svelte';
   import ShareDialog from '#lib/components/ShareDialog.svelte';
@@ -63,6 +73,8 @@
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
   import StepEditor from '#lib/components/steps/StepEditor.svelte';
   import Timeline from '#lib/components/steps/Timeline.svelte';
+  import DaySummary from '#lib/components/schedule/DaySummary.svelte';
+  import ReorganizePanel from '#lib/components/schedule/ReorganizePanel.svelte';
 
   let snapshot = $state<TripSnapshot | null>(null);
   let status = $state<'loading' | 'ready' | 'not_found' | 'error'>('loading');
@@ -101,6 +113,15 @@
   let manualLeg = $state<{ pair: DayPair; mode: LegMode } | null>(null);
   /** Trajets saisis à la main retirés par un réordonnancement : proposés à la reprise. */
   let removedLegs = $state<Leg[]>([]);
+  let reorganizing = $state(false);
+  /** Annuler / rétablir : modifications et déplacements (pas les créations ni suppressions). */
+  const history = createHistory();
+  let canUndo = $state(false);
+  let canRedo = $state(false);
+  const syncHistory = () => {
+    canUndo = history.canUndo;
+    canRedo = history.canRedo;
+  };
   const writes = createSerialQueue();
 
   const id = $derived(page.params.id ?? '');
@@ -130,6 +151,56 @@
   const pairs = $derived(dayPairs(items, legs));
   const legLines = $derived(exploring ? [] : dayLegLines(items, legs));
   const editingLeg = $derived(legs.find((l) => l.id === editingLegId) ?? null);
+
+  /** Données d'un jour pour le moteur d'horaires. */
+  function dayInput(d: Day) {
+    if (!trip) throw new Error('Voyage non chargé');
+    return {
+      date: d.date,
+      steps: steps.filter((s) => s.dayId === d.id),
+      stays,
+      legs,
+      ...resolveDayBounds(d, trip),
+      timezone: trip.defaultTimezone,
+    };
+  }
+  const schedules = $derived(
+    new Map(trip ? days.map((d) => [d.id, scheduleDay(dayInput(d))]) : []),
+  );
+  const daySchedule = $derived(day ? (schedules.get(day.id) ?? null) : null);
+  const times = $derived(new Map((daySchedule?.items ?? []).map((i) => [i.key, i])));
+  const alerts = $derived(
+    new Set(
+      [...schedules]
+        .filter(([, sc]) => sc.summary.conflictCount > 0 || sc.summary.overrunMin > 0)
+        .map(([dayId]) => dayId),
+    ),
+  );
+  /** Propositions de réorganisation du jour affiché (calculées à l'ouverture du panneau). */
+  const fixes = $derived.by((): Fix[] => {
+    if (!reorganizing || !day || !trip) return [];
+    const index = days.indexOf(day);
+    const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const otherDays = days
+      .filter((d) => d.id !== day.id)
+      .map((d) => {
+        const bounds = resolveDayBounds(d, trip);
+        const summary = schedules.get(d.id)?.summary;
+        const used = (summary?.onSiteMin ?? 0) + (summary?.travelMin ?? 0);
+        return {
+          dayId: d.id,
+          label: `J${days.indexOf(d) + 1}`,
+          freeMin: minutes(bounds.dayEnd) - minutes(bounds.dayStart) - used,
+        };
+      });
+    const next = days[index + 1];
+    return proposeFixes({
+      ...dayInput(day),
+      dayId: day.id,
+      otherDays,
+      nextDay: next ? { dayId: next.id, label: `J${index + 2}` } : null,
+    });
+  });
   const addedRefs = $derived(
     new Set(steps.map((s) => s.osmRef).filter((r): r is string => r !== null)),
   );
@@ -153,7 +224,14 @@
   }
 
   $effect(() => {
-    if (id) load();
+    if (!id) return;
+    // La page est réutilisée d'un voyage à l'autre : l'historique ne vaut que pour ce voyage.
+    untrack(() => {
+      history.clear();
+      syncHistory();
+      reorganizing = false;
+    });
+    load();
   });
 
   /** Applique une modification ; sur conflit de version, recharge le voyage et prévient. */
@@ -170,6 +248,9 @@
         if (gone.length > 0) removedLegs = [...gone, ...removedLegs].slice(0, 10);
       } catch (e) {
         if (e instanceof ApiError && e.code === 'version_conflict') {
+          // Les inverses enregistrés ne correspondent plus à l'état du voyage.
+          history.clear();
+          syncHistory();
           await load();
           notice = e.message;
           return;
@@ -251,10 +332,69 @@
     editingStayId = null;
   }
 
+  /** Applique un lot annulable : ses inverses sont calculés sur l'état actuel. */
+  async function runCommand(label: string, ops: BatchOp[]) {
+    const undo = inverseOps({ steps, days }, ops);
+    await apply(() => applyBatch(id, version(), ops));
+    history.push({ label, redo: ops, undo });
+    syncHistory();
+  }
+
+  async function undo() {
+    const entry = history.takeUndo();
+    syncHistory();
+    if (!entry) return;
+    try {
+      await apply(() => applyBatch(id, version(), entry.undo));
+      notice = `Annulé : ${entry.label}`;
+    } catch (e) {
+      history.restoreUndo(entry);
+      notice = e instanceof Error ? e.message : String(e);
+    }
+    syncHistory();
+  }
+
+  async function redo() {
+    const entry = history.takeRedo();
+    syncHistory();
+    if (!entry) return;
+    try {
+      await apply(() => applyBatch(id, version(), entry.redo));
+      notice = `Rétabli : ${entry.label}`;
+    } catch (e) {
+      history.restoreRedo(entry);
+      notice = e instanceof Error ? e.message : String(e);
+    }
+    syncHistory();
+  }
+
+  /** Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z), hors des champs de saisie et des fenêtres. */
+  function onKeydown(event: KeyboardEvent) {
+    if (!canEdit || !(event.ctrlKey || event.metaKey)) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (key === 'z' && !event.shiftKey) {
+      event.preventDefault();
+      undo();
+    } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+      event.preventDefault();
+      redo();
+    }
+  }
+
+  async function applyFix(fix: Fix) {
+    await runCommand(fix.label, fix.ops);
+    reorganizing = false;
+  }
+
   async function saveStep(patch: StepPatch) {
     const stepId = editingStepId;
     if (!stepId) return;
-    await apply(() => updateStep(id, stepId, version(), patch));
+    const name = steps.find((s) => s.id === stepId)?.name ?? 'étape';
+    await runCommand(`Modifier ${name}`, [{ kind: 'step', id: stepId, patch }]);
     editingStepId = null;
   }
 
@@ -287,16 +427,21 @@
 
   function move(step: Step, delta: -1 | 1) {
     const position = positionShift(siblingsOf(step.dayId, step.parentId), step.id, delta);
-    if (position) applyQuietly(() => updateStep(id, step.id, version(), { position }));
+    if (position) {
+      runCommand(`Déplacer ${step.name}`, [
+        { kind: 'step', id: step.id, patch: { position } },
+      ]).catch((e) => (notice = e instanceof Error ? e.message : String(e)));
+    }
   }
 
   function drop(stepId: string, target: DropTarget) {
     endDrag();
     const dayId = target.dayId !== undefined ? target.dayId : selectedDay;
     const position = positionAt(siblingsOf(dayId, target.parentId), target.index, stepId);
-    applyQuietly(() =>
-      updateStep(id, stepId, version(), { dayId, parentId: target.parentId, position }),
-    );
+    const name = steps.find((s) => s.id === stepId)?.name ?? 'étape';
+    runCommand(`Déplacer ${name}`, [
+      { kind: 'step', id: stepId, patch: { dayId, parentId: target.parentId, position } },
+    ]).catch((e) => (notice = e instanceof Error ? e.message : String(e)));
   }
 
   /** Dépôt sur l'onglet d'un jour : à la fin de ce jour. */
@@ -448,6 +593,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <svelte:head>
   <title>{trip ? `${trip.name} · MyTrips` : 'Voyage · MyTrips'}</title>
 </svelte:head>
@@ -496,6 +643,22 @@
         </div>
         <div class="tools">
           {#if canEdit}
+            <button
+              type="button"
+              class="btn btn-ghost icon-btn"
+              aria-label="Annuler"
+              title="Annuler (Ctrl+Z)"
+              disabled={!canUndo}
+              onclick={undo}><Undo2 size={16} /></button
+            >
+            <button
+              type="button"
+              class="btn btn-ghost icon-btn"
+              aria-label="Rétablir"
+              title="Rétablir (Ctrl+Y)"
+              disabled={!canRedo}
+              onclick={redo}><Redo2 size={16} /></button
+            >
             <button type="button" class="btn btn-soft" onclick={() => (editing = true)}>
               Modifier
             </button>
@@ -512,6 +675,7 @@
         selected={selectedDay}
         onSelect={(d) => (selectedDay = d)}
         onDropStep={canEdit ? dropOnDay : undefined}
+        {alerts}
       />
       {#if notice}
         <p class="notice" role="status">{notice}</p>
@@ -548,6 +712,13 @@
                   <h2>{dayTitle(day.date)}</h2>
                   <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
                 </div>
+                {#if daySchedule}
+                  <DaySummary
+                    summary={daySchedule.summary}
+                    {canEdit}
+                    onReorganize={() => (reorganizing = true)}
+                  />
+                {/if}
                 {#if day.notes}
                   <p class="notes">{day.notes}</p>
                 {/if}
@@ -564,6 +735,7 @@
                     onHover={(k) => (highlighted = k)}
                     onDrop={drop}
                     after={legAfter}
+                    {times}
                   />
                 </div>
                 {#if canEdit}
@@ -749,6 +921,10 @@
     />
   {/if}
 
+  {#if reorganizing}
+    <ReorganizePanel {fixes} onApply={applyFix} onClose={() => (reorganizing = false)} />
+  {/if}
+
   {#if deletingStep}
     <ConfirmDialog
       title={deletingStep.kind === 'group' ? 'Supprimer le dossier ?' : 'Supprimer l’étape ?'}
@@ -840,6 +1016,10 @@
   .readonly {
     background: var(--warn-soft);
     color: var(--warn);
+  }
+
+  .icon-btn {
+    padding: var(--space-2);
   }
 
   .tools {

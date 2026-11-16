@@ -20,6 +20,14 @@ describe('DayTabs', () => {
     ]);
   });
 
+  it('pastille d’alerte sur un jour en conflit ou qui déborde', () => {
+    render(DayTabs, {
+      props: { days, selected: null, onSelect: vi.fn(), alerts: new Set(['d2']) },
+    });
+    expect(screen.getByRole('tab', { name: /J2.*à revoir/ })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /J1.*à revoir/ })).toBeNull();
+  });
+
   it('marque l’onglet sélectionné', () => {
     render(DayTabs, { props: { days, selected: 'd2', onSelect: vi.fn() } });
     expect(screen.getByRole('tab', { selected: true }).textContent).toContain('J2');

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Step, StayItem, TimelineItem } from '@mytrips/core';
+  import type { ScheduledItem, Step, StayItem, TimelineItem } from '@mytrips/core';
   import type { Snippet } from 'svelte';
   import type { DropTarget } from '#lib/steps/dnd.svelte.ts';
   import DropZone from './DropZone.svelte';
@@ -21,6 +21,8 @@
     onDrop: (stepId: string, target: DropTarget) => void;
     /** Rendu après chaque point de passage (clé d'étape ou de séjour) : tuile de trajet. */
     after?: Snippet<[string]>;
+    /** Horaires calculés, par clé d'étape. */
+    times?: Map<string, ScheduledItem>;
   }
 
   let {
@@ -35,6 +37,7 @@
     onHover,
     onDrop,
     after,
+    times = new Map(),
   }: Props = $props();
 
   /** Étapes et dossiers à la racine du jour (sans les séjours), dans l'ordre. */
@@ -89,6 +92,7 @@
             label={labels.get(item.step.id) ?? null}
             {canEdit}
             highlighted={highlighted === item.step.id}
+            time={times.get(item.step.id) ?? null}
             {onEdit}
             {onMove}
             {onDelete}
@@ -106,6 +110,7 @@
             {onDelete}
             {onHover}
             {after}
+            {times}
             onDropInto={(id, index) => onDrop(id, { parentId: item.group.id, index })}
           />
         {/if}

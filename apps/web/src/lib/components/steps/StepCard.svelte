@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { STEP_TYPE_INFO, type Step } from '@mytrips/core';
+  import { STEP_TYPE_INFO, type ScheduledItem, type Step } from '@mytrips/core';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import Lock from 'lucide-svelte/icons/lock';
@@ -18,6 +18,8 @@
     onMove: (step: Step, delta: -1 | 1) => void;
     onDelete: (step: Step) => void;
     onHover: (key: string | null) => void;
+    /** Horaires calculés par le moteur (absents hors d'un jour). */
+    time?: ScheduledItem | null;
   }
 
   let {
@@ -29,17 +31,30 @@
     onMove,
     onDelete,
     onHover,
+    time = null,
   }: Props = $props();
 
   const info = $derived(step.type ? STEP_TYPE_INFO[step.type] : null);
+  const late = $derived(
+    time?.issues.reduce((t, i) => t + (i.kind === 'conflict' ? i.lateMin : 0), 0) ?? 0,
+  );
+  const times = $derived.by(() => {
+    if (!time || step.kind === 'group') return null;
+    const offset = time.end.dayOffset > 0 ? ` (+${time.end.dayOffset} j)` : '';
+    return `${time.start.time} → ${time.end.time}${offset}`;
+  });
   const Icon = $derived(
     step.type ? STEP_ICONS[step.type] : step.kind === 'group' ? GROUP_ICON : null,
   );
 </script>
 
+{#if time && time.freeBeforeMin >= 5}
+  <p class="free">⧗ {formatDuration(time.freeBeforeMin)} libre</p>
+{/if}
 <div
   class="card"
   class:highlighted
+  class:conflict={late > 0}
   data-testid="step-card"
   data-step-id={step.id}
   role="listitem"
@@ -64,8 +79,13 @@
           {info?.label ?? 'Étape'} · {formatDuration(step.durationMin)} sur place
         {/if}
       </span>
+      <!-- Après le type : le nom accessible garde la forme « nom type… ». -->
+      {#if times}<span class="times">{times}</span>{/if}
     </span>
     <span class="pills">
+      {#if late > 0}
+        <span class="chip late">Conflit +{formatDuration(late)}</span>
+      {/if}
       {#if step.fixedStart}
         <span class="chip fixed" title="Heure fixe"><Lock size={11} />{step.fixedStart}</span>
       {/if}
@@ -104,6 +124,27 @@
 
   .card[draggable='true'] {
     cursor: grab;
+  }
+
+  .card.conflict {
+    box-shadow: 0 0 0 2px var(--bad);
+  }
+
+  .free {
+    margin: 0;
+    padding: var(--space-1) 0 var(--space-1) var(--space-6);
+    color: var(--ok);
+    font: 600 12px var(--font-mono);
+  }
+
+  .times {
+    font: 600 12px var(--font-mono);
+    color: var(--fg);
+  }
+
+  .late {
+    background: var(--bad-soft);
+    color: var(--bad);
   }
 
   .card.highlighted {

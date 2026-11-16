@@ -6,6 +6,8 @@ import {
   estimatedDeparture,
   legValues,
   requiredLegs,
+  resolveDayBounds,
+  scheduleDay,
   zonedTimeToUtc,
   type LatLng,
   type LegMode,
@@ -15,7 +17,14 @@ import {
 import { Hono, type Context } from 'hono';
 import type { AuthEnv } from '../auth';
 import type { Bindings } from '../env';
-import { getCachedRoute, getLeg, putCachedRoute, routeCacheKey, routeCacheTtlMs } from '../db/legs';
+import {
+  getCachedRoute,
+  getLeg,
+  getLegs,
+  putCachedRoute,
+  routeCacheKey,
+  routeCacheTtlMs,
+} from '../db/legs';
 import { getStays, getSteps } from '../db/steps';
 import { getDays, getSnapshot, getTrip } from '../db/trips';
 import { NoRouteError, computeRoute, isCacheable } from '../routing/providers';
@@ -28,7 +37,7 @@ import {
   writeWithVersion,
   type TripsEnv,
 } from './shared';
-import { timezoneAt } from './steps';
+import { timezoneAt } from './plans';
 
 /** Itinéraire, depuis le cache si possible. Lève NoRouteError. */
 async function routeWithCache(
@@ -62,11 +71,12 @@ async function findPair(
   fromKey: string,
   toKey: string,
 ): Promise<PairContext | null> {
-  const [trip, days, steps, stays] = await Promise.all([
+  const [trip, days, steps, stays, legs] = await Promise.all([
     getTrip(db, tripId),
     getDays(db, tripId),
     getSteps(db, tripId),
     getStays(db, tripId),
+    getLegs(db, tripId),
   ]);
   if (!trip) return null;
   for (const day of days) {
@@ -81,15 +91,22 @@ async function findPair(
     const stay = fromKey.startsWith('stay:')
       ? stays.find((s) => fromKey.startsWith(`stay:${s.id}:`))
       : null;
+    // Départ estimé : fin de l'étape de départ selon les horaires calculés du jour.
+    const schedule = scheduleDay({
+      date: day.date,
+      steps: steps.filter((s) => s.dayId === day.id),
+      stays,
+      legs,
+      ...resolveDayBounds(day, trip),
+      timezone: trip.defaultTimezone,
+    });
+    const end = schedule.items.find((i) => i.key === fromKey)?.end;
     return {
       leg,
       date: day.date,
-      // Départ d'un séjour le matin : à l'heure du check-out.
-      previous: step
-        ? { fixedStart: step.fixedStart, durationMin: step.durationMin }
-        : stay
-          ? { fixedStart: stay.checkOutTime, durationMin: 0 }
-          : null,
+      previous: end
+        ? { fixedStart: end.dayOffset === 0 ? end.time : '23:59', durationMin: 0 }
+        : null,
       timezone:
         step?.timezone ?? (stay ? timezoneAt(stay.lat, stay.lng) : null) ?? trip.defaultTimezone,
     };

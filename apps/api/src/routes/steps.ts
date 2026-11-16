@@ -3,15 +3,13 @@ import {
   StayPatch,
   StepCreate,
   StepPatch,
-  keyAt,
   keysBetween,
   sortByPosition,
-  type Step,
 } from '@mytrips/core';
-import tzLookup from '@photostructure/tz-lookup';
 import type { Context, Hono } from 'hono';
 import { pruneStaleLegs } from '../db/legs';
 import { getStep, getSteps } from '../db/steps';
+import { dayBelongsToTrip, lastPosition, parentIsValid, planStepUpdate, timezoneAt } from './plans';
 import { getSnapshot } from '../db/trips';
 import {
   access,
@@ -22,63 +20,6 @@ import {
   writeWithVersion,
   type TripsEnv,
 } from './shared';
-
-/** Fuseau IANA du point, ou null si indéterminable. */
-export function timezoneAt(lat: number, lng: number): string | null {
-  try {
-    return tzLookup(lat, lng);
-  } catch {
-    return null;
-  }
-}
-
-async function dayBelongsToTrip(
-  db: D1Database,
-  tripId: string,
-  dayId: string | null,
-): Promise<boolean> {
-  if (dayId === null) return true;
-  const row = await db
-    .prepare('SELECT 1 FROM days WHERE id = ? AND trip_id = ?')
-    .bind(dayId, tripId)
-    .first();
-  return row !== null;
-}
-
-/**
- * Vérifie qu'une étape peut être rangée dans `parentId` : le parent est un dossier du même voyage,
- * du même jour, lui-même à la racine ; un dossier ne peut pas être rangé dans un autre.
- */
-async function parentIsValid(
-  db: D1Database,
-  tripId: string,
-  parentId: string | null,
-  kind: Step['kind'],
-  dayId: string | null,
-): Promise<boolean> {
-  if (parentId === null) return true;
-  if (kind === 'group') return false;
-  const parent = await getStep(db, tripId, parentId);
-  return (
-    parent !== null && parent.kind === 'group' && parent.parentId === null && parent.dayId === dayId
-  );
-}
-
-/** Clé de position en fin de liste parmi les frères (même jour, même parent). */
-async function lastPosition(
-  db: D1Database,
-  tripId: string,
-  dayId: string | null,
-  parentId: string | null,
-) {
-  const row = await db
-    .prepare(
-      'SELECT MAX(position) AS last FROM steps WHERE trip_id = ? AND day_id IS ? AND parent_id IS ?',
-    )
-    .bind(tripId, dayId, parentId)
-    .first<{ last: string | null }>();
-  return keyAt(row?.last ? [row.last] : [], row?.last ? 1 : 0);
-}
 
 /** Voyage complet après une écriture, trajets devenus caducs retirés. */
 async function snapshot(c: Context<TripsEnv>, status: 200 | 201 = 200) {
@@ -153,81 +94,10 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
 
     const step = await getStep(db, id, c.req.param('stepId'));
     if (!step) return c.json({ error: 'not_found' }, 404);
-    const p = body.data;
+    const plan = await planStepUpdate(db, id, step, body.data);
+    if ('error' in plan) return c.json(plan.error.body, plan.error.status);
 
-    if (step.kind === 'group' && (p.lat !== undefined || p.type !== undefined || p.parentId)) {
-      return c.json(
-        { error: 'invalid', issues: [{ message: 'Un dossier n’a ni lieu ni type' }] },
-        400,
-      );
-    }
-
-    const dayId = p.dayId !== undefined ? p.dayId : step.dayId;
-    const dayChanged = dayId !== step.dayId;
-    // Changer de jour sans préciser de dossier sort l'étape de son dossier.
-    const parentId = p.parentId !== undefined ? p.parentId : dayChanged ? null : step.parentId;
-    const parentChanged = parentId !== step.parentId;
-    if (!(await dayBelongsToTrip(db, id, dayId))) return c.json({ error: 'invalid_day' }, 400);
-    if (!(await parentIsValid(db, id, parentId, step.kind, dayId))) {
-      return c.json({ error: 'invalid_parent' }, 400);
-    }
-    const position =
-      p.position ??
-      (dayChanged || parentChanged ? await lastPosition(db, id, dayId, parentId) : step.position);
-
-    const fields: Record<string, unknown> = {
-      day_id: dayId,
-      parent_id: parentId,
-      position,
-    };
-    const columns = {
-      type: 'type',
-      name: 'name',
-      lat: 'lat',
-      lng: 'lng',
-      address: 'address',
-      exitLat: 'exit_lat',
-      exitLng: 'exit_lng',
-      durationMin: 'duration_min',
-      fixedStart: 'fixed_start',
-      notes: 'notes',
-      bookingRef: 'booking_ref',
-      bookingUrl: 'booking_url',
-      openingHours: 'opening_hours',
-    } as const;
-    for (const k of Object.keys(columns) as (keyof typeof columns)[]) {
-      if (p[k] !== undefined) fields[columns[k]] = p[k];
-    }
-    if (p.lat !== undefined && p.lng !== undefined) fields.timezone = timezoneAt(p.lat, p.lng);
-    fields.updated_at = now();
-    const cols = Object.keys(fields);
-
-    const ok = await writeWithVersion(db, id, expected, null, (guard, g) => [
-      db
-        .prepare(
-          `UPDATE steps SET ${cols.map((col) => `${col} = ?`).join(', ')} WHERE id = ? AND ${guard}`,
-        )
-        .bind(...cols.map((col) => fields[col]), step.id, ...g),
-      // Lieu déplacé : ses trajets calculés sont faux (ceux saisis à la main sont gardés).
-      ...(p.lat !== undefined || p.exitLat !== undefined || p.exitLng !== undefined
-        ? [
-            db
-              .prepare(
-                `DELETE FROM legs WHERE trip_id = ? AND (from_key = ? OR to_key = ?)
-                 AND distance_source != 'manual' AND duration_source != 'manual' AND ${guard}`,
-              )
-              .bind(id, step.id, step.id, ...g),
-          ]
-        : []),
-      // Un dossier emporte ses étapes quand il change de jour.
-      ...(step.kind === 'group' && dayChanged
-        ? [
-            db
-              .prepare(`UPDATE steps SET day_id = ? WHERE parent_id = ? AND ${guard}`)
-              .bind(dayId, step.id, ...g),
-          ]
-        : []),
-    ]);
+    const ok = await writeWithVersion(db, id, expected, null, plan.statements);
     if (!ok) return versionConflict(c, id);
     return snapshot(c);
   });

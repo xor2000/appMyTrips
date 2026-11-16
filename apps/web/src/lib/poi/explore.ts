@@ -33,15 +33,17 @@ export function poiCounts(pois: readonly Poi[]): Map<PoiCategory, number> {
   return counts;
 }
 
-/** Deux vues de carte identiques, à l'arrondi près (la carte renvoie des flottants). */
+/**
+ * Même vue de carte, pour la recherche : zoom à moins d'un demi-niveau, centre décalé de moins de
+ * 15 % de la zone. Un léger redimensionnement (barre de défilement) ne compte pas comme un
+ * déplacement : il ne doit pas reproposer « Rechercher dans cette zone ».
+ */
 export function sameView(a: MapView, b: MapView | null): boolean {
   if (!b) return false;
-  const close = (x: number, y: number) => Math.abs(x - y) < 1e-5;
-  return (
-    close(a.zoom, b.zoom) &&
-    close(a.bbox.west, b.bbox.west) &&
-    close(a.bbox.south, b.bbox.south) &&
-    close(a.bbox.east, b.bbox.east) &&
-    close(a.bbox.north, b.bbox.north)
-  );
+  if (Math.abs(a.zoom - b.zoom) >= 0.5) return false;
+  const width = a.bbox.east - a.bbox.west;
+  const height = a.bbox.north - a.bbox.south;
+  const dx = Math.abs((a.bbox.west + a.bbox.east) / 2 - (b.bbox.west + b.bbox.east) / 2);
+  const dy = Math.abs((a.bbox.south + a.bbox.north) / 2 - (b.bbox.south + b.bbox.north) / 2);
+  return dx <= width * 0.15 && dy <= height * 0.15;
 }

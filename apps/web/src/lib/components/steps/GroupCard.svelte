@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GroupItem, Step } from '@mytrips/core';
+  import type { GroupItem, ScheduledItem, Step } from '@mytrips/core';
   import type { Snippet } from 'svelte';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
@@ -21,6 +21,7 @@
     onDropInto: (stepId: string, index: number) => void;
     /** Rendu après chaque étape du dossier : tuile de trajet. */
     after?: Snippet<[string]>;
+    times?: Map<string, ScheduledItem>;
   }
 
   let {
@@ -34,6 +35,7 @@
     onHover,
     onDropInto,
     after,
+    times = new Map(),
   }: Props = $props();
 
   let open = $state(true);
@@ -65,6 +67,10 @@
     <button type="button" class="title" onclick={() => onEdit(item.group)}>
       <span class="icon"><Icon size={16} /></span>
       <span class="name">{item.group.name}</span>
+      {#if times.get(item.group.id)}
+        {@const t = times.get(item.group.id)!}
+        <span class="times">{t.start.time} → {t.end.time}</span>
+      {/if}
       <span class="count">{plural(item.children.length, 'étape')}</span>
     </button>
   </div>
@@ -83,6 +89,7 @@
           label={labels.get(child.id) ?? null}
           {canEdit}
           highlighted={highlighted === child.id}
+          time={times.get(child.id) ?? null}
           {onEdit}
           {onMove}
           {onDelete}
@@ -162,6 +169,11 @@
 
   .name {
     font: 700 14px var(--font-display);
+  }
+
+  .times {
+    font: 600 12px var(--font-mono);
+    color: var(--muted);
   }
 
   .count {
