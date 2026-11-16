@@ -1,7 +1,11 @@
 <script lang="ts">
   import {
+    POI_MIN_ZOOM,
+    bboxCenter,
     dayTimeline,
     type Place,
+    type Poi,
+    type PoiCategory,
     type Role,
     type Step,
     type StepPatch,
@@ -18,17 +22,21 @@
     deleteMember,
     deleteStay,
     deleteStep,
+    explorePois,
     getTrip,
+    poiWiki,
     putMember,
     reversePlace,
     searchPlaces,
     updateStay,
     updateStep,
     updateTrip,
+    type MapView,
     type StepInput,
   } from '#lib/api.ts';
   import { dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
+  import { poiStepInput, sameView } from '#lib/poi/explore.ts';
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { positionAt, positionShift } from '#lib/steps/moves.ts';
   import { createSerialQueue } from '#lib/serial.ts';
@@ -38,6 +46,7 @@
   import SplitPane from '#lib/components/SplitPane.svelte';
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
   import TripMap from '#lib/components/TripMap.svelte';
+  import ExplorePanel from '#lib/components/poi/ExplorePanel.svelte';
   import AddPlaceDialog from '#lib/components/steps/AddPlaceDialog.svelte';
   import DeleteGroupDialog from '#lib/components/steps/DeleteGroupDialog.svelte';
   import GroupDialog from '#lib/components/steps/GroupDialog.svelte';
@@ -65,7 +74,19 @@
   /** Étape (ou dossier vide) en attente de confirmation de suppression. */
   let deletingStep = $state<Step | null>(null);
   let highlighted = $state<string | null>(null);
-  let mapCenter = $state<{ lat: number; lng: number } | null>(null);
+  let mapView = $state<MapView | null>(null);
+  const mapCenter = $derived(mapView ? bboxCenter(mapView.bbox) : null);
+  /** Découverte de lieux : panneau gauche et marqueurs dédiés. */
+  let exploring = $state(false);
+  let poiCategories = $state<PoiCategory[]>([]);
+  let pois = $state<Poi[]>([]);
+  let poiStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  let poiError = $state<string | null>(null);
+  /** Vue de la carte lors de la dernière recherche (pour proposer de relancer). */
+  let searchedView = $state<MapView | null>(null);
+  let selectedPoi = $state<string | null>(null);
+  let hoveredPoi = $state<string | null>(null);
+  let poiRequest = 0;
   const writes = createSerialQueue();
 
   const id = $derived(page.params.id ?? '');
@@ -90,6 +111,14 @@
   const labels = $derived(new Map(points.map((p) => [p.key, p.label])));
   const editingStep = $derived(steps.find((s) => s.id === editingStepId) ?? null);
   const editingStay = $derived(stays.find((s) => s.id === editingStayId) ?? null);
+  const dayLabel = $derived(day ? `J${days.indexOf(day) + 1}` : null);
+  const addedRefs = $derived(
+    new Set(steps.map((s) => s.osmRef).filter((r): r is string => r !== null)),
+  );
+  const zoomTooLow = $derived(mapView !== null && mapView.zoom < POI_MIN_ZOOM);
+  const poiStale = $derived(
+    mapView !== null && searchedView !== null && !sameView(mapView, searchedView),
+  );
 
   async function load() {
     try {
@@ -277,6 +306,64 @@
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  /** Lieux de la zone visible pour les catégories cochées (jamais automatique au déplacement). */
+  async function searchPois() {
+    const view = mapView;
+    const categories = poiCategories;
+    if (!view || view.zoom < POI_MIN_ZOOM || categories.length === 0) return;
+    const request = ++poiRequest;
+    poiStatus = 'loading';
+    poiError = null;
+    try {
+      const found = await explorePois(view, categories);
+      // Une réponse plus ancienne qu'une recherche relancée entre-temps est ignorée.
+      if (request !== poiRequest) return;
+      pois = found;
+      searchedView = view;
+      poiStatus = 'ready';
+    } catch (e) {
+      if (request !== poiRequest) return;
+      poiStatus = 'error';
+      poiError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  function toggleCategory(category: PoiCategory) {
+    poiCategories = poiCategories.includes(category)
+      ? poiCategories.filter((c) => c !== category)
+      : [...poiCategories, category];
+    if (poiCategories.length === 0) {
+      poiRequest++;
+      pois = [];
+      poiStatus = 'idle';
+      return;
+    }
+    // Catégorie retirée : filtrage local ; ajoutée : nouvelle recherche.
+    pois = pois.filter((p) => poiCategories.includes(p.category));
+    if (poiCategories.includes(category)) searchPois();
+  }
+
+  async function addPoi(poi: Poi, toDay: boolean) {
+    await applyQuietly(() =>
+      createStep(id, version(), poiStepInput(poi, toDay ? selectedDay : null)),
+    );
+  }
+
+  function pickPoi(poi: Poi) {
+    selectedPoi = selectedPoi === poi.id ? null : poi.id;
+    if (selectedPoi) {
+      document
+        .querySelector(`[data-poi-id="${CSS.escape(poi.id)}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function toggleExplore() {
+    exploring = !exploring;
+    selectedPoi = null;
+    hoveredPoi = null;
+  }
+
   function editStay(item: StayItem) {
     if (canEdit) editingStayId = item.stay.id;
   }
@@ -340,77 +427,102 @@
       <SplitPane>
         {#snippet left()}
           <section class="panel">
-            {#if day}
-              <div class="day-head">
-                <h2>{dayTitle(day.date)}</h2>
-                <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
-              </div>
-              {#if day.notes}
-                <p class="notes">{day.notes}</p>
-              {/if}
-              <div data-testid="day-timeline">
-                <Timeline
-                  {items}
-                  {labels}
-                  {canEdit}
-                  {highlighted}
-                  onEdit={(s) => (editingStepId = s.id)}
-                  onEditStay={editStay}
-                  onMove={move}
-                  onDelete={askDelete}
-                  onHover={(k) => (highlighted = k)}
-                  onDrop={drop}
-                />
-              </div>
-              {#if canEdit}
-                <div class="add-bar">
-                  <button
-                    type="button"
-                    class="btn btn-primary"
-                    onclick={() => (adding = { kind: 'place', type: null })}>Ajouter un lieu</button
-                  >
-                  <button
-                    type="button"
-                    class="btn btn-soft"
-                    onclick={() => (adding = { kind: 'stay' })}
-                  >
-                    Ajouter un séjour
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-soft"
-                    onclick={() => (adding = { kind: 'group' })}
-                  >
-                    Nouveau dossier
-                  </button>
-                </div>
-              {/if}
+            {#if exploring}
+              <ExplorePanel
+                categories={poiCategories}
+                {pois}
+                status={poiStatus}
+                error={poiError}
+                {zoomTooLow}
+                stale={poiStale}
+                {dayLabel}
+                {canEdit}
+                {addedRefs}
+                selectedId={selectedPoi}
+                onToggleCategory={toggleCategory}
+                onSearch={searchPois}
+                onAdd={addPoi}
+                onSelect={pickPoi}
+                onHover={(poiId) => (hoveredPoi = poiId)}
+                onBack={toggleExplore}
+                loadWiki={(ref) => poiWiki(ref)}
+              />
             {:else}
-              <h2>Tout le voyage</h2>
-              <ol class="day-list">
-                {#each days as d, i (d.id)}
-                  {@const count = steps.filter((s) => s.dayId === d.id && s.kind === 'step').length}
-                  <li>
-                    <button type="button" onclick={() => (selectedDay = d.id)}>
-                      <b>J{i + 1}</b>
-                      <span class="grow">{dayTitle(d.date)}</span>
-                      <span class="count">{plural(count, 'étape')}</span>
+              {#if day}
+                <div class="day-head">
+                  <h2>{dayTitle(day.date)}</h2>
+                  <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
+                </div>
+                {#if day.notes}
+                  <p class="notes">{day.notes}</p>
+                {/if}
+                <div data-testid="day-timeline">
+                  <Timeline
+                    {items}
+                    {labels}
+                    {canEdit}
+                    {highlighted}
+                    onEdit={(s) => (editingStepId = s.id)}
+                    onEditStay={editStay}
+                    onMove={move}
+                    onDelete={askDelete}
+                    onHover={(k) => (highlighted = k)}
+                    onDrop={drop}
+                  />
+                </div>
+                {#if canEdit}
+                  <div class="add-bar">
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      onclick={() => (adding = { kind: 'place', type: null })}
+                      >Ajouter un lieu</button
+                    >
+                    <button
+                      type="button"
+                      class="btn btn-soft"
+                      onclick={() => (adding = { kind: 'stay' })}
+                    >
+                      Ajouter un séjour
                     </button>
-                  </li>
-                {/each}
-              </ol>
+                    <button
+                      type="button"
+                      class="btn btn-soft"
+                      onclick={() => (adding = { kind: 'group' })}
+                    >
+                      Nouveau dossier
+                    </button>
+                  </div>
+                {/if}
+              {:else}
+                <h2>Tout le voyage</h2>
+                <ol class="day-list">
+                  {#each days as d, i (d.id)}
+                    {@const count = steps.filter(
+                      (s) => s.dayId === d.id && s.kind === 'step',
+                    ).length}
+                    <li>
+                      <button type="button" onclick={() => (selectedDay = d.id)}>
+                        <b>J{i + 1}</b>
+                        <span class="grow">{dayTitle(d.date)}</span>
+                        <span class="count">{plural(count, 'étape')}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+              <IdeasPanel
+                {ideas}
+                {canEdit}
+                {highlighted}
+                onAdd={() => (adding = { kind: 'idea', type: null })}
+                onEdit={(s) => (editingStepId = s.id)}
+                onMove={move}
+                onDelete={askDelete}
+                onHover={(k) => (highlighted = k)}
+                onDrop={drop}
+              />
             {/if}
-            <IdeasPanel
-              {ideas}
-              {canEdit}
-              {highlighted}
-              onAdd={() => (adding = { kind: 'idea', type: null })}
-              onEdit={(s) => (editingStepId = s.id)}
-              onMove={move}
-              onDelete={askDelete}
-              onHover={(k) => (highlighted = k)}
-              onDrop={drop}
-            />
           </section>
         {/snippet}
         {#snippet right()}
@@ -421,7 +533,14 @@
             onHover={(k) => (highlighted = k)}
             onPick={pickPoint}
             onAddHere={canEdit ? addHere : undefined}
-            onCenterChange={(c) => (mapCenter = c)}
+            onViewChange={(v) => (mapView = v)}
+            pois={exploring ? pois : []}
+            {selectedPoi}
+            {hoveredPoi}
+            onPickPoi={pickPoi}
+            onHoverPoi={(poiId) => (hoveredPoi = poiId)}
+            {exploring}
+            onToggleExplore={toggleExplore}
           />
         {/snippet}
       </SplitPane>

@@ -25,6 +25,7 @@
   let fixedStart = $state(start.fixedStart ?? '09:00');
   let bookingRef = $state(start.bookingRef ?? '');
   let bookingUrl = $state(start.bookingUrl ?? '');
+  let openingHours = $state(start.openingHours ?? '');
   let notes = $state(start.notes);
   /** '' = liste d'idées. */
   let dayId = $state(start.dayId ?? '');
@@ -55,6 +56,7 @@
       if (fixed !== start.fixedStart) patch.fixedStart = fixed;
       if (orNull(bookingRef) !== start.bookingRef) patch.bookingRef = orNull(bookingRef);
       if (orNull(bookingUrl) !== start.bookingUrl) patch.bookingUrl = orNull(bookingUrl);
+      if (orNull(openingHours) !== start.openingHours) patch.openingHours = orNull(openingHours);
     }
     if (Object.keys(patch).length === 0) {
       onClose();
@@ -116,6 +118,15 @@
           <input type="url" bind:value={bookingUrl} placeholder="https://…" />
         </label>
       </div>
+      <label class="field">
+        Horaires d’ouverture
+        <input
+          type="text"
+          bind:value={openingHours}
+          maxlength="500"
+          placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
+        />
+      </label>
     {/if}
     <label class="field">
       Jour

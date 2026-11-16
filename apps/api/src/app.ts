@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { accessAuth, type AuthEnv } from './auth';
 import { geocodeRoutes } from './routes/geocode';
+import { poiRoutes } from './routes/poi';
 import { trips } from './routes/trips';
 
 /**
@@ -20,7 +21,9 @@ export function createApp(
 
   app.get('/me', (c) => c.json({ email: c.get('userEmail') }));
   app.route('/trips', trips);
-  app.route('/geocode', geocodeRoutes(options.fetch ?? ((input, init) => fetch(input, init))));
+  const outbound = options.fetch ?? ((input, init) => fetch(input, init));
+  app.route('/geocode', geocodeRoutes(outbound));
+  app.route('/poi', poiRoutes(outbound));
 
   return app;
 }

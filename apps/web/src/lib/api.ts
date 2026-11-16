@@ -1,6 +1,9 @@
 import type {
+  Bbox,
   DayPatch,
   Place,
+  Poi,
+  PoiCategory,
   Role,
   StayCreate,
   StayPatch,
@@ -10,6 +13,7 @@ import type {
   TripPatch,
   TripSnapshot,
   TripSummary,
+  WikiSummary,
 } from '@mytrips/core';
 
 import type { z } from 'zod';
@@ -28,6 +32,10 @@ const MESSAGES: Record<string, string> = {
   invalid_parent: 'Une étape ne peut être rangée que dans un dossier du même jour.',
   children_mode_required: 'Indiquez ce que deviennent les étapes du dossier.',
   geocoder_unavailable: 'La recherche de lieux est indisponible pour le moment.',
+  zoom_too_low: 'Zoomez pour explorer.',
+  area_too_large: 'Zone trop grande : zoomez pour explorer.',
+  poi_unavailable: 'La découverte de lieux est indisponible pour le moment. Réessayez plus tard.',
+  wiki_unavailable: 'Wikipédia ne répond pas pour le moment.',
   owner_cannot_be_member: 'Le propriétaire a déjà tous les droits sur ce voyage.',
   unauthorized: 'Session expirée : rechargez la page pour vous reconnecter.',
 };
@@ -246,4 +254,32 @@ export async function reversePlace(
   const params = new URLSearchParams({ lat: String(point.lat), lng: String(point.lng) });
   return (await request<{ result: Place | null }>(fetcher, `/api/geocode/reverse?${params}`))
     .result;
+}
+
+/** Vue de la carte : zone visible et zoom. */
+export interface MapView {
+  bbox: Bbox;
+  zoom: number;
+}
+
+/** Lieux des catégories dans la zone visible (découverte). */
+export async function explorePois(
+  view: MapView,
+  categories: readonly PoiCategory[],
+  fetcher: Fetcher = fetch,
+): Promise<Poi[]> {
+  const { west, south, east, north } = view.bbox;
+  const params = new URLSearchParams({
+    bbox: [west, south, east, north].join(','),
+    zoom: String(view.zoom),
+    categories: categories.join(','),
+  });
+  return (await request<{ pois: Poi[] }>(fetcher, `/api/poi?${params}`)).pois;
+}
+
+/** Résumé Wikipédia d'un lieu (référence « Q123 » ou « langue:titre »), ou null. */
+export async function poiWiki(ref: string, fetcher: Fetcher = fetch): Promise<WikiSummary | null> {
+  const params = new URLSearchParams({ ref });
+  return (await request<{ summary: WikiSummary | null }>(fetcher, `/api/poi/wiki?${params}`))
+    .summary;
 }

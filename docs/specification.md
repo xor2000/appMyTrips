@@ -15,8 +15,9 @@ mobile dédiée viendra plus tard et réutilisera la logique métier de `package
   avion, bus, train, ferry), calculé par un routeur et modifiable à la main.
 - **Horaires** : l'application calcule les horaires, signale les conflits et les dépassements de la
   journée, et propose des réorganisations.
-- **Découverte** : recherche de lieux (restaurants, musées…) par catégorie dans la zone visible de la
-  carte.
+- **Découverte** : bouton « Explorer » de la carte. On coche des catégories (restaurants, musées…), les
+  lieux de la zone visible s'affichent en liste et en marqueurs, et s'ajoutent en un clic au jour
+  sélectionné ou aux idées.
 - **Hors ligne** : consultation en lecture seule ; l'édition se fait en ligne.
 - **Partage** : un voyage peut être partagé en lecture seule ou en modification.
 
@@ -80,11 +81,12 @@ Monorepo pnpm :
 
 ## 4. Schéma de données (D1)
 
-| Migration        | Contenu                                          |
-| ---------------- | ------------------------------------------------ |
-| `0001_init.sql`  | Table technique `meta (key TEXT PK, value TEXT)` |
-| `0002_trips.sql` | `trips`, `trip_members`, `days`                  |
-| `0003_steps.sql` | `steps` (étapes et dossiers), `stays` (séjours)  |
+| Migration            | Contenu                                          |
+| -------------------- | ------------------------------------------------ |
+| `0001_init.sql`      | Table technique `meta (key TEXT PK, value TEXT)` |
+| `0002_trips.sql`     | `trips`, `trip_members`, `days`                  |
+| `0003_steps.sql`     | `steps` (étapes et dossiers), `stays` (séjours)  |
+| `0004_poi_cache.sql` | `poi_cache` (cache de la découverte de lieux)    |
 
 - **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
 - **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
@@ -92,6 +94,7 @@ Monorepo pnpm :
 - **`steps`** : étapes et dossiers.
   - Placement : `id`, `trip_id`, `day_id` (NULL = liste d'idées), `parent_id` (dossier), `position` (clé d'ordre fractionnaire parmi les frères), `kind` (`step` | `group`).
   - Contenu : `type` (16 types, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
+- **`poi_cache`** : `key` (`<catégorie>:13:<x>:<y>`, case de carte au zoom 13), `payload` (lieux normalisés, JSON), `source` (`overpass` | `geoapify`), `created_at`. Valable 7 jours.
 - **`stays`** : séjours. `id`, `trip_id`, `name`, `lat`, `lng`, `address`, `check_in_date`/`check_in_time` (défaut 17:00), `check_out_date`/`check_out_time` (défaut 10:00), `booking_ref`, `notes`.
 
 **Règles** :
@@ -105,7 +108,7 @@ Monorepo pnpm :
 - Durée maximale d'un voyage : 90 jours. Une journée doit finir après son début : la règle est vérifiée avec les valeurs existantes quand un seul des deux champs change.
 - **Verrou optimiste** : toute modification du voyage ou d'un jour exige `If-Match: <version>` (428 sinon) et incrémente `trips.version`, dans la même transaction D1 que la modification. Une version périmée donne `409 { error: 'version_conflict', version }`. Les changements de membres ne changent pas la version.
 
-Les tables `legs` et les caches arrivent aux lots suivants.
+Les tables `legs` et le cache des itinéraires arrivent aux lots suivants.
 
 ## 5. Surface API
 
@@ -129,8 +132,10 @@ Les tables `legs` et les caches arrivent aux lots suivants.
 | DELETE  | `/api/trips/:id/stays/:stayId`               | modification | `200 TripSnapshot` · `If-Match`                                                           |
 | GET     | `/api/geocode?q=&lat=&lng=`                  | connecté     | `200 { results: Place[] }` (Photon, biais vers lat/lng)                                   |
 | GET     | `/api/geocode/reverse?lat=&lng=`             | connecté     | `200 { result: Place                                                                      | null }`                         |
+| GET     | `/api/poi?bbox=O,S,E,N&zoom=&categories=a,b` | connecté     | `200 { pois: Poi[], source }` (zone visible, zoom ≥ 12, 40 cases au plus)                 |
+| GET     | `/api/poi/wiki?ref=`                         | connecté     | `200 { summary }` (`ref` : `Q123` ou `langue:titre` ; `summary` : `WikiSummary` ou null)  |
 
-- **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `428 version_required` ; `502 geocoder_unavailable`.
+- **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates`, `invalid_bbox`, `invalid_zoom`, `invalid_categories`, `zoom_too_low`, `area_too_large`, `invalid_ref` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `428 version_required` ; `502 geocoder_unavailable` ou `wiki_unavailable` ; `503 poi_unavailable`.
 - Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
 - Les schémas (`TripCreate`, `TripPatch`, `DayPatch`, `MemberPut`, `StepCreate`, `StepPatch`, `StayCreate`, `StayPatch`) et les types de réponse (`Step`, `Stay`, `Place`…) sont dans `packages/core`.
 
@@ -145,12 +150,18 @@ Les tables `legs` et les caches arrivent aux lots suivants.
 - **Géocodage** : Photon (Komoot), appelé par le Worker (`/api/geocode`), en français, User-Agent identifié sans donnée personnelle. URL configurable par la variable `PHOTON_URL` (défaut `https://photon.komoot.io`). Le type d'étape est deviné depuis les tags OSM (`core.stepTypeFromOsm`).
 - **Fuseau horaire** : déduit du point à l'enregistrement d'une étape (`@photostructure/tz-lookup`, côté Worker).
 
-Prévues :
+- **Découverte de lieux** (`/api/poi`, logique pure dans `packages/core/src/poi`) :
+  - **9 catégories** (`POI_CATEGORIES`) avec leurs tags OSM, leurs catégories Geoapify et leur type d'étape ;
+  - **Overpass** en premier : instances de `OVERPASS_URLS` (défaut `overpass-api.de`, puis `overpass.private.coffee`), requête QL `nwr[...]["name"](bbox); out center tags;`, POST avec User-Agent identifié ;
+  - **Geoapify** (API Places v2, 500 lieux au plus par appel) en **secours** si toutes les instances échouent : HTTP en erreur (dont 429), réseau, délai de 8 s dépassé, ou réponse tronquée (`remark` contenant « error »). Seulement si le secret `GEOAPIFY_API_KEY` est défini ; chaque secours est tracé dans les journaux du Worker ;
+  - **cache D1** par case de zoom 13 et catégorie, 7 jours ; seules les cases manquantes sont demandées, en une requête sur la zone qui les couvre ;
+  - **classement** : lieux avec article Wikipédia d'abord, puis distance au centre ; 200 lieux au plus par catégorie ; lieux sans nom ignorés ; liens non http(s) écartés ;
+  - **Wikipédia** : résumé et vignette par l'API REST (`/page/summary`), chargés à la sélection d'un lieu. Avec un identifiant Wikidata, article français sinon anglais. La langue d'un tag `wikipedia` est strictement validée (elle devient un sous-domaine).
+- **Ajout d'un lieu découvert** : étape pré-remplie (nom, type, point, adresse, horaires d'ouverture, `osm_ref`) ; site, téléphone et cuisine dans les notes. Un lieu dont l'`osm_ref` est déjà dans le voyage est marqué « Déjà ajouté ».
 
-- OpenRouteService et Transitous (routage) ;
-- Overpass, Geoapify et Wikipédia (lieux).
+Prévus : OpenRouteService et Transitous (routage), secret `ORS_API_KEY`.
 
-Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
+Secret facultatif : `GEOAPIFY_API_KEY` (secours de la découverte).
 
 ## 7. Contraintes non fonctionnelles
 
@@ -169,6 +180,9 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 - **Fabrique `createApp({ auth })`** (`apps/api/src/app.ts`) : les tests d'API injectent une identité, et tournent sur la vraie D1 de workerd, migrations appliquées.
 - **Pas de couleur stockée par voyage** (prévue dans le plan) : la teinte de la carte de voyage est dérivée de l'identifiant, ce qui évite un champ et un sélecteur sans valeur métier.
 - **Glisser-déposer HTML5 natif** (plutôt que `svelte-dnd-action` prévu dans le plan) : zones de dépôt imbriquées simples (jour, dossier, onglet de jour, idées) et e2e fiables avec Playwright ; complété par des actions monter/descendre et le choix du jour dans l'éditeur.
+- **Cache de la découverte au zoom 13** (plutôt que 14 prévu dans le plan) : au zoom 12 minimal, la zone visible couvre une vingtaine de cases du zoom 13, sous le plafond de 40 ; au zoom 14, il en faudrait plus de 60.
+- **Overpass factice pour les e2e** (plutôt qu'une interception Playwright prévue dans le plan) : Overpass est appelé par le Worker, comme Photon.
+- **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
 
 ## 9. Limites connues et reste à faire
@@ -176,8 +190,14 @@ Secrets prévus : `ORS_API_KEY`, `GEOAPIFY_API_KEY`.
 - **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour que le partage fonctionne avec d'autres personnes, la politique doit devenir une liste d'e-mails (Zero Trust → Access → Applications).
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
-- **Migration `0003_steps.sql`** à appliquer en production avant de déployer le lot 2.
+- **Migration `0004_poi_cache.sql`** à appliquer en production avant de déployer le lot 3.
+- **Découverte de lieux** :
+  - les instances publiques d'Overpass étaient **saturées** lors du contrôle manuel du 16/11/2026 (`overpass-api.de` : « at capacity », `overpass.private.coffee` : plus de 25 s) ; sans clé Geoapify, la découverte répond alors 503. Fournisseurs réels **non vérifiés** de bout en bout ;
+  - la correspondance des catégories Geoapify n'a pas été vérifiée sur l'API réelle (pas de clé) ;
+  - Geoapify renvoie 500 lieux au plus par appel : une zone dense peut être mise en cache incomplète ;
+  - le cache n'est jamais purgé (une ligne expirée n'est remplacée que si sa case est redemandée).
+- **E2E `smoke` du service worker** : instable en exécution parallèle complète, y compris sur `main` (relance nécessaire, précache d'environ 2,2 Mo) ; passe en isolé. Piste : allonger son délai ou le sortir du lot parallèle.
 - **Ranger une étape dans un dossier** ne se fait qu'au glisser-déposer (pas d'équivalent clavier ; monter/descendre et changer de jour ont le leur).
 - **Suppression** : confirmée, mais sans annulation avant le lot 5.
 - **Géocodage** : Photon est fourni sans garantie ; certains lieux reviennent en type « Autre » (tags OSM non reconnus) : l'utilisateur peut imposer le type à l'ajout ou le changer ensuite.
-- **Lots restants** : 3. lieux ; 4. trajets ; 5. horaires ; 6. GPX ; 7. hors ligne.
+- **Lots restants** : 4. trajets ; 5. horaires ; 6. GPX ; 7. hors ligne.

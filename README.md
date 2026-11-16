@@ -39,6 +39,14 @@ pnpm dev
 La recherche de lieux utilise Photon (`https://photon.komoot.io`) via l'API ; la variable `PHOTON_URL`
 de `apps/api/.dev.vars` permet d'en changer.
 
+La découverte de lieux (bouton « Explorer » de la carte) interroge Overpass, puis Geoapify en
+secours. Variables de `apps/api/.dev.vars` (toutes facultatives) :
+
+- `OVERPASS_URLS` : instances Overpass séparées par des virgules (défaut : `overpass-api.de`, puis
+  `overpass.private.coffee`) ;
+- `GEOAPIFY_API_KEY` : clé Geoapify (gratuite, 3 000 crédits par jour). Sans elle, pas de secours
+  quand Overpass est saturé.
+
 Si le port 8787 est déjà pris, lancer l'API sur un autre port et indiquer son URL au front :
 
 ```bash
@@ -106,6 +114,13 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
    ```bash
    pnpm --filter @mytrips/api exec wrangler secret put ACCESS_TEAM_DOMAIN
    pnpm --filter @mytrips/api exec wrangler secret put ACCESS_AUD
+   ```
+
+   Facultatif mais recommandé : la clé Geoapify, secours de la découverte de lieux quand les
+   instances publiques d'Overpass sont saturées (compte gratuit sur https://myprojects.geoapify.com) :
+
+   ```bash
+   pnpm --filter @mytrips/api exec wrangler secret put GEOAPIFY_API_KEY
    ```
 
 Déploiement actuel : https://mytrips.dev-workshop-net.workers.dev (équipe Access

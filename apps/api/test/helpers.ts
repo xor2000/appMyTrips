@@ -32,9 +32,12 @@ export type Caller = <T = any>(
 
 /**
  * Appelant de l'API (vraie base D1 du runtime de test). `outboundFetch` remplace le fetch utilisé
- * pour les services externes (géocodage…).
+ * pour les services externes (géocodage…) ; `bindings` complète ou remplace les bindings.
  */
-export function makeCaller(outboundFetch?: typeof fetch): Caller {
+export function makeCaller(
+  outboundFetch?: typeof fetch,
+  bindings: Partial<typeof env> = {},
+): Caller {
   const app = createApp({ auth: testAuth, fetch: outboundFetch });
   return async (user, method, path, body, headers = {}) => {
     const res = await app.request(
@@ -44,7 +47,7 @@ export function makeCaller(outboundFetch?: typeof fetch): Caller {
         headers: { 'x-test-user': user, 'content-type': 'application/json', ...headers },
         body: body === undefined ? undefined : JSON.stringify(body),
       },
-      env,
+      { ...env, ...bindings },
     );
     const text = await res.text();
     return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers };

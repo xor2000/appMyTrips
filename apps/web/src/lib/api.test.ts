@@ -5,6 +5,8 @@ import {
   createStep,
   deleteStay,
   deleteStep,
+  explorePois,
+  poiWiki,
   reversePlace,
   searchPlaces,
   updateStay,
@@ -181,5 +183,45 @@ describe('recherche de lieux', () => {
     const fetcher = json(200, { result: { name: 'Ici' } });
     expect(await reversePlace({ lat: 1, lng: 2 }, fetcher)).toEqual({ name: 'Ici' });
     expect(firstCall(fetcher)[0]).toBe('/api/geocode/reverse?lat=1&lng=2');
+  });
+});
+
+describe('découverte de lieux', () => {
+  it('explore la zone visible pour les catégories choisies', async () => {
+    const fetcher = json(200, { pois: [{ name: 'Louvre' }], source: 'cache' });
+    const pois = await explorePois(
+      { bbox: { west: 2.3, south: 48.84, east: 2.38, north: 48.88 }, zoom: 13.4 },
+      ['restaurant', 'museum'],
+      fetcher,
+    );
+    expect(pois).toEqual([{ name: 'Louvre' }]);
+    const url = new URL(firstCall(fetcher)[0], 'http://x');
+    expect(url.pathname).toBe('/api/poi');
+    expect(url.searchParams.get('bbox')).toBe('2.3,48.84,2.38,48.88');
+    expect(url.searchParams.get('zoom')).toBe('13.4');
+    expect(url.searchParams.get('categories')).toBe('restaurant,museum');
+  });
+
+  it('traduit les refus de l’exploration en messages', async () => {
+    await expect(
+      explorePois(
+        { bbox: { west: 0, south: 0, east: 1, north: 1 }, zoom: 12 },
+        ['museum'],
+        json(400, { error: 'area_too_large' }),
+      ),
+    ).rejects.toThrow('Zone trop grande : zoomez pour explorer.');
+    await expect(
+      explorePois(
+        { bbox: { west: 0, south: 0, east: 1, north: 1 }, zoom: 12 },
+        ['museum'],
+        json(503, { error: 'poi_unavailable' }),
+      ),
+    ).rejects.toThrow(/indisponible/);
+  });
+
+  it('charge le résumé Wikipédia d’un lieu', async () => {
+    const fetcher = json(200, { summary: { title: 'Louvre' } });
+    expect(await poiWiki('fr:Musée du Louvre', fetcher)).toEqual({ title: 'Louvre' });
+    expect(firstCall(fetcher)[0]).toBe('/api/poi/wiki?ref=fr%3AMus%C3%A9e+du+Louvre');
   });
 });

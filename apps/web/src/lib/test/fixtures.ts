@@ -1,4 +1,4 @@
-import type { Day, Stay, Step } from '@mytrips/core';
+import type { Day, Poi, Stay, Step } from '@mytrips/core';
 
 /** Données de test partagées par les tests de composants. */
 export const days: Day[] = [
@@ -45,6 +45,27 @@ export function makeStay(overrides: Partial<Stay> = {}): Stay {
     checkOutTime: '10:00',
     bookingRef: null,
     notes: '',
+    ...overrides,
+  };
+}
+
+export function makePoi(overrides: Partial<Poi> = {}): Poi {
+  return {
+    id: 'osm:N2001',
+    osmRef: 'N2001',
+    name: 'Musée des Arts décoratifs',
+    category: 'museum',
+    stepType: 'museum',
+    lat: 48.863,
+    lng: 2.333,
+    address: null,
+    openingHours: null,
+    website: null,
+    phone: null,
+    cuisine: null,
+    wikidata: null,
+    wikipedia: null,
+    source: 'overpass',
     ...overrides,
   };
 }
