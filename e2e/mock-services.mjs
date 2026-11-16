@@ -1,7 +1,8 @@
-// Serveur Photon factice pour les e2e : réponses déterministes, sans dépendre du service réel.
+// Services externes factices pour les e2e (Photon, Overpass) : réponses déterministes, sans
+// dépendre des services réels. Ils sont appelés par le Worker, pas par le navigateur.
 import { createServer } from 'node:http';
 
-const PORT = Number(process.env.MOCK_PHOTON_PORT ?? 8798);
+const PORT = Number(process.env.MOCK_SERVICES_PORT ?? 8798);
 
 const PLACES = [
   {
@@ -84,10 +85,74 @@ function feature(p, i) {
   };
 }
 
-createServer((req, res) => {
+// Lieux Overpass, autour du Louvre. Le Louvre a la même référence OSM (N1000) que dans Photon :
+// ajouté par la recherche, il apparaît « déjà ajouté » dans la découverte.
+const OVERPASS_ELEMENTS = [
+  {
+    type: 'node',
+    id: 1000,
+    lat: 48.8606,
+    lon: 2.3376,
+    tags: { name: 'Musée du Louvre', tourism: 'museum', wikidata: 'Q19675' },
+  },
+  {
+    type: 'node',
+    id: 2001,
+    lat: 48.863,
+    lon: 2.333,
+    tags: {
+      name: 'Musée des Arts décoratifs',
+      tourism: 'museum',
+      opening_hours: 'Tu-Su 11:00-18:00',
+      website: 'https://madparis.fr',
+      'addr:housenumber': '107',
+      'addr:street': 'Rue de Rivoli',
+      'addr:city': 'Paris',
+    },
+  },
+  {
+    type: 'way',
+    id: 2002,
+    center: { lat: 48.8638, lon: 2.3226 },
+    tags: { name: 'Musée de l’Orangerie', tourism: 'museum' },
+  },
+  {
+    type: 'node',
+    id: 2003,
+    lat: 48.8622,
+    lon: 2.3405,
+    tags: { name: 'Café Kitsuné', amenity: 'cafe' },
+  },
+];
+
+/** Réponse Overpass : éléments dont les tags correspondent à l'une des règles de la requête. */
+function overpass(query) {
+  const rules = [...query.matchAll(/nwr\["([^"]+)"~"\^\(([^)]+)\)\$"\]/g)].map((m) => ({
+    key: m[1],
+    values: m[2].split('|'),
+  }));
+  const elements = OVERPASS_ELEMENTS.filter((el) =>
+    rules.some((r) => r.values.includes(el.tags[r.key])),
+  );
+  return { elements };
+}
+
+function readBody(req) {
+  return new Promise((done) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => done(body));
+  });
+}
+
+createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   res.setHeader('content-type', 'application/json');
   if (url.pathname === '/health') return res.end('{"ok":true}');
+  if (url.pathname === '/overpass/api/interpreter') {
+    const query = new URLSearchParams(await readBody(req)).get('data') ?? '';
+    return res.end(JSON.stringify(overpass(query)));
+  }
   if (url.pathname === '/api/' || url.pathname === '/api') {
     const q = norm(url.searchParams.get('q') ?? '');
     const found = PLACES.map((p, i) => [p, i]).filter(([p]) => norm(p.name).includes(q));
@@ -103,4 +168,4 @@ createServer((req, res) => {
   }
   res.statusCode = 404;
   res.end('{}');
-}).listen(PORT, () => console.log(`Photon factice sur http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`Services factices sur http://localhost:${PORT}`));

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 8788;
-const PHOTON_PORT = 8798;
+const MOCK_PORT = 8798;
 
 // Les e2e tournent sur le build de production servi par le Worker (wrangler dev),
 // pour que le service worker et le fallback SPA se comportent comme en production.
@@ -18,10 +18,10 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      // Photon factice : le géocodage est appelé par le Worker, pas par le navigateur.
-      command: `node e2e/mock-photon.mjs`,
-      url: `http://localhost:${PHOTON_PORT}/health`,
-      env: { MOCK_PHOTON_PORT: String(PHOTON_PORT) },
+      // Photon et Overpass factices : ils sont appelés par le Worker, pas par le navigateur.
+      command: `node e2e/mock-services.mjs`,
+      url: `http://localhost:${MOCK_PORT}/health`,
+      env: { MOCK_SERVICES_PORT: String(MOCK_PORT) },
       reuseExistingServer: !process.env.CI,
     },
     {
@@ -29,7 +29,7 @@ export default defineConfig({
       command: [
         'pnpm build',
         'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
-        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test --var PHOTON_URL:http://localhost:${PHOTON_PORT}`,
+        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var DEV_USER_EMAIL:dev@example.test --var PHOTON_URL:http://localhost:${MOCK_PORT} --var OVERPASS_URLS:http://localhost:${MOCK_PORT}/overpass/api/interpreter`,
       ].join(' && '),
       url: `http://localhost:${PORT}/api/health`,
       reuseExistingServer: !process.env.CI,

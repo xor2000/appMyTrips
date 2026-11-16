@@ -44,6 +44,15 @@ describe('StepEditor', () => {
     expect(props.onSave).toHaveBeenCalledWith({ dayId: null });
   });
 
+  it('affiche et modifie les horaires d’ouverture', async () => {
+    const props = setup(makeStep({ openingHours: 'Mo-Su 09:00-18:00' }));
+    const field = screen.getByLabelText('Horaires d’ouverture') as HTMLInputElement;
+    expect(field.value).toBe('Mo-Su 09:00-18:00');
+    await fireEvent.input(field, { target: { value: 'Mo,We-Su 09:00-18:00' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(props.onSave).toHaveBeenCalledWith({ openingHours: 'Mo,We-Su 09:00-18:00' });
+  });
+
   it('retire l’heure fixe', async () => {
     const props = setup(makeStep({ fixedStart: '09:00' }));
     await fireEvent.click(screen.getByLabelText('Heure fixe'));

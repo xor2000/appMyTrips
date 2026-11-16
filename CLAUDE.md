@@ -82,9 +82,14 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   Deux écritures rapprochées avec la même version donnent un faux conflit.
 - **Zones de dépôt** (`DropZone.svelte`) : hauteur fixe. Une zone qui grandit pendant un glisser décale
   la liste sous le curseur et le dépôt tombe ailleurs (constaté en e2e).
-- **E2E et géocodage** : Photon est appelé par le Worker, pas par le navigateur ; Playwright lance un
-  Photon factice (`e2e/mock-photon.mjs`, port 8798) et passe `PHOTON_URL` à `wrangler dev`. Après un
-  glisser-déposer, attendre que le résultat soit affiché avant l'action suivante.
+- **E2E et services externes** : Photon et Overpass sont appelés par le Worker, pas par le
+  navigateur (une interception Playwright ne les voit pas). Playwright lance des services factices
+  (`e2e/mock-services.mjs`, port 8798) et passe `PHOTON_URL` et `OVERPASS_URLS` à `wrangler dev`.
+  Après un glisser-déposer, attendre que le résultat soit affiché avant l'action suivante.
+- **Découverte de lieux** (`apps/api/src/routes/poi.ts`) : jamais de requête automatique au
+  déplacement de la carte (politique d'usage d'Overpass) ; le cache `poi_cache` (case de zoom 13 ×
+  catégorie, 7 jours) ne doit recevoir que des réponses complètes. Les tests d'API fixent
+  `OVERPASS_URLS` et `GEOAPIFY_API_KEY` (`poiCaller`) et explorent chacun leur propre zone.
 - **Routes d'étapes** (`apps/api/src/routes/steps.ts`) : utilitaires communs (`access`, `parseBody`,
   `requireVersion`, `writeWithVersion`) dans `routes/shared.ts`.
 - **Ordre des routes Hono** : une route déclarée avant `app.use('*', accessAuth())` reste publique

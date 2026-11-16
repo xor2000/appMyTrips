@@ -1,7 +1,10 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { onMount } from 'svelte';
+  import { STEP_TYPE_INFO, type Poi } from '@mytrips/core';
+  import Compass from 'lucide-svelte/icons/compass';
   import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
+  import type { MapView } from '#lib/api.ts';
   import type { MapPoint } from '#lib/map/points.ts';
   import { styleFor, type MapStyleId } from '#lib/map/styles.ts';
 
@@ -15,7 +18,17 @@
     onPick?: (point: MapPoint) => void;
     /** Clic droit → « Ajouter ici » ; absent en lecture seule. */
     onAddHere?: (point: { lat: number; lng: number }) => void;
-    onCenterChange?: (center: { lat: number; lng: number }) => void;
+    /** Zone visible et zoom, au chargement puis après chaque déplacement. */
+    onViewChange?: (view: MapView) => void;
+    /** Lieux de la découverte (marqueurs atténués, distincts des étapes). */
+    pois?: Poi[];
+    selectedPoi?: string | null;
+    hoveredPoi?: string | null;
+    onPickPoi?: (poi: Poi) => void;
+    onHoverPoi?: (id: string | null) => void;
+    /** Mode « Explorer » ; le bouton n'apparaît que si `onToggleExplore` est fourni. */
+    exploring?: boolean;
+    onToggleExplore?: () => void;
   }
 
   let {
@@ -25,7 +38,14 @@
     onHover = () => {},
     onPick = () => {},
     onAddHere,
-    onCenterChange = () => {},
+    onViewChange = () => {},
+    pois = [],
+    selectedPoi = null,
+    hoveredPoi = null,
+    onPickPoi = () => {},
+    onHoverPoi = () => {},
+    exploring = false,
+    onToggleExplore,
   }: Props = $props();
 
   let container: HTMLDivElement;
@@ -37,6 +57,8 @@
   // Cache des marqueurs MapLibre, volontairement non réactif (mis à jour par les effets).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const poiMarkers = new Map<string, { marker: Marker; el: HTMLElement }>();
   let lastFit = '';
 
   onMount(() => {
@@ -68,10 +90,15 @@
         menu = { x: e.point.x, y: e.point.y, lat: e.lngLat.lat, lng: e.lngLat.lng };
       });
       m.on('movestart', () => (menu = null));
-      m.on('moveend', () => {
-        const c = m.getCenter();
-        onCenterChange({ lat: c.lat, lng: c.lng });
-      });
+      const emitView = () => {
+        const b = m.getBounds();
+        onViewChange({
+          bbox: { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() },
+          zoom: m.getZoom(),
+        });
+      };
+      m.on('load', emitView);
+      m.on('moveend', emitView);
       // Le panneau gauche est redimensionnable : la carte suit la taille de son conteneur.
       observer = new ResizeObserver(() => m.resize());
       observer.observe(container);
@@ -125,6 +152,45 @@
     }
   });
 
+  // Synchronise les marqueurs des lieux de la découverte.
+  $effect(() => {
+    const m = map;
+    if (!m || !MarkerClass) return;
+    const wanted = new Map(pois.map((p) => [p.id, p]));
+    for (const [id, { marker }] of poiMarkers) {
+      if (!wanted.has(id)) {
+        marker.remove();
+        poiMarkers.delete(id);
+      }
+    }
+    for (const p of pois) {
+      if (poiMarkers.has(p.id)) continue;
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'poi-marker';
+      el.title = p.name;
+      el.setAttribute('aria-label', `Lieu proposé : ${p.name}`);
+      el.style.setProperty('--c', `var(${STEP_TYPE_INFO[p.stepType].color})`);
+      el.addEventListener('mouseenter', () => onHoverPoi(p.id));
+      el.addEventListener('mouseleave', () => onHoverPoi(null));
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        onPickPoi(p);
+      });
+      poiMarkers.set(p.id, {
+        el,
+        marker: new MarkerClass({ element: el }).setLngLat([p.lng, p.lat]).addTo(m),
+      });
+    }
+  });
+
+  // Lieu de la découverte sélectionné ou survolé.
+  $effect(() => {
+    for (const [id, { el }] of poiMarkers) {
+      el.classList.toggle('active', id === selectedPoi || id === hoveredPoi);
+    }
+  });
+
   // Mise en évidence du point survolé.
   $effect(() => {
     for (const [key, { el }] of markers) el.classList.toggle('highlighted', key === highlighted);
@@ -160,13 +226,20 @@
 
 <div class="map-wrap">
   <div class="map" bind:this={container}></div>
-  <div class="styles" role="group" aria-label="Fond de carte">
-    <button type="button" aria-pressed={styleId === 'plan'} onclick={() => selectStyle('plan')}>
-      Plan
-    </button>
-    <button type="button" aria-pressed={styleId === 'topo'} onclick={() => selectStyle('topo')}>
-      Topo
-    </button>
+  <div class="tools">
+    {#if onToggleExplore}
+      <button type="button" class="explore" aria-pressed={exploring} onclick={onToggleExplore}>
+        <Compass size={15} />Explorer
+      </button>
+    {/if}
+    <div class="styles" role="group" aria-label="Fond de carte">
+      <button type="button" aria-pressed={styleId === 'plan'} onclick={() => selectStyle('plan')}>
+        Plan
+      </button>
+      <button type="button" aria-pressed={styleId === 'topo'} onclick={() => selectStyle('topo')}>
+        Topo
+      </button>
+    </div>
   </div>
   {#if menu}
     <div class="menu" style={`left: ${menu.x}px; top: ${menu.y}px`}>
@@ -188,10 +261,34 @@
     background: var(--surface-2);
   }
 
-  .styles {
+  .tools {
     position: absolute;
     top: var(--space-4);
     right: var(--space-4);
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .explore {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    border: 0;
+    border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-3);
+    background: var(--surface);
+    color: var(--fg);
+    font: 600 13px var(--font-display);
+    box-shadow: var(--shadow-float);
+    cursor: pointer;
+  }
+
+  .explore[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .styles {
     display: flex;
     gap: var(--space-1);
     padding: var(--space-1);
@@ -241,6 +338,8 @@
 
   /* Marqueurs créés par MapLibre hors du composant : styles globaux. */
   :global(.map-marker) {
+    /* Au-dessus des lieux proposés par la découverte. */
+    z-index: 1;
     display: grid;
     place-items: center;
     min-width: 30px;
@@ -263,5 +362,24 @@
 
   :global(.map-marker.faded) {
     opacity: 0.45;
+  }
+
+  /* Lieux proposés : petites pastilles atténuées, sous les étapes du voyage. */
+  :global(.poi-marker) {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--c) 55%, var(--surface));
+    box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+
+  :global(.poi-marker.active) {
+    background: var(--c);
+    transform: scale(1.5);
+    z-index: 1;
   }
 </style>
