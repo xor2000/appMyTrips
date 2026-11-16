@@ -57,4 +57,16 @@ describe('TripCard', () => {
     });
     expect(screen.getByText('1 jour')).toBeTruthy();
   });
+
+  it('signale un voyage disponible hors ligne', () => {
+    render(TripCard, {
+      props: { trip, today: '2026-06-17', onDelete: vi.fn(), offlineReady: true },
+    });
+    expect(screen.getByText('Disponible hors ligne')).toBeTruthy();
+  });
+
+  it('hors ligne (lecture seule) : pas de suppression', () => {
+    render(TripCard, { props: { trip, today: '2026-06-17', onDelete: vi.fn(), readOnly: true } });
+    expect(screen.queryByRole('button', { name: 'Supprimer' })).toBeNull();
+  });
 });

@@ -45,7 +45,11 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 ## Pièges connus
 
 - **Service worker uniquement en build** : jamais actif en `vite dev`. Tester la PWA avec
-  `pnpm build` puis `wrangler dev` (c'est ce que font les e2e).
+  `pnpm build` puis `wrangler dev` (c'est ce que font les e2e). Il ne contrôle la page qu'au
+  chargement suivant son installation : un e2e hors ligne attend `navigator.serviceWorker.ready`,
+  recharge, puis vérifie `navigator.serviceWorker.controller` avant `context.setOffline(true)`.
+- **IndexedDB et état Svelte** : un objet `$state` est un proxy, qu'IndexedDB ne sait pas cloner
+  (« could not be cloned »). Toujours enregistrer `$state.snapshot(valeur)`.
 - **SvelteKit 3** : l'alias `$lib` n'existe plus. Utiliser `#lib/...` (champ `imports` de
   `apps/web/package.json`) **avec l'extension** pour les modules TS : `import { x } from '#lib/api.ts'`.
 - **`@vite-pwa/sveltekit` 2** : API `withPwa(configKit, optionsPwa)`. Options Workbox sous `generateSW`

@@ -8,9 +8,13 @@
     /** Date du jour (AAAA-MM-JJ), pour le compte à rebours. */
     today: string;
     onDelete: (trip: TripSummary) => void;
+    /** Voyage préparé pour la consultation hors ligne. */
+    offlineReady?: boolean;
+    /** Hors ligne : pas de suppression. */
+    readOnly?: boolean;
   }
 
-  let { trip, today, onDelete }: Props = $props();
+  let { trip, today, onDelete, offlineReady = false, readOnly = false }: Props = $props();
 
   // Teinte stable par voyage, prise dans les couleurs des types d'étape.
   const tints = [
@@ -38,6 +42,9 @@
     <span class="eyebrow">{plural(trip.dayCount, 'jour')}</span>
     <h2>{trip.name}</h2>
     <span class="countdown chip">{countdownLabel(trip.startDate, trip.endDate, today)}</span>
+    {#if offlineReady}
+      <span class="offline chip">Disponible hors ligne</span>
+    {/if}
   </div>
   <div class="body">
     <p class="period">{formatPeriod(trip.startDate, trip.endDate)}</p>
@@ -46,7 +53,7 @@
     {/if}
     <div class="actions">
       <a class="open" href={resolve('/trips/[id]', { id: trip.id })}>Ouvrir le carnet →</a>
-      {#if trip.role === 'owner'}
+      {#if trip.role === 'owner' && !readOnly}
         <button type="button" class="btn btn-ghost delete" onclick={() => onDelete(trip)}>
           Supprimer
         </button>
@@ -143,5 +150,10 @@
   .delete {
     min-height: 30px;
     font-size: 13px;
+  }
+
+  .offline {
+    background: var(--ok-soft);
+    color: var(--ok);
   }
 </style>
