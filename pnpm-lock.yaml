@@ -87,6 +87,9 @@ importers:
       '@mytrips/core':
         specifier: workspace:*
         version: link:../../packages/core
+      idb-keyval:
+        specifier: 6.3.0
+        version: 6.3.0
       lucide-svelte:
         specifier: 1.0.1
         version: 1.0.1(svelte@5.57.3(@typescript-eslint/types@8.72.2))
@@ -2479,6 +2482,9 @@ packages:
 
   ico-endec@0.1.6:
     resolution: {integrity: sha512-ZdLU38ZoED3g1j3iEyzcQj+wAkY2xfWNkymszfJPoxucIUhK7NayQ+/C4Kv0nDFMIsbtbEHldv3V8PU494/ueQ==}
+
+  idb-keyval@6.3.0:
+    resolution: {integrity: sha512-um+2dgAWmYsu615EXpWVwSmapJhON0G43t3Ka/EVaohzPQXSMqKEqeDK/oIW3Ow+BXaF2PvSc+oBTFp793A5Ow==}
 
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
@@ -6097,6 +6103,8 @@ snapshots:
       - '@noble/hashes'
 
   ico-endec@0.1.6: {}
+
+  idb-keyval@6.3.0: {}
 
   idb@7.1.1: {}
 

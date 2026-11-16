@@ -29,3 +29,4 @@ export * from './schedule/schedule';
 export * from './schedule/fixes';
 export * from './schedule/batch';
 export * from './gpx/gpx';
+export * from './offline/tiles';

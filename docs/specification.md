@@ -18,7 +18,7 @@ mobile dédiée viendra plus tard et réutilisera la logique métier de `package
 - **Découverte** : bouton « Explorer » de la carte. On coche des catégories (restaurants, musées…), les
   lieux de la zone visible s'affichent en liste et en marqueurs, et s'ajoutent en un clic au jour
   sélectionné ou aux idées.
-- **Hors ligne** : consultation en lecture seule ; l'édition se fait en ligne.
+- **Hors ligne** : consultation en lecture seule des voyages déjà ouverts (ou préparés), carte de leur zone comprise ; l'édition se fait en ligne.
 - **Partage** : un voyage peut être partagé en lecture seule ou en modification.
 
 Feuille de route détaillée : épique #1 et ses lots (#2 à #9).
@@ -55,7 +55,15 @@ Monorepo pnpm :
 - précache des fichiers client et de la coquille `index.html` ;
 - la navigation hors ligne retombe sur `index.html`, sauf `/api/*` ;
 - enregistrement avec invite de mise à jour (`registerType: 'prompt'`, composant `UpdatePrompt`) ;
+- invite d'installation (`beforeinstallprompt`, composant `InstallPrompt`) sur la liste des voyages ;
 - manifeste `manifest.webmanifest` lié dans `app.html`.
+
+**Hors ligne** (lot 7) :
+
+- **Données** : copie IndexedDB (`idb-keyval`, `lib/offline/store.ts`) de la liste des voyages et de chaque instantané ouvert, avec sa date, mise à jour à chaque chargement et à chaque modification réussie ; un voyage ouvert après la liste y est ajouté. Hors ligne (ou sur échec réseau), la page se charge depuis cette copie (`loadWithFallback`) ; une erreur de l'API (404, 403) n'est jamais masquée par la copie. Le moteur d'horaires recalcule tout localement.
+- **Connexion** (`lib/offline/connection.svelte.ts`) : `navigator.onLine`, événements `online`/`offline`, échec réseau d'un appel. Hors ligne : bandeau « Hors ligne · consultation seule · données du JJ/MM à HH:mm » et lecture seule (même mécanisme que le rôle `viewer`, découverte de lieux masquée). Au retour du réseau, les données sont rechargées.
+- **Service worker** (stratégies runtime de Workbox, `vite.config.ts`) : style, sprites, polices et TileJSON d'OpenFreeMap en `StaleWhileRevalidate` ; tuiles OpenFreeMap en `CacheFirst` (`ofm-tiles`, 20 000 au plus, 60 jours) ; tuiles OpenTopoMap en `CacheFirst` (5 000 au plus) ; vignettes Wikipédia en `CacheFirst` (500 au plus). Les réponses de `/api` ne sont **pas** mises en cache par le service worker.
+- **« Préparer hors ligne »** (en-tête du voyage) : emprise de chaque jour (`core.tripBboxes` : étapes, sorties, tracés GPX et de trajets, séjours, marge de 10 %) ; tuiles des zooms 6 à 14 sans doublon (`core.planOfflineTiles`), plafond de 4 000 tuiles (zoom maximal abaissé au-delà) ; estimation à 25 Ko par tuile ; préchargement à la demande seulement, 4 requêtes en parallèle au plus, avec barre de progression ; polices (plages 0–1023) et sprites du style aussi. `navigator.storage.persist()` est demandé ; l'espace utilisé est affiché, « Libérer » retire du cache les tuiles propres au voyage. Le statut « Disponible hors ligne » s'affiche sur la carte du voyage dans la liste.
 
 **Design** : direction « Pastel ludique ».
 
@@ -246,6 +254,8 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 - **Éditeur de trajet en fenêtre** (le plan prévoyait un panneau latéral) : même composant `Modal` que les autres éditeurs.
 - **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
+- **Pas de cache service worker pour `/api`** (le plan prévoyait `NetworkFirst`) : hors ligne, il servirait une ancienne réponse comme fraîche et sans date ; la copie IndexedDB, datée, suffit.
+- **Pas d'option de zooms 15–16** : les tuiles vectorielles d'OpenFreeMap s'arrêtent au zoom 14, la carte les agrandit au-delà.
 - **GPX sans R2** (choix de l'utilisateur, R2 n'étant pas activé) : statistiques, tracé simplifié et profil dans D1, sans le fichier original ni son téléchargement. R2 pourra s'ajouter sans changer le reste.
 - **GPX analysé dans le navigateur** (le plan le prévoyait en repli) : limite CPU du Worker gratuit. `StepCreate` accepte directement `gpx`, en une écriture.
 - **`fast-xml-parser`** (5.11.2, dans `core`) : parseur XML sans DOM, utilisable dans le navigateur et le Worker.
@@ -286,4 +296,10 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
   - le fichier original n'est pas conservé (pas de R2) : pas de téléchargement ni de recalcul avec d'autres réglages de lissage ;
   - les statistiques viennent du navigateur ; l'API en valide la forme, pas l'exactitude ;
   - une durée annulée (Ctrl+Z) sur une randonnée reste marquée manuelle jusqu'au prochain changement de l'option dénivelé.
-- **Lots restants** : 7. hors ligne.
+- **Hors ligne** :
+  - pas d'édition hors ligne ni de synchronisation ; pas de routage, de recherche ni de découverte de lieux sans réseau ;
+  - la carte hors ligne dépend d'OpenFreeMap : l'URL des tuiles est versionnée, une nouvelle version publiée après la préparation n'est pas en cache (il faut préparer de nouveau) ;
+  - un quota dépassé pendant la mise en cache par le service worker n'est pas visible de la page ; seule une erreur `QuotaExceededError` remontée au navigateur affiche le message dédié ;
+  - un voyage jamais ouvert sur l'appareil n'est pas consultable hors ligne ;
+  - non vérifié à la main : consultation hors ligne de la vraie carte (tuiles réelles), PWA installée, mise à jour de l'application avec un voyage en cache.
+- **Feuille de route** : tous les lots de l'épique #1 sont livrés.

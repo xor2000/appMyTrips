@@ -39,6 +39,11 @@ pnpm dev
 La recherche de lieux utilise Photon (`https://photon.komoot.io`) via l'API ; la variable `PHOTON_URL`
 de `apps/api/.dev.vars` permet d'en changer.
 
+Pour tester le hors ligne : `pnpm build`, lancer le Worker (`wrangler dev`), ouvrir un voyage puis
+« Préparer hors ligne » (icône de nuage dans l'en-tête), et passer Chrome hors ligne (DevTools →
+Network → Offline). Le service worker n'est jamais actif en `vite dev`. L'e2e `e2e/offline.spec.ts`
+fait ce parcours avec `context.setOffline(true)`.
+
 La découverte de lieux (bouton « Explorer » de la carte) interroge Overpass, puis Geoapify en
 secours. Variables de `apps/api/.dev.vars` (toutes facultatives) :
 

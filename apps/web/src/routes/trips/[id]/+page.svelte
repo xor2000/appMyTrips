@@ -3,7 +3,9 @@
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
+    planOfflineTiles,
     proposeFixes,
+    tripBboxes,
     resolveDayBounds,
     scheduleDay,
     type BatchOp,
@@ -21,6 +23,7 @@
     type StepType,
     type StayItem,
     type TripSnapshot,
+    type TripSummary,
   } from '@mytrips/core';
   import { untrack } from 'svelte';
   import { resolve } from '$app/paths';
@@ -65,6 +68,15 @@
   import { createSerialQueue } from '#lib/serial.ts';
   import { createHistory, inverseOps } from '#lib/schedule/history.ts';
   import { isGpxFile, readGpxFile } from '#lib/gpx/import.ts';
+  import { PLAN_STYLE_URL } from '#lib/map/styles.ts';
+  import { connection } from '#lib/offline/connection.svelte.ts';
+  import { TILE_CACHE, offlineStore } from '#lib/offline/instance.ts';
+  import { isNetworkError, loadWithFallback } from '#lib/offline/load.ts';
+  import { glyphUrls, prefetchAll, resolveTileTemplate, tileUrl } from '#lib/offline/prefetch.ts';
+  import type { PreparedTrip } from '#lib/offline/store.ts';
+  import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
+  import OfflineDialog from '#lib/components/offline/OfflineDialog.svelte';
+  import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Redo2 from 'lucide-svelte/icons/redo-2';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
@@ -136,7 +148,20 @@
 
   const id = $derived(page.params.id ?? '');
   const trip = $derived(snapshot?.trip);
-  const canEdit = $derived(snapshot?.role === 'owner' || snapshot?.role === 'editor');
+  /** Hors ligne : consultation seule, comme pour un lecteur (viewer). */
+  const online = $derived(connection.online);
+  const canEdit = $derived(online && (snapshot?.role === 'owner' || snapshot?.role === 'editor'));
+  /** Date de la copie affichée hors ligne (null : données fraîches). */
+  let savedAt = $state<string | null>(null);
+  /** Préparation hors ligne : fenêtre, voyage préparé, progression. */
+  let offlineOpen = $state(false);
+  let prepared = $state<PreparedTrip | null>(null);
+  let usedBytes = $state<number | null>(null);
+  let offlineProgress = $state<{ done: number; total: number } | null>(null);
+  let offlineError = $state<string | null>(null);
+  const offlinePlan = $derived(
+    offlineOpen && snapshot ? planOfflineTiles(tripBboxes(snapshot)) : null,
+  );
   const isOwner = $derived(snapshot?.role === 'owner');
   const days = $derived(snapshot?.days ?? []);
   const steps = $derived(snapshot?.steps ?? []);
@@ -221,7 +246,24 @@
 
   async function load() {
     try {
-      snapshot = await getTrip(id);
+      const tripId = id;
+      const result = await loadWithFallback({
+        online: connection.online,
+        fetch: () => getTrip(tripId),
+        readCopy: () => offlineStore.loadTrip<TripSnapshot>(tripId),
+        writeCopy: async (data) => {
+          await offlineStore.saveTrip(tripId, data);
+          // La liste hors ligne doit contenir ce voyage, même ouvert après elle.
+          await offlineStore.upsertTripInList({
+            ...data.trip,
+            role: data.role,
+            dayCount: data.days.length,
+          } satisfies TripSummary);
+        },
+        onNetworkError: () => connection.markOffline(),
+      });
+      snapshot = result.data;
+      savedAt = result.savedAt;
       status = 'ready';
       if (selectedDay && !snapshot.days.some((d) => d.id === selectedDay)) selectedDay = null;
     } catch (e) {
@@ -244,6 +286,9 @@
     load();
   });
 
+  // Au retour du réseau : données fraîches, édition à nouveau possible.
+  $effect(() => connection.onReconnect(() => load()));
+
   /** Applique une modification ; sur conflit de version, recharge le voyage et prévient. */
   function apply(action: () => Promise<TripSnapshot | void>) {
     // Écritures en file : chacune part avec la version du voyage laissée par la précédente.
@@ -253,10 +298,16 @@
         const next = await action();
         snapshot = next ?? (await getTrip(id));
         notice = null;
+        // Copie hors ligne : objet brut ($state.snapshot), un proxy Svelte n'est pas clonable.
+        offlineStore.saveTrip(id, $state.snapshot(snapshot)).catch(() => undefined);
         const after = new Set(snapshot.legs.map((l) => l.id));
         const gone = before.filter((l) => !after.has(l.id) && isManual(l));
         if (gone.length > 0) removedLegs = [...gone, ...removedLegs].slice(0, 10);
       } catch (e) {
+        if (isNetworkError(e)) {
+          connection.markOffline();
+          throw new Error('Hors ligne : la modification n’a pas été enregistrée.', { cause: e });
+        }
         if (e instanceof ApiError && e.code === 'version_conflict') {
           // Les inverses enregistrés ne correspondent plus à l'état du voyage.
           history.clear();
@@ -650,6 +701,62 @@
     manualLeg = null;
   }
 
+  async function openOffline() {
+    offlineOpen = true;
+    offlineError = null;
+    prepared = await offlineStore.getPrepared(id).catch(() => null);
+    const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
+    usedBytes = estimate?.usage ?? null;
+  }
+
+  /**
+   * Précharge la carte de la zone du voyage (le service worker met les tuiles en cache) et garde
+   * l'instantané. Ne se lance que sur action de l'utilisateur, avec 4 requêtes au plus en parallèle.
+   */
+  async function prepareOffline() {
+    const plan = offlinePlan;
+    if (!plan || !snapshot) return;
+    offlineError = null;
+    offlineProgress = { done: 0, total: plan.tiles.length };
+    try {
+      await navigator.storage?.persist?.().catch(() => false);
+      const { template, style } = await resolveTileTemplate(PLAN_STYLE_URL);
+      const tileUrls = template ? plan.tiles.map((t) => tileUrl(template, t)) : [];
+      const extras = glyphUrls(style);
+      const sprite = (style as { sprite?: string }).sprite;
+      if (typeof sprite === 'string') {
+        extras.push(...['.json', '.png', '@2x.json', '@2x.png'].map((ext) => `${sprite}${ext}`));
+      }
+      const urls = [...tileUrls, ...extras];
+      offlineProgress = { done: 0, total: urls.length };
+      await prefetchAll(urls, {
+        onProgress: (done, total) => (offlineProgress = { done, total }),
+      });
+      await offlineStore.saveTrip(id, $state.snapshot(snapshot));
+      await offlineStore.markPrepared(id, {
+        tileUrls,
+        bytes: plan.tiles.length * 25_000,
+      });
+      prepared = await offlineStore.getPrepared(id);
+      const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
+      usedBytes = estimate?.usage ?? usedBytes;
+    } catch (e) {
+      offlineError = e instanceof Error ? e.message : String(e);
+    } finally {
+      offlineProgress = null;
+    }
+  }
+
+  /** Oublie la préparation hors ligne : tuiles propres à ce voyage retirées du cache. */
+  async function releaseOffline() {
+    const urls = await offlineStore.removePrepared(id);
+    const cache = await caches?.open(TILE_CACHE).catch(() => undefined);
+    if (cache) await Promise.all(urls.map((url) => cache.delete(url)));
+    prepared = null;
+    const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
+    usedBytes = estimate?.usage ?? null;
+  }
+
   function editStay(item: StayItem) {
     if (canEdit) editingStayId = item.stay.id;
   }
@@ -704,6 +811,15 @@
           </p>
         </div>
         <div class="tools">
+          {#if online}
+            <button
+              type="button"
+              class="btn btn-ghost icon-btn"
+              aria-label="Préparer hors ligne"
+              title="Préparer hors ligne"
+              onclick={openOffline}><CloudDownload size={16} /></button
+            >
+          {/if}
           {#if canEdit}
             <button
               type="button"
@@ -739,6 +855,9 @@
         onDropStep={canEdit ? dropOnDay : undefined}
         {alerts}
       />
+      {#if !online}
+        <OfflineBanner {savedAt} />
+      {/if}
       {#if notice}
         <p class="notice" role="status">{notice}</p>
       {/if}
@@ -883,7 +1002,7 @@
             onPickPoi={pickPoi}
             onHoverPoi={(poiId) => (hoveredPoi = poiId)}
             {exploring}
-            onToggleExplore={toggleExplore}
+            onToggleExplore={online ? toggleExplore : undefined}
             lines={legLines}
           />
         {/snippet}
@@ -995,6 +1114,20 @@
       onRecompute={async () => {}}
       onDelete={() => {}}
       onClose={() => (manualLeg = null)}
+    />
+  {/if}
+
+  {#if offlineOpen && offlinePlan}
+    <OfflineDialog
+      tileCount={offlinePlan.tiles.length}
+      reduced={offlinePlan.reduced}
+      {prepared}
+      {usedBytes}
+      progress={offlineProgress}
+      error={offlineError}
+      onPrepare={prepareOffline}
+      onRelease={releaseOffline}
+      onClose={() => (offlineOpen = false)}
     />
   {/if}
 

@@ -47,6 +47,47 @@ export default defineConfig({
           globStrict: false,
           // La navigation hors ligne ne doit jamais retomber sur la coquille pour /api.
           navigateFallbackDenylist: [/^\/api\//],
+          // Consultation hors ligne : carte mise en cache au fil de la navigation et par
+          // « Préparer hors ligne ». Les données de l'API vont dans IndexedDB (avec leur date),
+          // jamais dans ce cache, pour ne pas présenter une ancienne réponse comme fraîche.
+          runtimeCaching: [
+            {
+              // Style, sprites, polices et TileJSON d'OpenFreeMap.
+              urlPattern:
+                /^https:\/\/tiles\.openfreemap\.org\/(styles|sprites|fonts)\/|^https:\/\/tiles\.openfreemap\.org\/planet$/,
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'ofm-assets', cacheableResponse: { statuses: [0, 200] } },
+            },
+            {
+              // Tuiles OpenFreeMap (vectorielles et fond raster) : même nom que TILE_CACHE.
+              urlPattern: /^https:\/\/tiles\.openfreemap\.org\/(planet|natural_earth)\/.+/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'ofm-tiles',
+                expiration: { maxEntries: 20_000, maxAgeSeconds: 60 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/[abc]\.tile\.opentopomap\.org\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'topo-tiles',
+                expiration: { maxEntries: 5000, maxAgeSeconds: 60 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // Vignettes Wikipédia de la découverte de lieux.
+              urlPattern: /^https:\/\/upload\.wikimedia\.org\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'wiki-thumbnails',
+                expiration: { maxEntries: 500 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+          ],
         },
       },
     ),

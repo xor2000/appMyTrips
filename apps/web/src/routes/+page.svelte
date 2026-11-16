@@ -8,17 +8,35 @@
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import TripCard from '#lib/components/TripCard.svelte';
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
+  import InstallPrompt from '#lib/components/offline/InstallPrompt.svelte';
+  import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
+  import { connection } from '#lib/offline/connection.svelte.ts';
+  import { offlineStore } from '#lib/offline/instance.ts';
+  import { loadWithFallback } from '#lib/offline/load.ts';
 
   let trips = $state<TripSummary[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let creating = $state(false);
   let toDelete = $state<TripSummary | null>(null);
+  /** Date de la copie affichée hors ligne (null : données fraîches). */
+  let savedAt = $state<string | null>(null);
+  let prepared = $state<Set<string>>(new Set());
+  const online = $derived(connection.online);
   const today = todayIso();
 
   async function load() {
     try {
-      trips = await listTrips();
+      const result = await loadWithFallback({
+        online: connection.online,
+        fetch: () => listTrips(),
+        readCopy: () => offlineStore.loadTripList<TripSummary[]>(),
+        writeCopy: (data) => offlineStore.saveTripList(data),
+        onNetworkError: () => connection.markOffline(),
+      });
+      trips = result.data;
+      savedAt = result.savedAt;
+      prepared = new Set(await offlineStore.listPrepared().catch(() => []));
       error = null;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -27,7 +45,11 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    load();
+    // Au retour du réseau : données fraîches.
+    return connection.onReconnect(() => load());
+  });
 
   async function create(values: TripFormValues) {
     const snapshot = await createTrip(values);
@@ -53,10 +75,19 @@
       <h1>Mes voyages</h1>
       <p>Jours, étapes, trajets et carte : ton carnet de route, organisé.</p>
     </div>
-    <button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-      Nouveau voyage
-    </button>
+    <div class="hero-actions">
+      <InstallPrompt />
+      {#if online}
+        <button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
+          Nouveau voyage
+        </button>
+      {/if}
+    </div>
   </section>
+
+  {#if !online}
+    <OfflineBanner {savedAt} />
+  {/if}
 
   {#if loading}
     <p class="muted">Chargement…</p>
@@ -69,14 +100,22 @@
         Crée ton premier voyage : choisis un nom et une période, puis ajoute tes étapes jour par
         jour.
       </p>
-      <button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-        Créer un voyage
-      </button>
+      {#if online}
+        <button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
+          Créer un voyage
+        </button>
+      {/if}
     </div>
   {:else}
     <div class="grid">
       {#each trips as trip (trip.id)}
-        <TripCard {trip} {today} onDelete={(t) => (toDelete = t)} />
+        <TripCard
+          {trip}
+          {today}
+          onDelete={(t) => (toDelete = t)}
+          offlineReady={prepared.has(trip.id)}
+          readOnly={!online}
+        />
       {/each}
     </div>
   {/if}
@@ -144,5 +183,11 @@
 
   .empty p {
     max-width: 52ch;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 </style>
