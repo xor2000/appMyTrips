@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import ShareDialog from './ShareDialog.svelte';
 
@@ -10,7 +10,8 @@ const members = [
 function setup(overrides: Record<string, unknown> = {}) {
   const props = {
     members,
-    onAdd: vi.fn().mockResolvedValue(undefined),
+    onInvite: vi.fn().mockResolvedValue('https://mytrips.test/invitation/abc'),
+    onRoleChange: vi.fn().mockResolvedValue(undefined),
     onRemove: vi.fn().mockResolvedValue(undefined),
     onClose: vi.fn(),
     ...overrides,
@@ -24,31 +25,52 @@ describe('ShareDialog', () => {
     setup();
     expect(screen.getByRole('dialog', { name: /partager/i })).toBeTruthy();
     expect(screen.getByText('bob@example.test')).toBeTruthy();
-    expect(screen.getByText('Modification')).toBeTruthy();
-    expect(screen.getByText('Lecture seule')).toBeTruthy();
+    const bob = screen.getByLabelText('Rôle de bob@example.test') as HTMLSelectElement;
+    expect(bob.value).toBe('editor');
+    const carol = screen.getByLabelText('Rôle de carol@example.test') as HTMLSelectElement;
+    expect(carol.value).toBe('viewer');
   });
 
-  it('rappelle que l’invité doit aussi être autorisé dans Cloudflare Access', () => {
+  it('ne parle plus de Cloudflare Access ni d’ajout par e-mail', () => {
     setup();
-    expect(screen.getByText(/cloudflare access/i)).toBeTruthy();
+    expect(screen.queryByText(/cloudflare access/i)).toBeNull();
+    expect(screen.queryByLabelText('E-mail')).toBeNull();
   });
 
-  it('ajoute un membre avec un e-mail normalisé et le rôle choisi', async () => {
+  it('crée un lien d’invitation pour le rôle choisi et l’affiche', async () => {
     const props = setup();
-    await fireEvent.input(screen.getByLabelText('E-mail'), {
-      target: { value: '  Dave@Example.TEST ' },
+    await fireEvent.change(screen.getByLabelText('Rôle de l’invité'), {
+      target: { value: 'editor' },
     });
-    await fireEvent.change(screen.getByLabelText('Rôle'), { target: { value: 'editor' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Inviter' }));
-    expect(props.onAdd).toHaveBeenCalledWith('dave@example.test', 'editor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Créer un lien' }));
+    expect(props.onInvite).toHaveBeenCalledWith('editor');
+    const link = (await screen.findByLabelText('Lien d’invitation')) as HTMLInputElement;
+    expect(link.value).toBe('https://mytrips.test/invitation/abc');
+    expect(screen.getByText(/usage unique/i)).toBeTruthy();
   });
 
-  it('refuse un e-mail invalide sans appeler onAdd', async () => {
+  it('copie le lien dans le presse-papiers', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    setup();
+    await fireEvent.click(screen.getByRole('button', { name: 'Créer un lien' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Copier' }));
+    expect(writeText).toHaveBeenCalledWith('https://mytrips.test/invitation/abc');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copié' })).toBeTruthy());
+  });
+
+  it('change le rôle d’un membre', async () => {
     const props = setup();
-    await fireEvent.input(screen.getByLabelText('E-mail'), { target: { value: 'dave' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Inviter' }));
-    expect(props.onAdd).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toMatch(/e-mail invalide/i);
+    await fireEvent.change(screen.getByLabelText('Rôle de carol@example.test'), {
+      target: { value: 'editor' },
+    });
+    expect(props.onRoleChange).toHaveBeenCalledWith('carol@example.test', 'editor');
+  });
+
+  it('affiche l’erreur d’une création de lien', async () => {
+    setup({ onInvite: vi.fn().mockRejectedValue(new Error('Hors ligne')) });
+    await fireEvent.click(screen.getByRole('button', { name: 'Créer un lien' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/hors ligne/i);
   });
 
   it('retire un membre', async () => {

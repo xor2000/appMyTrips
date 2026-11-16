@@ -72,31 +72,63 @@ Monorepo pnpm :
 
 ## 3. Authentification et droits
 
-- **Cloudflare Access** protège tout le Worker, avec une liste blanche d'e-mails dans la politique Access.
-- **Middleware `accessAuth`** (`apps/api/src/auth.ts`) :
-  - vérifie le JWT `Cf-Access-Jwt-Assertion` avec `jose` : JWKS distant `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, émetteur `https://<ACCESS_TEAM_DOMAIN>`, audience `ACCESS_AUD`, algorithme RS256 uniquement ;
-  - expose l'e-mail normalisé (minuscules) dans `c.get('userEmail')`.
-- **Réponses d'erreur** :
-  - `401 { error: 'unauthorized' }` : jeton absent, invalide, expiré, mauvais émetteur, mauvaise audience, mauvais algorithme ou sans e-mail ;
-  - `500 { error: 'access_not_configured' }` : `ACCESS_AUD` ou `ACCESS_TEAM_DOMAIN` manquant hors mode dev.
-- **Mode dev** : si `ACCESS_AUD` est absent et `DEV_USER_EMAIL` défini, cet e-mail est utilisé sans JWT. L'en-tête `x-dev-user-email` peut alors choisir un autre utilisateur (e2e à plusieurs utilisateurs) ; il est ignoré dès que `ACCESS_AUD` est défini.
+Authentification faite maison (issue #19), sans Cloudflare Access. Code dans `apps/api/src/auth/` et `apps/api/src/routes/auth.ts`, schémas dans `packages/core/src/auth/schemas.ts`.
+
+- **Comptes** (`users`) : l'identifiant est l'e-mail, en minuscules (`trips.owner_email` et `trip_members.email` y renvoient : un compte créé avec l'adresse d'un ancien utilisateur Access retrouve ses voyages). Mot de passe de 10 à 128 caractères.
+- **Mots de passe** (`auth/password.ts`) :
+  - PBKDF2-SHA256 (WebCrypto), sel aléatoire de 16 octets, empreinte de 32 octets ;
+  - format versionné `pbkdf2-sha256$<itérations>$<sel>$<empreinte>` (base64url) ;
+  - **5000 répétitions** : le Worker gratuit n'a que 10 ms de CPU par requête (mesuré dans workerd : 5000 ≈ 6,3 ms, 10 000 ≈ 11,3 ms). Une empreinte plus faible que `PASSWORD_ITERATIONS` est recalculée à la connexion suivante : il suffira d'augmenter la constante (Workers Paid) ;
+  - compte inconnu : une empreinte factice est vérifiée, pour que la durée et la réponse soient celles d'un mauvais mot de passe.
+- **Sessions** (`auth/session.ts`, table `sessions`) :
+  - jeton aléatoire de 32 octets ; seule son empreinte SHA-256 est stockée ;
+  - cookie `__Host-session` : `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, sans `Domain` ;
+  - 30 jours glissants (prolongation écrite une fois par jour au plus) ;
+  - déconnexion : session supprimée, cookie effacé. Changer de mot de passe ferme les autres sessions ; une réinitialisation les ferme toutes.
+- **CSRF** (`sameOrigin`) : toute requête `/api` autre que GET, HEAD ou OPTIONS doit porter un en-tête `Origin` dont l'hôte est celui de la requête (`Host`), sinon `403 bad_origin`. S'ajoute à `SameSite=Lax`.
+- **Inscription libre et captcha fait maison** (`auth/captcha.ts`) :
+  - question « Combien font a + b ? » (a et b de 1 à 9) ;
+  - jeton `charge.signature` : la charge (base64url) porte un identifiant et l'expiration (10 minutes) ; la signature est un HMAC-SHA256 (secret `AUTH_SECRET`) de la charge et de la réponse attendue, qui n'apparaît donc pas en clair ;
+  - usage unique (`captcha_used`) : un jeton bien formé et non expiré est consommé dès sa première présentation, même avec une mauvaise réponse ;
+  - c'est un frein, pas une protection : les limites et le bannissement sont la vraie défense.
+- **Bannissement d'IP** (`auth/limits.ts`, `ip_bans`) :
+  - 3 échecs de connexion depuis une même IP (`CF-Connecting-IP`) en 15 minutes : IP bannie jusqu'à réactivation par un admin ;
+  - une IP bannie reçoit `403 ip_banned` sur la connexion, le captcha, l'inscription et la réinitialisation ; les sessions déjà ouvertes continuent ;
+  - une connexion réussie remet à zéro les échecs de l'IP et de l'e-mail ;
+  - en production, Cloudflare remplace tout `CF-Connecting-IP` envoyé par le client ; en local, `wrangler dev` le laisse passer (les e2e s'en servent pour isoler leurs tests).
+- **Autres limites** (`auth_attempts`, purgées après 24 h) : 5 échecs par e-mail en 15 minutes, toutes IP confondues ; 5 inscriptions par IP et par heure. Au-delà : `429 too_many_attempts`.
+- **Administration** :
+  - administrateurs = e-mails de `ADMIN_EMAILS` (séparés par des virgules, sans casse) ; routes `/api/admin/*` (sinon `403 forbidden`) ;
+  - page `/admin` : lien de réinitialisation du mot de passe (24 h, usage unique, `password_resets`), liste des IP bannies (date, dernier e-mail tenté, échecs) et réactivation ;
+  - commandes de secours, sans session (`wrangler d1 execute`) : `pnpm --filter @mytrips/api run reset-link <email>` et `pnpm --filter @mytrips/api run unban-ip <ip>` (option `--local` pour la base locale). Leur SQL (`scripts/sql.mjs`) est testé dans le runtime Workers.
+- **Routes publiques** : `/api/health` et `/api/auth/{captcha,signup,login,logout,reset/:token}`, montées avant `sessionAuth`. Toutes les autres exigent une session (`401 unauthorized`).
+- **Front** :
+  - pages `/connexion` (onglets connexion et inscription ; retour à `?suite=` ensuite, chemin interne seulement : `lib/auth/next.ts`), `/invitation/[token]`, `/reinitialisation/[token]`, `/compte` (changer de mot de passe, se déconnecter), `/admin` ;
+  - en-tête : e-mail (lien vers `/compte`) et lien « Administration » pour un admin ;
+  - un `401 unauthorized` de l'API (`setUnauthorizedHandler`) renvoie vers `/connexion?suite=<page>` ; un `401 invalid_credentials` (mauvais identifiants) non ;
+  - hors ligne (état de session inconnu), la page reste affichée : les copies sont consultables sans session ;
+  - la déconnexion efface les copies hors ligne de l'appareil (IndexedDB).
 - **Droits par voyage** :
   - le **propriétaire** (`trips.owner_email`) peut tout faire ;
   - un membre **`editor`** lit et modifie le voyage et ses jours, mais ne peut ni partager ni supprimer le voyage ;
   - un membre **`viewer`** lit seulement ;
   - un **non-membre** reçoit 404, pour ne pas révéler l'existence du voyage. Un membre sans le droit requis reçoit 403.
-- **Partage** : géré par le propriétaire (`PUT` et `DELETE /api/trips/:id/members/:email`). L'invité doit aussi passer Cloudflare Access : la politique Access doit l'autoriser.
+- **Partage par lien d'invitation** (`routes/invitations.ts`, table `invitations`) :
+  - le propriétaire crée un lien secret (rôle lecture ou modification, 7 jours, usage unique, stocké haché) ;
+  - la personne qui l'ouvre, connectée ou après inscription, voit le voyage proposé puis l'accepte : elle devient membre sous son e-mail (consommation du lien et ajout dans un même lot D1) ;
+  - plus d'ajout direct par e-mail : une inscription avec l'adresse de quelqu'un d'autre ne donne accès à rien. `PUT /members/:email` ne change que le rôle d'un membre existant (`404 not_member` sinon) ; retirer un membre reste possible.
 
 ## 4. Schéma de données (D1)
 
-| Migration            | Contenu                                          |
-| -------------------- | ------------------------------------------------ |
-| `0001_init.sql`      | Table technique `meta (key TEXT PK, value TEXT)` |
-| `0002_trips.sql`     | `trips`, `trip_members`, `days`                  |
-| `0003_steps.sql`     | `steps` (étapes et dossiers), `stays` (séjours)  |
-| `0004_poi_cache.sql` | `poi_cache` (cache de la découverte de lieux)    |
-| `0005_legs.sql`      | `legs` (trajets), `route_cache` (itinéraires)    |
-| `0006_gpx.sql`       | colonnes GPX des étapes (randonnées)             |
+| Migration            | Contenu                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `0001_init.sql`      | Table technique `meta (key TEXT PK, value TEXT)`                                                  |
+| `0002_trips.sql`     | `trips`, `trip_members`, `days`                                                                   |
+| `0003_steps.sql`     | `steps` (étapes et dossiers), `stays` (séjours)                                                   |
+| `0004_poi_cache.sql` | `poi_cache` (cache de la découverte de lieux)                                                     |
+| `0005_legs.sql`      | `legs` (trajets), `route_cache` (itinéraires)                                                     |
+| `0006_gpx.sql`       | colonnes GPX des étapes (randonnées)                                                              |
+| `0007_auth.sql`      | `users`, `sessions`, `invitations`, `password_resets`, `auth_attempts`, `ip_bans`, `captcha_used` |
 
 - **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
 - **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
@@ -168,14 +200,26 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 | Méthode | Route                                        | Droit        | Réponse                                                                                   |
 | ------- | -------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
 | GET     | `/api/health`                                | aucun        | `200 { ok: true }`                                                                        |
-| GET     | `/api/me`                                    | connecté     | `200 { email }`                                                                           |
+| GET     | `/api/me`                                    | connecté     | `200 { email, isAdmin }`                                                                  |
+| GET     | `/api/auth/captcha`                          | aucun        | `200 { question, token }`                                                                 |
+| POST    | `/api/auth/signup`                           | aucun        | `201 Me` + cookie · `{ email, password, captcha: { token, answer } }`                     |
+| POST    | `/api/auth/login`                            | aucun        | `200 Me` + cookie · `{ email, password }`                                                 |
+| POST    | `/api/auth/logout`                           | aucun        | `204`, cookie effacé                                                                      |
+| POST    | `/api/auth/reset/:token`                     | aucun        | `204` · `{ password }` · ferme toutes les sessions                                        |
+| POST    | `/api/auth/password`                         | connecté     | `204` · `{ current, next }` · ferme les autres sessions                                   |
+| POST    | `/api/trips/:id/invitations`                 | propriétaire | `201 { token, role, expiresAt }` · `{ role }`                                             |
+| GET     | `/api/invitations/:token`                    | connecté     | `200 { tripId, tripName, ownerEmail, role }`                                              |
+| POST    | `/api/invitations/:token/accept`             | connecté     | `200 { tripId }`                                                                          |
+| POST    | `/api/admin/resets`                          | admin        | `201 { token, expiresAt }` · `{ email }`                                                  |
+| GET     | `/api/admin/bans`                            | admin        | `200 { bans: IpBan[] }`                                                                   |
+| DELETE  | `/api/admin/bans/:ip`                        | admin        | `204`                                                                                     |
 | GET     | `/api/trips`                                 | connecté     | `200 { trips: TripSummary[] }` (avec rôle)                                                |
 | POST    | `/api/trips`                                 | connecté     | `201 TripSnapshot`                                                                        |
 | GET     | `/api/trips/:id`                             | lecture      | `200 TripSnapshot` (voyage, rôle, jours, membres, étapes, séjours)                        |
 | PATCH   | `/api/trips/:id[?force=true]`                | modification | `200 TripSnapshot` · `If-Match` obligatoire                                               |
 | DELETE  | `/api/trips/:id`                             | propriétaire | `204`                                                                                     |
 | PATCH   | `/api/trips/:id/days/:dayId`                 | modification | `200 TripSnapshot` · `If-Match` obligatoire                                               |
-| PUT     | `/api/trips/:id/members/:email`              | propriétaire | `204` · corps `{ role }`                                                                  |
+| PUT     | `/api/trips/:id/members/:email`              | propriétaire | `204` · corps `{ role }` · membre existant seulement (`404 not_member`)                   |
 | DELETE  | `/api/trips/:id/members/:email`              | propriétaire | `204`                                                                                     |
 | POST    | `/api/trips/:id/steps`                       | modification | `201 TripSnapshot` · `If-Match` · position absente = fin de liste                         |
 | PATCH   | `/api/trips/:id/steps/:stepId`               | modification | `200 TripSnapshot` · `If-Match` · champs et déplacement (`dayId`, `parentId`, `position`) |
@@ -195,8 +239,9 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 | PUT     | `/api/trips/:id/steps/:stepId/gpx`           | modification | `200 TripSnapshot` · `If-Match` · corps `{ gpx: GpxData }` (randonnée)                    |
 | DELETE  | `/api/trips/:id/steps/:stepId/gpx`           | modification | `200 TripSnapshot` · `If-Match`                                                           |
 
+- **Erreurs d'authentification** : `400 invalid_captcha`, `wrong_password`, `already_owner` ; `401 unauthorized` (sans session), `invalid_credentials` ; `403 bad_origin`, `ip_banned` ; `404 invalid_invitation`, `invalid_link`, `unknown_user`, `not_member` ; `409 email_taken` ; `429 too_many_attempts` ; `500 auth_not_configured` (`AUTH_SECRET` absent).
 - **Erreurs** : `400 invalid` (avec `issues`), `invalid_json`, `invalid_day`, `invalid_parent`, `children_mode_required`, `invalid_query`, `invalid_coordinates`, `invalid_bbox`, `invalid_zoom`, `invalid_categories`, `zoom_too_low`, `area_too_large`, `invalid_ref`, `invalid_leg` ; `401` ; `403 forbidden` ; `404 not_found` ; `409 version_conflict` ou `days_not_empty` ; `422 no_route` ; `428 version_required` ; `502 geocoder_unavailable` ou `wiki_unavailable` ; `503 poi_unavailable`.
-- Toute route `/api/*` autre que `/health` passe d'abord par l'authentification.
+- Toute route `/api/*` passe d'abord par le contrôle d'origine (CSRF) ; toutes, sauf `/health` et les routes publiques de `/auth`, exigent ensuite une session.
 - Les schémas (`TripCreate`, `TripPatch`, `DayPatch`, `MemberPut`, `StepCreate`, `StepPatch`, `StayCreate`, `StayPatch`) et les types de réponse (`Step`, `Stay`, `Place`…) sont dans `packages/core`.
 
 ## 6. Intégrations externes
@@ -227,7 +272,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - les URL de base (`ORS_URL`, `TRANSITOUS_URL`, comme `PHOTON_URL` et `GEOAPIFY_URL`) peuvent contenir un chemin (relais, services factices des e2e) ;
   - mentions « openrouteservice.org (HeiGIT) » et « Transitous » (lien vers `transitous.org/sources`) dans l'attribution de la carte.
 
-Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estimés), `GEOAPIFY_API_KEY` (facultatif, secours de la découverte). Variable : `CONTACT_URL` (URL du projet publié, pour Transitous).
+Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estimés), `GEOAPIFY_API_KEY` (facultatif, secours de la découverte). Variables : `ADMIN_EMAILS` (administrateurs), `CONTACT_URL` (URL du projet publié, pour Transitous).
 
 ## 7. Contraintes non fonctionnelles
 
@@ -237,13 +282,15 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 
 ## 8. Décisions d'architecture
 
-- **Un seul Worker** pour le front et l'API : même origine, une seule application Access, pas de CORS.
+- **Un seul Worker** pour le front et l'API : même origine, cookie de session `__Host-`, pas de CORS.
 - **SvelteKit 3** (au lieu de la 2 prévue dans le plan) : version stable depuis octobre 2026, exigée par `adapter-static` 4 et `@vite-pwa/sveltekit` 2.
 - **TypeScript 6** : `typescript-eslint` n'accepte pas encore TS 7.
 - **Vitest 4** : exigé par `@cloudflare/vitest-plugin`.
 - **Tests du Worker dans le runtime workerd** (`@cloudflare/vitest-plugin`), pour exercer les vrais bindings (D1, puis R2 au lot 6).
 - **Données en ligne d'abord** : D1 fait foi, hors ligne en lecture seule (lot 7).
-- **Fabrique `createApp({ auth })`** (`apps/api/src/app.ts`) : les tests d'API injectent une identité, et tournent sur la vraie D1 de workerd, migrations appliquées.
+- **Fabrique `createApp({ auth })`** (`apps/api/src/app.ts`) : les tests d'API injectent une identité (`x-test-user`), et tournent sur la vraie D1 de workerd, migrations appliquées. Les tests d'authentification (`test/auth-helpers.ts`) passent par la vraie session, chacun avec sa propre IP fictive.
+- **Authentification faite maison plutôt que Cloudflare Access** (issue #19, choix de l'utilisateur) : comptes dans D1 ; PBKDF2 dimensionné aux 10 ms du Worker gratuit ; captcha fait maison plutôt que Turnstile ; partage par lien d'invitation plutôt que par e-mail (sans vérification d'e-mail, une inscription avec l'adresse d'un autre lui prendrait ses partages) ; réinitialisation par l'admin. Plus de contournement de développement (`DEV_USER_EMAIL` supprimé) : les e2e s'inscrivent vraiment.
+- **`400 wrong_password`** (et non 401) pour un mauvais mot de passe actuel : le front renvoie tout `401 unauthorized` vers la connexion.
 - **Pas de couleur stockée par voyage** (prévue dans le plan) : la teinte de la carte de voyage est dérivée de l'identifiant, ce qui évite un champ et un sélecteur sans valeur métier.
 - **Glisser-déposer HTML5 natif** (plutôt que `svelte-dnd-action` prévu dans le plan) : zones de dépôt imbriquées simples (jour, dossier, onglet de jour, idées) et e2e fiables avec Playwright ; complété par des actions monter/descendre et le choix du jour dans l'éditeur.
 - **Cache de la découverte au zoom 13** (plutôt que 14 prévu dans le plan) : au zoom 12 minimal, la zone visible couvre une vingtaine de cases du zoom 13, sous le plafond de 40 ; au zoom 14, il en faudrait plus de 60.
@@ -266,7 +313,16 @@ Secrets : `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estim�
 
 ## 9. Limites connues et reste à faire
 
-- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, protégé par Access (« All traffic », politique « Cloudflare account », équipe `mytraces-pages.cloudflareaccess.com`), URL Preview désactivées. Pour que le partage fonctionne avec d'autres personnes, la politique doit devenir une liste d'e-mails (Zero Trust → Access → Applications).
+- **Déploiement** : Worker sur https://mytrips.dev-workshop-net.workers.dev, URL Preview désactivées. **Bascule vers l'authentification maison à faire** (issue #19) : secret `AUTH_SECRET`, variable `ADMIN_EMAILS`, migration `0007`, déploiement, création du compte, puis suppression de l'application Access (tant qu'elle existe, les deux protections se cumulent ; ensuite, seule la nouvelle authentification protège `/api`).
+- **Authentification** :
+  - hachage limité par les 10 ms de CPU du Worker gratuit (5000 répétitions PBKDF2, bien moins que les recommandations actuelles) ; format prêt à être renforcé ;
+  - deux calculs PBKDF2 dans une même requête (environ 12 ms mesurés en local) pour le changement de mot de passe (vérification puis nouvelle empreinte) et pour le renforcement d'une ancienne empreinte à la connexion : au-dessus de la limite nominale, non vérifié en production ;
+  - IP partagée (4G, entreprise) : 3 erreurs d'une personne bloquent les autres jusqu'à la réactivation ; un admin banni se débloque par `unban-ip` ;
+  - 5 échecs sur un e-mail le bloquent 15 minutes pour tout le monde (verrouillage possible par un tiers) ;
+  - l'inscription révèle si un e-mail a déjà un compte (`409 email_taken`), ce qu'une inscription libre ne peut éviter ; le captcha et la limite par IP freinent l'énumération ;
+  - pas d'envoi d'e-mail (vérification, mot de passe oublié en libre-service), pas de suppression ni de changement d'e-mail d'un compte, pas de double authentification, pas de jetons pour l'application mobile ;
+  - les liens d'invitation non utilisés ne se listent ni ne se révoquent (ils expirent en 7 jours ; un membre ajouté par erreur se retire) ;
+  - les sessions expirées et les invitations ou liens de réinitialisation périmés ne sont pas purgés de la base.
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
 - **Trajets** :

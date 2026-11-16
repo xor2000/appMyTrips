@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALICE, BOB, addStep, call, createTrip } from './helpers';
+import { ALICE, BOB, addStep, call, createTrip, addMember } from './helpers';
 
 /** Rando de 12,4 km et 620 m de D+, du lac (45,90 ; 6,13) au sommet (45,95 ; 6,20). */
 const GPX = {
@@ -189,7 +189,7 @@ describe('randonnée GPX', () => {
     const t = await tripWithHike();
     const path = `/api/trips/${t.tripId}/steps/${t.hike.id}/gpx`;
     expect((await call(ALICE, 'PUT', path, { gpx: GPX })).status).toBe(428);
-    await call(ALICE, 'PUT', `/api/trips/${t.tripId}/members/${BOB}`, { role: 'viewer' });
+    await addMember(t.tripId, BOB, 'viewer');
     expect((await call(BOB, 'PUT', path, { gpx: GPX }, v(t.snapshot))).status).toBe(403);
     expect(
       (

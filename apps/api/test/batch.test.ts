@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALICE, BOB, addStep, call, createTrip } from './helpers';
+import { ALICE, BOB, addStep, call, createTrip, addMember } from './helpers';
 
 /** Voyage de 3 jours avec deux étapes sur J1. */
 async function tripWithSteps() {
@@ -106,7 +106,7 @@ describe('POST /api/trips/:id/batch', () => {
     const t = await tripWithSteps();
     const body = { ops: [{ kind: 'step', id: t.a, patch: { durationMin: 90 } }] };
     expect((await call(ALICE, 'POST', `/api/trips/${t.tripId}/batch`, body)).status).toBe(428);
-    await call(ALICE, 'PUT', `/api/trips/${t.tripId}/members/${BOB}`, { role: 'viewer' });
+    await addMember(t.tripId, BOB, 'viewer');
     expect(
       (await call(BOB, 'POST', `/api/trips/${t.tripId}/batch`, body, v(t.snapshot))).status,
     ).toBe(403);

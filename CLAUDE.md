@@ -24,7 +24,7 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   sans dépendance au DOM ni à Cloudflare. Partagée par le front, l'API et la future appli mobile.
   Exportée en source TypeScript (`exports: ./src/index.ts`), sans étape de build.
 - `apps/api` : Worker Hono. `src/app.ts` (`createApp({ auth })`) monte les routes sous `/api` ;
-  `src/index.ts` exporte `createApp()` avec Access. Routes métier dans `src/routes/`, requêtes D1
+  `src/index.ts` exporte `createApp()` avec la session par cookie (`src/auth/`). Routes métier dans `src/routes/`, requêtes D1
   dans `src/db/`. Droits par voyage : middleware `access('read' | 'write' | 'owner')`. Bindings dans
   `src/env.ts`. Migrations D1 dans `migrations/`.
 - `apps/web` : SvelteKit 3 en SPA (`ssr = false`, `adapter-static` avec `fallback: 'index.html'`).
@@ -59,8 +59,16 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   déprécié). Appeler le Worker avec `exports.default.fetch()` de `cloudflare:workers` (`SELF` est
   déprécié). Le typage passe par `Cloudflare.GlobalProps.mainModule` dans `apps/api/test/env.d.ts`.
   Premier appel lent (démarrage de workerd) : `testTimeout` de 20 s, paquets testés un par un.
-- **`DEV_USER_EMAIL`** : contourne Access en local seulement, et seulement si `ACCESS_AUD` est absent.
-  Ne jamais le définir en production.
+- **Authentification maison** (`apps/api/src/auth/`, `routes/auth.ts`) : aucun contournement de
+  développement. En local, `.dev.vars` doit définir `AUTH_SECRET` (et `ADMIN_EMAILS`) ; on crée son
+  compte sur `/connexion`. Toute écriture `/api` exige un en-tête `Origin` de la même origine (CSRF).
+- **Routes publiques** : `/api/health` et les routes de `publicAuthRoutes` (captcha, inscription,
+  connexion, déconnexion, réinitialisation) sont montées **avant** `sessionAuth()` dans `app.ts`.
+- **Partage** : uniquement par lien d'invitation. `PUT /members/:email` ne fait que changer le rôle d'un
+  membre existant ; dans les tests d'API, ajouter un membre avec `addMember()` de `test/helpers.ts`.
+- **Front et 401** : `setUnauthorizedHandler` (layout) renvoie un `401 unauthorized` vers
+  `/connexion?suite=…`. Une erreur métier ne doit donc jamais répondre 401 (mauvais mot de passe
+  actuel : `400 wrong_password`).
 - **Tests d'API** : utiliser `call(user, method, path, body?, headers?)` de `apps/api/test/helpers.ts`
   (identité par en-tête `x-test-user`, vraie D1, migrations appliquées par `test/apply-migrations.ts`).
   L'isolation du stockage entre tests n'est pas garantie : ne jamais supposer une base vide (filtrer
@@ -82,7 +90,12 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
     fait défiler jusqu'à la cible pendant le glisser et Chromium perd alors le dépôt) ;
   - machine chargée (autres serveurs) : délais dépassés en série ; relancer avec `--workers=1` ;
   - tuiles de carte interceptées (style vide) ;
-  - autre utilisateur via `browser.newContext({ extraHTTPHeaders: { 'x-dev-user-email': … } })` ;
+  - compte principal `dev@example.test` connecté par le projet `setup` (`e2e/auth.setup.ts`), session
+    réutilisée par `storageState` (`e2e/.auth/`, ignoré par git) ;
+  - autre utilisateur : `anonymousContext(browser)` puis `signupViaUi` (`e2e/auth-helpers.ts`) ; un
+    `browser.newContext()` hérite sinon de la session du projet ;
+  - chaque contexte envoie sa propre IP fictive (`CF-Connecting-IP`, que `wrangler dev` laisse passer) :
+    les bannissements et la limite de 5 inscriptions par IP et par heure ne gênent pas les autres tests ;
   - `getByLabel` fait une recherche partielle insensible à la casse : utiliser `{ exact: true }`
     pour des libellés courts (« Du » correspond aussi à « Nom du voyage »).
 - **Écritures sur un voyage (front)** : toujours passer par `apply()` de la page voyage (file
@@ -115,9 +128,9 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   commande intégrée de pnpm ; dans les scripts, toujours écrire `pnpm --filter <paquet> run deploy`.
   Worker déployé : https://mytrips.dev-workshop-net.workers.dev (base D1 `mytrips`, région WEUR).
 - **URL Preview** : `"preview_urls": false` dans `wrangler.jsonc` est indispensable. Sans lui,
-  chaque `wrangler deploy` réactive les URL Preview, que Cloudflare Access ne protège pas.
+  chaque `wrangler deploy` réactive les URL Preview (autres versions du Worker sur la base de production).
 - **`.dev.vars` et tests** : `@cloudflare/vitest-plugin` charge `apps/api/.dev.vars`. Un test ne doit
   jamais dépendre de ce fichier local : fixer explicitement les bindings concernés
-  (ex. `DEV_USER_EMAIL: undefined`).
+  (ex. `AUTH_SECRET` et `ADMIN_EMAILS` dans `vitest.config.ts`).
 - **Versions** : TypeScript reste en 6.x (`typescript-eslint` n'accepte pas TS 7), Vitest en 4.x
   (exigé par le plugin Cloudflare).

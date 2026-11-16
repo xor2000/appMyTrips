@@ -1,4 +1,4 @@
-import { del, get, keys, set } from 'idb-keyval';
+import { clear, del, get, keys, set } from 'idb-keyval';
 import { createOfflineStore } from './store.ts';
 
 /** Copies hors ligne de l'application, dans IndexedDB. */
@@ -11,3 +11,8 @@ export const offlineStore = createOfflineStore({
 
 /** Cache des tuiles du service worker (voir runtimeCaching dans vite.config.ts). */
 export const TILE_CACHE = 'ofm-tiles';
+
+/** Efface toutes les copies hors ligne de l'appareil (déconnexion). */
+export function clearOfflineData(): Promise<void> {
+  return clear();
+}

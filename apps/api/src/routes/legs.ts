@@ -15,7 +15,7 @@ import {
   type RouteResult,
 } from '@mytrips/core';
 import { Hono, type Context } from 'hono';
-import type { AuthEnv } from '../auth';
+import type { AuthEnv } from '../auth/session';
 import type { Bindings } from '../env';
 import {
   getCachedRoute,

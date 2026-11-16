@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALICE, BOB, CAROL, MALLORY, addStep, call, createTrip } from './helpers';
+import { ALICE, BOB, CAROL, MALLORY, addStep, call, createTrip, addMember } from './helpers';
 
 const LOUVRE = { type: 'museum', name: 'Musée du Louvre', lat: 48.8606, lng: 2.3376 };
 const ORSAY = { type: 'museum', name: 'Musée d’Orsay', lat: 48.86, lng: 2.3266 };
@@ -66,8 +66,8 @@ describe('POST /api/trips/:id/steps', () => {
 
   it('applique les droits : editor oui, viewer 403, inconnu 404', async () => {
     const t = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${t.trip.id}/members/${BOB}`, { role: 'editor' });
-    await call(ALICE, 'PUT', `/api/trips/${t.trip.id}/members/${CAROL}`, { role: 'viewer' });
+    await addMember(t.trip.id, BOB, 'editor');
+    await addMember(t.trip.id, CAROL, 'viewer');
     const path = `/api/trips/${t.trip.id}/steps`;
     const body = { ...LOUVRE, dayId: null };
     expect((await call(BOB, 'POST', path, body, { 'if-match': '1' })).status).toBe(201);

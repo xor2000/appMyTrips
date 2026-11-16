@@ -1,155 +1,310 @@
 import { env } from 'cloudflare:test';
-import { Hono } from 'hono';
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWTVerifyGetKey } from 'jose';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { accessAuth, type AuthEnv } from '../src/auth';
+import { describe, expect, it } from 'vitest';
+import { createCaptcha } from '../src/auth/captcha';
+import { DUMMY_HASH, hashPassword, verifyPassword } from '../src/auth/password';
+import { freshEmail, freshIp, raw, signup, solve } from './auth-helpers';
 
-const TEAM = 'mytrips.cloudflareaccess.com';
-const AUD = 'aud-de-test';
+describe('mots de passe', () => {
+  it('empreinte PBKDF2-SHA256 versionnée, sel différent à chaque fois', async () => {
+    const a = await hashPassword('mot-de-passe-1');
+    const b = await hashPassword('mot-de-passe-1');
+    expect(a).toMatch(/^pbkdf2-sha256\$\d+\$[\w-]+\$[\w-]+$/);
+    expect(a).not.toBe(b);
+    expect(await verifyPassword('mot-de-passe-1', a)).toMatchObject({ ok: true });
+    expect(await verifyPassword('autre-mot-de-passe', a)).toMatchObject({ ok: false });
+  });
 
-let goodKeys: JWTVerifyGetKey;
-let privateKey: CryptoKey;
-let otherPrivateKey: CryptoKey;
-let ecPrivateKey: CryptoKey;
+  it('empreinte d’un format inconnu ou d’un nombre de répétitions plus faible : à renforcer', async () => {
+    expect(await verifyPassword('x', 'md5$abc')).toEqual({ ok: false, needsRehash: false });
+    const weak = await hashPassword('mot-de-passe-1', 1000);
+    expect(await verifyPassword('mot-de-passe-1', weak)).toEqual({ ok: true, needsRehash: true });
+  });
 
-beforeAll(async () => {
-  const pair = await generateKeyPair('RS256', { extractable: true });
-  const other = await generateKeyPair('RS256', { extractable: true });
-  privateKey = pair.privateKey;
-  otherPrivateKey = other.privateKey;
-  const ec = await generateKeyPair('ES256', { extractable: true });
-  ecPrivateKey = ec.privateKey;
-  const jwk = { ...(await exportJWK(pair.publicKey)), kid: 'k1', alg: 'RS256' };
-  const ecJwk = { ...(await exportJWK(ec.publicKey)), kid: 'k2', alg: 'ES256' };
-  goodKeys = createLocalJWKSet({ keys: [jwk, ecJwk] });
+  it('empreinte factice (compte inconnu) : format valide, aucun mot de passe ne correspond', async () => {
+    expect(DUMMY_HASH).toMatch(/^pbkdf2-sha256\$5000\$[\w-]{22}\$[\w-]{43}$/);
+    expect(await verifyPassword('mot-de-passe-1', DUMMY_HASH)).toEqual({
+      ok: false,
+      needsRehash: false,
+    });
+  });
 });
 
-function sign(
-  key: CryptoKey,
-  claims: { email?: string; aud?: string; iss?: string; exp?: string } = {},
-): Promise<string> {
-  const jwt = new SignJWT(claims.email === undefined ? {} : { email: claims.email })
-    .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
-    .setIssuedAt()
-    .setIssuer(claims.iss ?? `https://${TEAM}`)
-    .setAudience(claims.aud ?? AUD)
-    .setExpirationTime(claims.exp ?? '5m');
-  return jwt.sign(key);
-}
-
-function app(vars: Partial<AuthEnv['Bindings']>) {
-  const a = new Hono<AuthEnv>();
-  a.use('*', accessAuth({ getKey: () => goodKeys }));
-  a.get('/me', (c) => c.json({ email: c.get('userEmail') }));
-  // DEV_USER_EMAIL est neutralisé par défaut : un apps/api/.dev.vars local ne doit pas changer les tests.
-  const bindings = {
-    ...env,
-    ACCESS_TEAM_DOMAIN: TEAM,
-    ACCESS_AUD: AUD,
-    DEV_USER_EMAIL: undefined,
-    ...vars,
-  };
-  return (headers: Record<string, string> = {}) =>
-    a.request('/me', { headers }, bindings as AuthEnv['Bindings']);
-}
-
-describe('middleware Cloudflare Access', () => {
-  it('refuse une requête sans JWT (401)', async () => {
-    const res = await app({})();
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'unauthorized' });
-  });
-
-  it('accepte un JWT valide et expose l’e-mail en minuscules', async () => {
-    const token = await sign(privateKey, { email: 'Alice@Example.test' });
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
+describe('captcha', () => {
+  it('pose une question de calcul et un jeton signé', async () => {
+    const res = await raw('GET', '/api/auth/captcha');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: 'alice@example.test' });
+    expect(res.body.question).toMatch(/^Combien font \d+ \+ \d+ \?$/);
+    expect(res.body.token).toEqual(expect.any(String));
   });
+});
 
-  it('refuse un JWT signé par une autre clé', async () => {
-    const token = await sign(otherPrivateKey, { email: 'alice@example.test' });
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
-  });
-
-  it('refuse un JWT avec une mauvaise audience', async () => {
-    const token = await sign(privateKey, { email: 'alice@example.test', aud: 'autre' });
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
-  });
-
-  it('refuse un JWT avec un mauvais émetteur', async () => {
-    const token = await sign(privateKey, {
-      email: 'alice@example.test',
-      iss: 'https://pirate.cloudflareaccess.com',
+describe('inscription', () => {
+  async function attempt(overrides: Record<string, unknown> = {}, ip = freshIp()) {
+    const captcha = await raw('GET', '/api/auth/captcha', { ip });
+    return raw('POST', '/api/auth/signup', {
+      ip,
+      body: {
+        email: freshEmail(),
+        password: 'mot-de-passe-1',
+        captcha: { token: captcha.body.token, answer: solve(captcha.body.question) },
+        ...overrides,
+      },
     });
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
+  }
+
+  it('crée le compte et ouvre une session (cookie sécurisé)', async () => {
+    const res = await attempt();
+    expect(res.status).toBe(201);
+    expect(res.session).toEqual(expect.any(String));
+    expect(res.setCookie).toMatch(/HttpOnly/);
+    expect(res.setCookie).toMatch(/Secure/);
+    expect(res.setCookie).toMatch(/SameSite=Lax/);
+    expect(res.setCookie).toMatch(/Path=\//);
+    const me = await raw('GET', '/api/me', { session: res.session! });
+    expect(me.body).toEqual({ email: expect.stringMatching(/@example\.test$/), isAdmin: false });
   });
 
-  it('refuse un JWT expiré', async () => {
-    const token = await sign(privateKey, { email: 'alice@example.test', exp: '-1m' });
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
+  it('e-mail déjà pris : 409', async () => {
+    const { email } = await signup();
+    const res = await attempt({ email });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('email_taken');
   });
 
-  it('refuse un JWT signé avec un autre algorithme que RS256', async () => {
-    const token = await new SignJWT({ email: 'alice@example.test' })
-      .setProtectedHeader({ alg: 'ES256', kid: 'k2' })
-      .setIssuer(`https://${TEAM}`)
-      .setAudience(AUD)
-      .setExpirationTime('5m')
-      .sign(ecPrivateKey);
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
+  it('captcha absent, faux, réutilisé ou signé par un autre secret : 400 invalid_captcha', async () => {
+    expect((await attempt({ captcha: undefined })).status).toBe(400);
+    const ip = freshIp();
+    const captcha = await raw('GET', '/api/auth/captcha', { ip });
+    const wrong = await raw('POST', '/api/auth/signup', {
+      ip,
+      body: {
+        email: freshEmail(),
+        password: 'mot-de-passe-1',
+        captcha: { token: captcha.body.token, answer: '9999' },
+      },
+    });
+    expect(wrong.body.error).toBe('invalid_captcha');
+    // Un jeton déjà présenté ne sert plus, même avec la bonne réponse.
+    const reused = await raw('POST', '/api/auth/signup', {
+      ip,
+      body: {
+        email: freshEmail(),
+        password: 'mot-de-passe-1',
+        captcha: { token: captcha.body.token, answer: solve(captcha.body.question) },
+      },
+    });
+    expect(reused.body.error).toBe('invalid_captcha');
+    const other = await raw('GET', '/api/auth/captcha', {
+      ip,
+      bindings: { AUTH_SECRET: 'un-autre-secret' },
+    });
+    const forged = await raw('POST', '/api/auth/signup', {
+      ip,
+      body: {
+        email: freshEmail(),
+        password: 'mot-de-passe-1',
+        captcha: { token: other.body.token, answer: solve(other.body.question) },
+      },
+    });
+    expect(forged.body.error).toBe('invalid_captcha');
   });
 
-  it('refuse un JWT valide mais sans e-mail', async () => {
-    const token = await sign(privateKey, {});
-    const res = await app({})({ 'Cf-Access-Jwt-Assertion': token });
-    expect(res.status).toBe(401);
+  it('captcha expiré (plus de 10 minutes) : refusé', async () => {
+    const captcha = await createCaptcha(env.AUTH_SECRET!, Date.now() - 11 * 60 * 1000);
+    const res = await raw('POST', '/api/auth/signup', {
+      ip: freshIp(),
+      body: {
+        email: freshEmail(),
+        password: 'mot-de-passe-1',
+        captcha: { token: captcha.token, answer: solve(captcha.question) },
+      },
+    });
+    expect(res.body.error).toBe('invalid_captcha');
   });
 
-  it('accepte une requête sans JWT en dev quand DEV_USER_EMAIL est défini et ACCESS_AUD absent', async () => {
-    const res = await app({ DEV_USER_EMAIL: 'Dev@Example.test', ACCESS_AUD: undefined })();
+  it('mot de passe trop court : 400', async () => {
+    const res = await attempt({ password: 'court' });
+    expect(res.status).toBe(400);
+  });
+
+  it('5 inscriptions par IP et par heure, puis 429', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 5; i++) expect((await attempt({}, ip)).status).toBe(201);
+    const res = await attempt({}, ip);
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('too_many_attempts');
+  });
+});
+
+describe('connexion', () => {
+  it('bon mot de passe : session ouverte', async () => {
+    const user = await signup();
+    const res = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email.toUpperCase(), password: user.password },
+    });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: 'dev@example.test' });
+    expect(res.session).toEqual(expect.any(String));
+    expect(res.body).toEqual({ email: user.email, isAdmin: false });
   });
 
-  it('en mode dev, l’en-tête x-dev-user-email choisit l’utilisateur (tests e2e multi-utilisateurs)', async () => {
-    const res = await app({ DEV_USER_EMAIL: 'dev@example.test', ACCESS_AUD: undefined })({
-      'x-dev-user-email': 'Bob@Example.test',
+  it('mauvais mot de passe et compte inconnu : même réponse', async () => {
+    const user = await signup();
+    const wrong = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email, password: 'faux-mot-de-passe' },
     });
-    expect(await res.json()).toEqual({ email: 'bob@example.test' });
-  });
-
-  it('en mode dev, un en-tête x-dev-user-email invalide est ignoré', async () => {
-    const res = await app({ DEV_USER_EMAIL: 'dev@example.test', ACCESS_AUD: undefined })({
-      'x-dev-user-email': 'pas-un-email',
+    const unknown = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: freshEmail('inconnu'), password: 'faux-mot-de-passe' },
     });
-    expect(await res.json()).toEqual({ email: 'dev@example.test' });
+    expect(wrong.status).toBe(401);
+    expect(unknown.status).toBe(401);
+    expect(wrong.body).toEqual(unknown.body);
+    expect(wrong.body.error).toBe('invalid_credentials');
   });
 
-  it('ignore x-dev-user-email quand ACCESS_AUD est configuré (production)', async () => {
-    const token = await sign(privateKey, { email: 'alice@example.test' });
-    const res = await app({ DEV_USER_EMAIL: 'dev@example.test' })({
-      'Cf-Access-Jwt-Assertion': token,
-      'x-dev-user-email': 'mallory@example.test',
+  it('3 mots de passe faux depuis une IP : IP bannie (403), même avec le bon mot de passe', async () => {
+    const user = await signup();
+    const ip = freshIp();
+    for (let i = 0; i < 3; i++) {
+      await raw('POST', '/api/auth/login', { ip, body: { email: user.email, password: 'faux-1' } });
+    }
+    const res = await raw('POST', '/api/auth/login', {
+      ip,
+      body: { email: user.email, password: user.password },
     });
-    expect(await res.json()).toEqual({ email: 'alice@example.test' });
-  });
-
-  it('ignore DEV_USER_EMAIL quand ACCESS_AUD est configuré (production)', async () => {
-    const res = await app({ DEV_USER_EMAIL: 'dev@example.test' })();
-    expect(res.status).toBe(401);
-  });
-
-  it('répond 500 si Access n’est pas configuré et qu’aucun mode dev n’est actif', async () => {
-    const res = await app({ ACCESS_AUD: undefined, ACCESS_TEAM_DOMAIN: undefined })({
-      'Cf-Access-Jwt-Assertion': 'x',
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('ip_banned');
+    // Inscription et réinitialisation aussi refusées depuis cette IP.
+    expect((await raw('GET', '/api/auth/captcha', { ip })).status).toBe(403);
+    expect(
+      (
+        await raw('POST', '/api/auth/reset/jeton-inconnu', {
+          ip,
+          body: { password: 'nouveau-mot-1' },
+        })
+      ).status,
+    ).toBe(403);
+    // Une autre IP n'est pas concernée.
+    const other = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email, password: user.password },
     });
-    expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: 'access_not_configured' });
+    expect(other.status).toBe(200);
+  });
+
+  it('une connexion réussie remet le compteur de l’IP à zéro', async () => {
+    const user = await signup();
+    const ip = freshIp();
+    const fail = () =>
+      raw('POST', '/api/auth/login', { ip, body: { email: user.email, password: 'faux-1' } });
+    await fail();
+    await fail();
+    await raw('POST', '/api/auth/login', {
+      ip,
+      body: { email: user.email, password: user.password },
+    });
+    await fail();
+    await fail();
+    const res = await raw('POST', '/api/auth/login', {
+      ip,
+      body: { email: user.email, password: user.password },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('5 échecs sur un même e-mail depuis plusieurs IP : 429', async () => {
+    const user = await signup();
+    for (let i = 0; i < 5; i++) {
+      await raw('POST', '/api/auth/login', {
+        ip: freshIp(),
+        body: { email: user.email, password: 'faux-1' },
+      });
+    }
+    const res = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email, password: user.password },
+    });
+    expect(res.status).toBe(429);
+  });
+});
+
+describe('sessions', () => {
+  it('sans session : 401 ; /api/health reste public', async () => {
+    expect((await raw('GET', '/api/me')).status).toBe(401);
+    expect((await raw('GET', '/api/trips')).status).toBe(401);
+    expect((await raw('GET', '/api/health')).status).toBe(200);
+  });
+
+  it('session inconnue ou expirée : 401', async () => {
+    expect((await raw('GET', '/api/me', { session: 'jeton-inconnu' })).status).toBe(401);
+    const user = await signup();
+    await env.DB.prepare(
+      "UPDATE sessions SET expires_at = '2000-01-01T00:00:00.000Z' WHERE email = ?",
+    )
+      .bind(user.email)
+      .run();
+    expect((await raw('GET', '/api/me', { session: user.session })).status).toBe(401);
+  });
+
+  it('déconnexion : session supprimée, cookie effacé', async () => {
+    const user = await signup();
+    const res = await raw('POST', '/api/auth/logout', { session: user.session });
+    expect(res.status).toBe(204);
+    expect(res.session).toBeNull();
+    expect((await raw('GET', '/api/me', { session: user.session })).status).toBe(401);
+  });
+
+  it('changer de mot de passe ferme les autres sessions', async () => {
+    const user = await signup();
+    const other = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email, password: user.password },
+    });
+    const wrong = await raw('POST', '/api/auth/password', {
+      session: user.session,
+      body: { current: 'faux', next: 'nouveau-mot-1' },
+    });
+    // 400 et non 401 : le front renvoie tout 401 vers la page de connexion.
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toBe('wrong_password');
+    const res = await raw('POST', '/api/auth/password', {
+      session: user.session,
+      body: { current: user.password, next: 'nouveau-mot-1' },
+    });
+    expect(res.status).toBe(204);
+    expect((await raw('GET', '/api/me', { session: user.session })).status).toBe(200);
+    expect((await raw('GET', '/api/me', { session: other.session! })).status).toBe(401);
+    const login = await raw('POST', '/api/auth/login', {
+      ip: freshIp(),
+      body: { email: user.email, password: 'nouveau-mot-1' },
+    });
+    expect(login.status).toBe(200);
+  });
+});
+
+describe('protection CSRF', () => {
+  it('écriture sans en-tête Origin ou d’une origine étrangère : 403', async () => {
+    const user = await signup();
+    const body = { name: 'Voyage', startDate: '2026-07-10', endDate: '2026-07-12' };
+    const missing = await raw('POST', '/api/trips', { session: user.session, origin: null, body });
+    const foreign = await raw('POST', '/api/trips', {
+      session: user.session,
+      origin: 'https://pirate.example',
+      body,
+    });
+    expect(missing.status).toBe(403);
+    expect(foreign.status).toBe(403);
+    expect(foreign.body.error).toBe('bad_origin');
+    const ok = await raw('POST', '/api/trips', { session: user.session, body });
+    expect(ok.status).toBe(201);
+  });
+
+  it('lecture (GET) sans Origin : autorisée', async () => {
+    const user = await signup();
+    expect((await raw('GET', '/api/trips', { session: user.session, origin: null })).status).toBe(
+      200,
+    );
   });
 });

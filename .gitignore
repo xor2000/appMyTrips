@@ -9,6 +9,8 @@ dist/
 !.env.example
 test-results/
 playwright-report/
+# Sessions enregistrées des e2e
+e2e/.auth/
 *.log
 
 # Fichiers Claude Code propres à la machine

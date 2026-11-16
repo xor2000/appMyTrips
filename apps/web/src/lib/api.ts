@@ -2,6 +2,7 @@ import type {
   BatchOp,
   GpxData,
   Bbox,
+  Me,
   DayPatch,
   LegCreate,
   LegPatch,
@@ -43,8 +44,29 @@ const MESSAGES: Record<string, string> = {
   no_route: 'Aucun itinéraire trouvé : indiquez la durée à la main.',
   invalid_leg: 'Ces deux étapes ne se suivent plus : le jour a changé entre-temps.',
   owner_cannot_be_member: 'Le propriétaire a déjà tous les droits sur ce voyage.',
-  unauthorized: 'Session expirée : rechargez la page pour vous reconnecter.',
+  unauthorized: 'Session expirée : reconnectez-vous.',
+  invalid_credentials: 'E-mail ou mot de passe incorrect.',
+  ip_banned:
+    'Trop de mots de passe faux depuis cette adresse : elle est bloquée. Demandez à l’administrateur de la réactiver.',
+  too_many_attempts: 'Trop de tentatives : réessayez dans quelques minutes.',
+  invalid_captcha: 'Réponse au calcul incorrecte ou expirée : une nouvelle question est posée.',
+  email_taken: 'Un compte existe déjà avec cet e-mail.',
+  wrong_password: 'Mot de passe actuel incorrect.',
+  invalid_link: 'Ce lien n’est plus valable (déjà utilisé ou expiré).',
+  invalid_invitation: 'Cette invitation n’est plus valable (déjà utilisée ou expirée).',
+  already_owner: 'Vous êtes déjà propriétaire de ce voyage.',
+  not_member: 'Cette personne n’est pas membre du voyage.',
+  unknown_user: 'Aucun compte avec cet e-mail.',
+  bad_origin: 'Requête refusée : rechargez la page.',
+  auth_not_configured: 'L’authentification n’est pas configurée sur le serveur.',
 };
+
+let onUnauthorized: (() => void) | null = null;
+
+/** Appelé quand l'API répond « session absente ou expirée » (renvoi vers la connexion). */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
 
 /** Erreur renvoyée par l'API, avec son statut HTTP, son code et son corps. */
 export class ApiError extends Error {
@@ -71,23 +93,126 @@ async function request<T>(fetcher: Fetcher, path: string, init: RequestInit = {}
       // Corps absent ou non JSON : le statut suffit.
     }
     const code = typeof body.error === 'string' ? body.error : `http_${res.status}`;
+    if (res.status === 401 && code === 'unauthorized') onUnauthorized?.();
     throw new ApiError(res.status, code, body);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
-/** Utilisateur connecté (identité Cloudflare Access), ou null si l'API ne répond pas. */
-export async function fetchMe(fetcher: Fetcher = fetch): Promise<{ email: string } | null> {
+/** État de la session : connecté, non connecté (401), ou inconnu (hors ligne, API muette). */
+export type SessionState =
+  { state: 'signed-in'; me: Me } | { state: 'signed-out' } | { state: 'unknown' };
+
+export async function fetchSession(fetcher: Fetcher = fetch): Promise<SessionState> {
   try {
-    const body = await request<unknown>(fetcher, '/api/me');
-    if (body && typeof body === 'object' && 'email' in body && typeof body.email === 'string') {
-      return { email: body.email };
+    const body = await request<Partial<Me>>(fetcher, '/api/me');
+    if (typeof body?.email === 'string') {
+      return { state: 'signed-in', me: { email: body.email, isAdmin: body.isAdmin === true } };
     }
-    return null;
-  } catch {
-    return null;
+    return { state: 'unknown' };
+  } catch (e) {
+    return e instanceof ApiError && e.status === 401
+      ? { state: 'signed-out' }
+      : { state: 'unknown' };
   }
+}
+
+const post = (body?: unknown): RequestInit => ({
+  method: 'POST',
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+/** Question de calcul (captcha) à poser à l'inscription. */
+export function getCaptcha(fetcher: Fetcher = fetch): Promise<{ question: string; token: string }> {
+  return request(fetcher, '/api/auth/captcha');
+}
+
+export function signup(
+  email: string,
+  password: string,
+  captcha: { token: string; answer: string },
+  fetcher: Fetcher = fetch,
+): Promise<Me> {
+  return request(fetcher, '/api/auth/signup', post({ email, password, captcha }));
+}
+
+export function login(email: string, password: string, fetcher: Fetcher = fetch): Promise<Me> {
+  return request(fetcher, '/api/auth/login', post({ email, password }));
+}
+
+export function logout(fetcher: Fetcher = fetch): Promise<void> {
+  return request(fetcher, '/api/auth/logout', post());
+}
+
+export function changePassword(
+  current: string,
+  next: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return request(fetcher, '/api/auth/password', post({ current, next }));
+}
+
+export function resetPassword(
+  token: string,
+  password: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return request(fetcher, `/api/auth/reset/${encodeURIComponent(token)}`, post({ password }));
+}
+
+export interface InvitationLink {
+  token: string;
+  role: Role;
+  expiresAt: string;
+}
+
+export interface InvitationPreview {
+  tripId: string;
+  tripName: string;
+  ownerEmail: string;
+  role: Role;
+}
+
+export function createInvitation(
+  tripId: string,
+  role: Role,
+  fetcher: Fetcher = fetch,
+): Promise<InvitationLink> {
+  return request(fetcher, `/api/trips/${tripId}/invitations`, post({ role }));
+}
+
+export function getInvitation(token: string, fetcher: Fetcher = fetch): Promise<InvitationPreview> {
+  return request(fetcher, `/api/invitations/${encodeURIComponent(token)}`);
+}
+
+export function acceptInvitation(
+  token: string,
+  fetcher: Fetcher = fetch,
+): Promise<{ tripId: string }> {
+  return request(fetcher, `/api/invitations/${encodeURIComponent(token)}/accept`, post());
+}
+
+export interface IpBan {
+  ip: string;
+  bannedAt: string;
+  lastEmail: string | null;
+  failures: number;
+}
+
+export function adminCreateReset(
+  email: string,
+  fetcher: Fetcher = fetch,
+): Promise<{ token: string; expiresAt: string }> {
+  return request(fetcher, '/api/admin/resets', post({ email }));
+}
+
+export async function adminListBans(fetcher: Fetcher = fetch): Promise<IpBan[]> {
+  return (await request<{ bans: IpBan[] }>(fetcher, '/api/admin/bans')).bans;
+}
+
+export function adminUnban(ip: string, fetcher: Fetcher = fetch): Promise<void> {
+  return request(fetcher, `/api/admin/bans/${encodeURIComponent(ip)}`, { method: 'DELETE' });
 }
 
 export async function listTrips(fetcher: Fetcher = fetch): Promise<TripSummary[]> {

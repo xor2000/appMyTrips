@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
-import { ALICE, BOB, call, createTrip, makeCaller } from './helpers';
+import { ALICE, BOB, call, createTrip, makeCaller, addMember } from './helpers';
 
 /**
  * Le stockage D1 n'est pas isolé entre les tests : chaque test explore sa propre zone (`area(n)`),
@@ -296,7 +296,7 @@ describe('GET /api/poi', () => {
   it('un lecteur (viewer) peut explorer, mais pas ajouter le lieu au voyage', async () => {
     const a = area();
     const t = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${t.trip.id}/members/${BOB}`, { role: 'viewer' });
+    await addMember(t.trip.id, BOB, 'viewer');
     const fetcher = fakeFetch(() => json(overpassBody([museum(40, a.center.lat, a.center.lng)])));
     const explore = await poiCaller(fetcher)(
       BOB,

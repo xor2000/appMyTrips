@@ -1,6 +1,6 @@
 import { stepTypeFromOsm, type Place } from '@mytrips/core';
 import { Hono } from 'hono';
-import type { AuthEnv } from '../auth';
+import type { AuthEnv } from '../auth/session';
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io';
 /** Identification demandée par la politique d'usage de Photon (sans donnée personnelle). */

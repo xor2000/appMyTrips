@@ -37,6 +37,7 @@
     createStay,
     createStep,
     deleteLeg,
+    createInvitation,
     deleteMember,
     deleteStay,
     deleteStep,
@@ -348,7 +349,13 @@
     }
   }
 
-  async function addMember(email: string, role: Role) {
+  /** Crée un lien d'invitation et renvoie son URL complète. */
+  async function inviteMember(role: Role) {
+    const { token } = await createInvitation(id, role);
+    return `${location.origin}/invitation/${token}`;
+  }
+
+  async function changeMemberRole(email: string, role: Role) {
     await apply(() => putMember(id, email, role));
   }
 
@@ -1032,7 +1039,8 @@
   {#if sharing}
     <ShareDialog
       members={snapshot.members}
-      onAdd={addMember}
+      onInvite={inviteMember}
+      onRoleChange={changeMemberRole}
       onRemove={removeMember}
       onClose={() => (sharing = false)}
     />

@@ -8,8 +8,8 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.jsonc' },
       miniflare: {
         bindings: {
-          ACCESS_TEAM_DOMAIN: 'mytrips.cloudflareaccess.com',
-          ACCESS_AUD: 'aud-de-test',
+          AUTH_SECRET: 'secret-de-test',
+          ADMIN_EMAILS: 'admin@example.test',
           // Migrations D1 appliquées par test/apply-migrations.ts avant chaque fichier de test.
           TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, 'migrations')),
         },

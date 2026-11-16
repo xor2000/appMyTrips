@@ -1,7 +1,7 @@
 import { TripId, type TripRole } from '@mytrips/core';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { z } from 'zod';
-import type { AuthEnv } from '../auth';
+import type { AuthEnv } from '../auth/session';
 import { getRole, getTrip } from '../db/trips';
 
 export type TripsEnv = AuthEnv & { Variables: { role: TripRole } };

@@ -19,7 +19,7 @@ import {
   type WikiSummary,
 } from '@mytrips/core';
 import { Hono } from 'hono';
-import type { AuthEnv } from '../auth';
+import type { AuthEnv } from '../auth/session';
 import { getCachedPois, putCachedPois } from '../db/poiCache';
 import {
   PoiUnavailableError,

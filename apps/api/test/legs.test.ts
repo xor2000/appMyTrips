@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
-import { ALICE, BOB, addStep, call, createTrip, makeCaller } from './helpers';
+import { ALICE, BOB, addStep, call, createTrip, makeCaller, addMember } from './helpers';
 
 /** Points uniques par test : le cache des itinéraires (D1) est partagé entre les tests. */
 let seed = 0;
@@ -346,7 +346,7 @@ describe('trajets : création', () => {
     const caller = routeCaller(fakeFetch(() => json(orsResponse())));
     const leg = { fromKey: t.a, toKey: t.b, mode: 'plane' };
     expect((await caller(ALICE, 'POST', `/api/trips/${t.tripId}/legs`, leg)).status).toBe(428);
-    await call(ALICE, 'PUT', `/api/trips/${t.tripId}/members/${BOB}`, { role: 'viewer' });
+    await addMember(t.tripId, BOB, 'viewer');
     expect((await caller(BOB, 'POST', `/api/trips/${t.tripId}/legs`, leg, v(t.trip))).status).toBe(
       403,
     );

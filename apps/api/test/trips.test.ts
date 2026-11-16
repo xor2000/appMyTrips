@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALICE, BOB, CAROL, MALLORY, call, createTrip } from './helpers';
+import { ALICE, BOB, CAROL, MALLORY, call, createTrip, addMember } from './helpers';
 
 describe('POST /api/trips', () => {
   it('crée le voyage, ses jours, et en fait le propriétaire', async () => {
@@ -56,7 +56,7 @@ describe('GET /api/trips', () => {
     const mine = await createTrip(ALICE, { name: 'À moi' });
     const shared = await createTrip(BOB, { name: 'De Bob', endDate: '2026-07-11' });
     await createTrip(CAROL, { name: 'De Carol' });
-    await call(BOB, 'PUT', `/api/trips/${shared.trip.id}/members/${ALICE}`, { role: 'viewer' });
+    await addMember(shared.trip.id, ALICE, 'viewer');
 
     const res = await call(ALICE, 'GET', '/api/trips');
     expect(res.status).toBe(200);
@@ -89,8 +89,8 @@ describe('droits par voyage', () => {
   async function setup() {
     const created = await createTrip(ALICE);
     const id = created.trip.id as string;
-    await call(ALICE, 'PUT', `/api/trips/${id}/members/${BOB}`, { role: 'editor' });
-    await call(ALICE, 'PUT', `/api/trips/${id}/members/${CAROL}`, { role: 'viewer' });
+    await addMember(id, BOB, 'editor');
+    await addMember(id, CAROL, 'viewer');
     return id;
   }
 
@@ -122,7 +122,7 @@ describe('droits par voyage', () => {
       );
       expect(patch.status).toBe(u.write);
 
-      const share = await call(u.email, 'PUT', `/api/trips/${id}/members/dave@example.test`, {
+      const share = await call(u.email, 'PUT', `/api/trips/${id}/members/${CAROL}`, {
         role: 'viewer',
       });
       expect(share.status).toBe(u.share);
@@ -350,14 +350,21 @@ describe('PATCH /api/trips/:id/days/:dayId', () => {
 describe('membres', () => {
   it('normalise l’e-mail et met à jour le rôle d’un membre existant', async () => {
     const { trip } = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/Bob@Example.TEST`, { role: 'viewer' });
-    await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${BOB}`, { role: 'editor' });
+    await addMember(trip.id, BOB, 'viewer');
+    expect(
+      (
+        await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/Bob@Example.TEST`, {
+          role: 'editor',
+        })
+      ).status,
+    ).toBe(204);
     const res = await call(ALICE, 'GET', `/api/trips/${trip.id}`);
     expect(res.body.members).toEqual([{ email: BOB, role: 'editor' }]);
   });
 
   it('refuse un rôle inconnu, un e-mail invalide, et le propriétaire lui-même (400)', async () => {
     const { trip } = await createTrip();
+    await addMember(trip.id, BOB, 'viewer');
     expect(
       (await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${BOB}`, { role: 'owner' })).status,
     ).toBe(400);
@@ -373,9 +380,10 @@ describe('membres', () => {
 
   it('accepte des e-mails avec des caractères encodés (+, %) sans erreur serveur', async () => {
     const { trip } = await createTrip();
+    await addMember(trip.id, 'bob+voyage@example.test', 'viewer');
     const plus = encodeURIComponent('bob+voyage@example.test');
     expect(
-      (await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${plus}`, { role: 'viewer' }))
+      (await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${plus}`, { role: 'editor' }))
         .status,
     ).toBe(204);
     const percent = encodeURIComponent('100%bob@example.test');
@@ -384,12 +392,12 @@ describe('membres', () => {
     });
     expect(res.status).toBeLessThan(500);
     const members = (await call(ALICE, 'GET', `/api/trips/${trip.id}`)).body.members;
-    expect(members.map((m: { email: string }) => m.email)).toContain('bob+voyage@example.test');
+    expect(members).toContainEqual({ email: 'bob+voyage@example.test', role: 'editor' });
   });
 
   it('retirer un membre lui retire l’accès', async () => {
     const { trip } = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${BOB}`, { role: 'viewer' });
+    await addMember(trip.id, BOB, 'viewer');
     expect((await call(BOB, 'GET', `/api/trips/${trip.id}`)).status).toBe(200);
     expect((await call(ALICE, 'DELETE', `/api/trips/${trip.id}/members/${BOB}`)).status).toBe(204);
     expect((await call(BOB, 'GET', `/api/trips/${trip.id}`)).status).toBe(404);
@@ -399,7 +407,7 @@ describe('membres', () => {
 describe('DELETE /api/trips/:id', () => {
   it('supprime le voyage, ses jours et ses membres', async () => {
     const { trip } = await createTrip();
-    await call(ALICE, 'PUT', `/api/trips/${trip.id}/members/${BOB}`, { role: 'viewer' });
+    await addMember(trip.id, BOB, 'viewer');
     expect((await call(ALICE, 'DELETE', `/api/trips/${trip.id}`)).status).toBe(204);
     expect((await call(ALICE, 'GET', `/api/trips/${trip.id}`)).status).toBe(404);
     const bobTrips = (await call(BOB, 'GET', '/api/trips')).body.trips as { id: string }[];
