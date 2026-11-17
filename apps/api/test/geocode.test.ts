@@ -52,6 +52,19 @@ describe('GET /api/geocode', () => {
     expect(new Headers(init.headers).get('user-agent')).toMatch(/MyTrips/);
   });
 
+  it('dédoublonne les lieux renvoyés plusieurs fois par Photon (même objet OSM ou même point)', async () => {
+    const sansRef = {
+      geometry: { type: 'Point', coordinates: [7.37, 45.74] },
+      properties: { name: 'Aéroport', osm_key: 'aeroway', osm_value: 'aerodrome' },
+    };
+    const fetcher = photon([LOUVRE_FEATURE, LOUVRE_FEATURE, sansRef, sansRef]);
+    const res = await makeCaller(fetcher)(ALICE, 'GET', '/api/geocode?q=a');
+    expect(res.body.results.map((p: { name: string }) => p.name)).toEqual([
+      'Musée du Louvre',
+      'Aéroport',
+    ]);
+  });
+
   it('PHOTON_URL avec un chemin (relais) : le chemin est conservé', async () => {
     const fetcher = photon([]);
     await makeCaller(fetcher, { PHOTON_URL: 'http://relais.test/photon/' })(
