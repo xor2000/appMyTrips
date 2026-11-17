@@ -59,7 +59,17 @@ export function geocodeRoutes(fetchImpl: typeof fetch) {
     });
     if (!res.ok) throw new Error(`Photon ${res.status}`);
     const body = (await res.json()) as { features?: PhotonFeature[] };
-    return (body.features ?? []).map(toPlace).filter((p): p is Place => p !== null);
+    // Photon renvoie parfois plusieurs fois le même lieu : un seul par objet OSM (ou par point).
+    const seen = new Set<string>();
+    return (body.features ?? [])
+      .map(toPlace)
+      .filter((p): p is Place => p !== null)
+      .filter((p) => {
+        const key = p.osmRef ?? `${p.name}@${p.lat},${p.lng}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }
 
   routes.get('/', async (c) => {

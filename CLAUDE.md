@@ -103,6 +103,9 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   Deux écritures rapprochées avec la même version donnent un faux conflit.
 - **Zones de dépôt** (`DropZone.svelte`) : hauteur fixe. Une zone qui grandit pendant un glisser décale
   la liste sous le curseur et le dépôt tombe ailleurs (constaté en e2e).
+- **Clés de `{#each}`** : jamais construites à partir de données externes supposées uniques (Photon
+  renvoie parfois deux fois le même lieu). Une clé en double lève `each_key_duplicate` et SvelteKit
+  affiche sa page d'erreur 500.
 - **E2E et services externes** : Photon et Overpass sont appelés par le Worker, pas par le
   navigateur (une interception Playwright ne les voit pas). Playwright lance des services factices
   (`e2e/mock-services.mjs`, port 8798) et passe `PHOTON_URL` et `OVERPASS_URLS` à `wrangler dev`.

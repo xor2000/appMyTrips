@@ -28,6 +28,19 @@ describe('PlaceSearch', () => {
     expect(onPick).toHaveBeenCalledWith(louvre);
   });
 
+  it('résultats en double : la liste s’affiche sans planter', async () => {
+    const sansRef = { ...louvre, osmRef: null };
+    render(PlaceSearch, {
+      props: {
+        search: vi.fn().mockResolvedValue([louvre, louvre, sansRef, sansRef]),
+        onPick: vi.fn(),
+        delay: 0,
+      },
+    });
+    await fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'Louvre' } });
+    expect(await screen.findAllByRole('button', { name: /Musée du Louvre/ })).toHaveLength(4);
+  });
+
   it('indique quand rien n’est trouvé', async () => {
     render(PlaceSearch, {
       props: { search: vi.fn().mockResolvedValue([]), onPick: vi.fn(), delay: 0 },

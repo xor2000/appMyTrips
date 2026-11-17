@@ -78,7 +78,8 @@
     <p class="hint">Aucun lieu trouvé.</p>
   {:else if results}
     <ul class="results">
-      {#each results as place (`${place.osmRef}-${place.lat}-${place.lng}`)}
+      <!-- Clé par position : le géocodeur peut renvoyer deux fois le même lieu. -->
+      {#each results as place, i (i)}
         <li>
           <button type="button" onclick={() => onPick(place)}>
             <span class="name">{place.name}</span>
