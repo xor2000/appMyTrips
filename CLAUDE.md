@@ -37,8 +37,11 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - TypeScript strict (`noUncheckedIndexedAccess`). Svelte 5 avec runes (`$props`, `$state`, `$derived`).
 - Tests : `*.test.ts` à côté du code (core, web) ou dans `apps/api/test/`. Noms de tests en français.
   TDD : écrire les tests d'abord et les voir échouer.
-- Styles : uniquement via les variables de `apps/web/src/lib/styles/tokens.css` (design « Pastel
-  ludique », thèmes clair et sombre). Pas de couleur en dur dans les composants.
+- Styles : uniquement via les variables CSS. `apps/web/src/lib/styles/tokens.css` (polices,
+  rayons, espacements) et un fichier par thème dans `styles/themes/` (couleurs et variables de
+  forme : `pastel.css` clair et sombre, `carnet.css`). Pas de couleur en dur dans les composants ;
+  un nouveau thème ne doit demander qu'un fichier CSS (plus son entrée dans `lib/theme.ts` et
+  `app.html`).
 - Dépendances en version exacte (`.npmrc` : `save-exact=true`).
 - Pas de secret dans le dépôt : `wrangler secret put` en production, `apps/api/.dev.vars` en local.
 
@@ -89,6 +92,9 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   - fenêtre de 1280 × 900 : un glisser-déposer ne doit jamais demander de défilement (Playwright
     fait défiler jusqu'à la cible pendant le glisser et Chromium perd alors le dépôt) ;
   - machine chargée (autres serveurs) : délais dépassés en série ; relancer avec `--workers=1` ;
+  - ports 8788 / 8798 déjà pris par une autre copie du projet : `reuseExistingServer` lance alors
+    les tests contre son serveur (page `{"error":"not_found"}`, setup en échec) ; choisir d'autres
+    ports avec `E2E_PORT` et `E2E_MOCK_PORT` ;
   - tuiles de carte interceptées (style vide) ;
   - compte principal `dev@example.test` connecté par le projet `setup` (`e2e/auth.setup.ts`), session
     réutilisée par `storageState` (`e2e/.auth/`, ignoré par git) ;

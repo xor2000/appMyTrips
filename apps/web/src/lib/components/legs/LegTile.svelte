@@ -99,9 +99,12 @@
 </div>
 
 <style>
+  /* Tuile centrée sur la ligne de la timeline. */
   .leg {
     display: flex;
-    padding: var(--space-1) 0 var(--space-1) var(--leg-indent, var(--space-6));
+    justify-content: center;
+    /* --leg-offset : hauteur de la zone de dépôt qui suit le trajet (voir Timeline). */
+    padding: calc(var(--space-1) + var(--leg-offset, 0px)) 0 var(--space-1);
   }
 
   .pill {
@@ -112,8 +115,8 @@
     max-width: 100%;
     padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
     border: 0;
-    border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--c) 12%, var(--surface));
+    border-radius: var(--leg-radius);
+    background: color-mix(in srgb, var(--c) var(--leg-tint), var(--leg-base));
     color: var(--fg);
     font: 600 12px var(--font-body);
     text-align: left;
@@ -136,8 +139,8 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: var(--c);
-    color: var(--surface);
+    background: color-mix(in srgb, var(--c) var(--leg-icon-tint), transparent);
+    color: color-mix(in srgb, var(--c) var(--leg-icon-ink), var(--surface));
   }
 
   .label {
@@ -181,6 +184,8 @@
     padding: var(--space-1) var(--space-3);
     border: 1.5px dashed var(--line);
     border-radius: var(--radius-pill);
+    /* Fond plein : la ligne de la timeline ne traverse pas la tuile. */
+    background: var(--surface);
     color: var(--muted);
     font-size: 12px;
   }

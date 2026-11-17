@@ -1,4 +1,6 @@
 @import './tokens.css';
+@import './themes/pastel.css';
+@import './themes/carnet.css';
 
 *,
 *::before,

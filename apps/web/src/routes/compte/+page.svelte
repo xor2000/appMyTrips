@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import PasswordForm from '#lib/components/auth/PasswordForm.svelte';
+  import ThemePicker from '#lib/components/ThemePicker.svelte';
   import { changePassword, logout } from '#lib/api.ts';
   import { session } from '#lib/auth/session.svelte.ts';
   import { clearOfflineData } from '#lib/offline/instance.ts';
@@ -31,6 +32,12 @@
   {#if session.me}
     <p class="email">Connecté avec <strong>{session.me.email}</strong></p>
   {/if}
+
+  <section class="panel">
+    <h2>Apparence</h2>
+    <p class="muted">Le thème est mémorisé sur cet appareil.</p>
+    <ThemePicker />
+  </section>
 
   <section class="panel">
     <h2>Changer de mot de passe</h2>

@@ -67,7 +67,7 @@
     {/if}
   </div>
 {:else}
-  <div class="timeline" role="list">
+  <div class="timeline" class:editable={canEdit} role="list">
     {#each items as item (item.key)}
       {#if item.kind === 'stay'}
         {#if item.edge === 'end' && canEdit}
@@ -76,12 +76,7 @@
             onDrop={(id) => onDrop(id, { parentId: null, index: rootIndex(id, roots.length) })}
           />
         {/if}
-        <div class="stay-row">
-          <span class="clock" aria-hidden="true"
-            >{item.edge === 'start' ? item.stay.checkOutTime : item.stay.checkInTime}</span
-          >
-          <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} {onHover} />
-        </div>
+        <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} {onHover} />
         {@render after?.(item.key)}
       {:else}
         {#if canEdit}
@@ -98,7 +93,6 @@
             {canEdit}
             highlighted={highlighted === item.step.id}
             time={times.get(item.step.id) ?? null}
-            timeColumn
             {onEdit}
             {onMove}
             {onDelete}
@@ -108,7 +102,6 @@
         {:else}
           <GroupCard
             {item}
-            timeColumn
             {labels}
             {canEdit}
             {highlighted}
@@ -134,13 +127,10 @@
 
 <style>
   /*
-   * Agenda de la maquette : colonne d'heures (44 px), rail pointillé, puis les cartes. Les tuiles
-   * de trajet et le temps libre s'alignent sur le rail via --leg-indent.
+   * Ligne de la timeline au milieu des cartes : visible entre les étapes (zones de dépôt
+   * transparentes), masquée par les cartes et les tuiles de trajet, centrées dessus.
    */
   .timeline {
-    --clock-width: 44px;
-    --clock-gap: 8px;
-    --leg-indent: calc(var(--clock-width) + var(--clock-gap) + 16px);
     position: relative;
     isolation: isolate;
     display: flex;
@@ -153,26 +143,16 @@
     z-index: -1;
     top: var(--space-4);
     bottom: var(--space-4);
-    left: calc(var(--clock-width) + var(--clock-gap) + 6px);
+    left: 50%;
     border-left: 2px dashed var(--line);
   }
 
-  /* Zones de dépôt alignées sur les cartes (hauteur inchangée, voir DropZone). */
-  .timeline > :global([data-testid='drop-zone']) {
-    margin-left: calc(var(--clock-width) + var(--clock-gap));
-  }
-
-  .stay-row {
-    display: grid;
-    grid-template-columns: var(--clock-width) 1fr;
-    gap: var(--clock-gap);
-    align-items: center;
-  }
-
-  .clock {
-    font: 500 11px var(--font-mono);
-    color: var(--muted);
-    text-align: right;
+  /*
+   * En édition, une zone de dépôt (--space-3) précède chaque étape, donc suit chaque trajet : le
+   * trajet reçoit la même hauteur en plus au-dessus pour rester centré entre les deux étapes.
+   */
+  .timeline.editable {
+    --leg-offset: var(--space-3);
   }
 
   .empty {

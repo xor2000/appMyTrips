@@ -1,0 +1,68 @@
+/*
+ * Thème « Carnet clair » (direction A de la maquette de l'étude) : cartes blanches à filet fin,
+ * icônes de type sur fond teinté, trajets en bandes grises, rayons plus petits.
+ * Activé par `data-theme="carnet"` sur <html> (ou sur un élément : aperçu). Thème clair uniquement.
+ */
+[data-theme='carnet'] {
+  --bg: #f4f6f6;
+  --surface: #ffffff;
+  --surface-2: #eef1f1;
+  --fg: #17262a;
+  --muted: #5e6f73;
+  --line: #dfe5e6;
+  --accent: #0b8f94;
+  --accent-strong: #0a5f66;
+  --accent-soft: #e3f2f2;
+  --on-accent: #ffffff;
+  --focus: #0b8f94;
+
+  --ok: #1c9a5b;
+  --ok-soft: #e2f6ec;
+  --warn: #c77700;
+  --warn-soft: #fff3d6;
+  --on-warn: #ffffff;
+  --bad: #d23c5a;
+  --bad-soft: #fde7ec;
+  --on-bad: #ffffff;
+
+  --type-hotel: #7b61d1;
+  --type-food: #e07a2f;
+  --type-poi: #16a0a7;
+  --type-museum: #c4458a;
+  --type-air: #3b6fd8;
+  --type-hike: #2f9a55;
+  --type-transport: #8a9a9c;
+  --on-type: #ffffff;
+
+  --marker-ring: #ffffff;
+
+  --shadow-card: 0 1px 2px rgb(23 38 42 / 6%);
+  --shadow-float: 0 4px 14px -6px rgb(23 38 42 / 25%);
+  --shadow-window: 0 18px 40px -24px rgb(23 38 42 / 30%);
+  --shadow-marker: 0 3px 8px -2px rgb(0 0 0 / 35%);
+  --scrim: rgb(23 38 42 / 40%);
+
+  /* Cartes blanches à filet fin, sans ombre colorée. */
+  --card-tint: 0%;
+  --card-edge: 1.5px;
+  --card-lift: 0%;
+  --card-radius: var(--radius-md);
+  /* Icône teintée : fond pâle de la couleur du type, pictogramme de la couleur du type. */
+  --icon-tint: 14%;
+  --icon-ink: 100%;
+  --icon-radius: 10px;
+  /* Trajets en bandes grises discrètes, icône de la couleur du mode. */
+  --leg-tint: 0%;
+  --leg-base: var(--bg);
+  --leg-radius: 10px;
+  --leg-icon-tint: 0%;
+  --leg-icon-ink: 100%;
+
+  --tab-radius: 10px;
+  --btn-radius: 10px;
+  --group-edge-style: solid;
+  --group-edge: var(--line);
+  --group-radius: 14px;
+
+  color-scheme: light;
+}

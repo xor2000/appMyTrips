@@ -22,8 +22,6 @@
     /** Rendu après chaque étape du dossier : tuile de trajet. */
     after?: Snippet<[string]>;
     times?: Map<string, ScheduledItem>;
-    /** Colonne d'heures à gauche du dossier (timeline d'un jour). */
-    timeColumn?: boolean;
   }
 
   let {
@@ -38,7 +36,6 @@
     onDropInto,
     after,
     times = new Map(),
-    timeColumn = false,
   }: Props = $props();
 
   let open = $state(true);
@@ -49,16 +46,7 @@
   }
 </script>
 
-<div
-  class="group-row"
-  class:with-clock={timeColumn}
-  role="listitem"
-  data-testid="group-card"
-  data-step-id={item.group.id}
->
-  {#if timeColumn}
-    <span class="clock" aria-hidden="true">{times.get(item.group.id)?.start.time ?? ''}</span>
-  {/if}
+<div class="group-row" role="listitem" data-testid="group-card" data-step-id={item.group.id}>
   <div class="group">
     <div
       class="header"
@@ -126,27 +114,14 @@
 </div>
 
 <style>
-  .group-row.with-clock {
-    display: grid;
-    grid-template-columns: var(--clock-width) 1fr;
-    gap: var(--clock-gap);
-  }
-
-  .clock {
-    padding-top: 12px;
-    font: 500 11px var(--font-mono);
-    color: var(--muted);
-    text-align: right;
-  }
-
   .group {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
     min-width: 0;
     padding: var(--space-2);
-    border: 1.5px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
-    border-radius: var(--radius-xl);
+    border: 1.5px var(--group-edge-style) var(--group-edge);
+    border-radius: var(--group-radius);
     background: color-mix(in srgb, var(--accent) 4%, var(--surface));
   }
 
@@ -210,8 +185,6 @@
   }
 
   .children {
-    /* Dans un dossier : pas de colonne d'heures, trajets en léger retrait. */
-    --leg-indent: var(--space-6);
     display: flex;
     flex-direction: column;
     padding-left: var(--space-2);

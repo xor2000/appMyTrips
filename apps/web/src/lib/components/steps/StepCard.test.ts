@@ -56,6 +56,21 @@ describe('StepCard', () => {
     expect(screen.getByText('08:35 → 10:35')).toBeTruthy();
   });
 
+  it('met en avant l’heure de début, à droite de la carte', () => {
+    setup({
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '08:35', dayOffset: 0 },
+        end: { time: '10:35', dayOffset: 0 },
+        timezone: 'Europe/Paris',
+        freeBeforeMin: 0,
+        issues: [],
+      },
+    });
+    expect(screen.getByTestId('step-start').textContent).toBe('08:35');
+  });
+
   it('signale un conflit (retard) et le temps libre avant une heure fixe', () => {
     setup({
       step: makeStep({ fixedStart: '10:30' }),
@@ -72,28 +87,6 @@ describe('StepCard', () => {
     expect(screen.getByText('Conflit +20 min')).toBeTruthy();
     expect(screen.getByTestId('step-card').classList.contains('conflict')).toBe(true);
     expect(screen.getByText('⧗ 1 h 15 libre')).toBeTruthy();
-  });
-
-  it('colonne d’heures : l’heure de début à gauche de la carte, horaire complet dedans', () => {
-    setup({
-      timeColumn: true,
-      time: {
-        key: 's1',
-        kind: 'step',
-        start: { time: '08:35', dayOffset: 0 },
-        end: { time: '10:35', dayOffset: 0 },
-        timezone: 'Europe/Paris',
-        freeBeforeMin: 0,
-        issues: [],
-      },
-    });
-    expect(screen.getByTestId('step-clock').textContent?.trim()).toBe('08:35');
-    expect(screen.getByTestId('step-card').textContent).toContain('08:35 → 10:35');
-  });
-
-  it('sans colonne d’heures (idées) : pas d’heure à gauche', () => {
-    setup();
-    expect(screen.queryByTestId('step-clock')).toBeNull();
   });
 
   it('arrivée le lendemain : « +1 j »', () => {

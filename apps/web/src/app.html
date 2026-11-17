@@ -8,6 +8,17 @@
     <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon-180x180.png" />
     <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
     <title>MyTrips</title>
+    <script>
+      // Thème mémorisé, appliqué avant le premier affichage (voir src/lib/theme.ts).
+      try {
+        var theme = localStorage.getItem('mytrips.theme');
+        if (['pastel-light', 'pastel-dark', 'carnet'].indexOf(theme) >= 0) {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      } catch (e) {
+        // Stockage bloqué : thème automatique.
+      }
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

@@ -1,0 +1,139 @@
+/*
+ * Thème « Pastel ludique » (par défaut) : aplats pastel par type d'étape, pastilles pleines,
+ * formes arrondies, trajets en pilule. Palette de la maquette de l'étude (direction C).
+ *
+ * Sans attribut `data-theme` : clair ou sombre selon le système. `data-theme="pastel-light"` force
+ * le clair (valeurs de base), `data-theme="pastel-dark"` force le sombre. Les sélecteurs valent
+ * pour tout élément (aperçus du sélecteur de thème), pas seulement pour <html>.
+ *
+ * Variables de forme (lues par les composants, voir docs/specification.md) : les pourcentages
+ * dosent la couleur du type d'étape (`--c`, propre à chaque carte) dans le fond, l'icône, etc.
+ */
+:root,
+[data-theme='pastel-light'] {
+  --bg: #f6f8f8;
+  --surface: #ffffff;
+  --surface-2: #edf2f2;
+  --fg: #14282b;
+  --muted: #5b7174;
+  --line: #dde6e7;
+  --accent: #0b8f94;
+  --accent-strong: #0a5f66;
+  --accent-soft: #e1f3f3;
+  --on-accent: #ffffff;
+  --focus: #0b8f94;
+
+  --ok: #1c9a5b;
+  --ok-soft: #e2f6ec;
+  --warn: #c77700;
+  --warn-soft: #fff3d6;
+  --on-warn: #ffffff;
+  --bad: #d23c5a;
+  --bad-soft: #fde7ec;
+  --on-bad: #ffffff;
+
+  /* Couleurs par type d'étape (aplats) et texte posé dessus. */
+  --type-hotel: #7b61d1;
+  --type-food: #e07a2f;
+  --type-poi: #16a0a7;
+  --type-museum: #c4458a;
+  --type-air: #3b6fd8;
+  --type-hike: #2f9a55;
+  --type-transport: #8a9a9c;
+  --on-type: #ffffff;
+
+  /* Marqueurs de carte : liseré blanc dans les deux thèmes, comme sur la maquette. */
+  --marker-ring: #ffffff;
+
+  --shadow-card: 0 2px 0 rgb(10 60 64 / 6%);
+  --shadow-float: 0 4px 14px -6px rgb(10 60 64 / 30%);
+  --shadow-window: 0 18px 40px -24px rgb(10 60 64 / 35%);
+  --shadow-marker: 0 3px 8px -2px rgb(0 0 0 / 35%);
+  --scrim: rgb(20 40 43 / 40%);
+
+  /* Forme des cartes d'étape : fond teinté, sans bordure, ombre colorée. */
+  --card-tint: 11%;
+  --card-edge: 0px;
+  --card-lift: 30%;
+  --card-radius: var(--radius-lg);
+  /* Icône de type : pastille pleine, pictogramme blanc. */
+  --icon-tint: 100%;
+  --icon-ink: 0%;
+  --icon-radius: 50%;
+  /* Tuile de trajet : pilule teintée, icône en pastille pleine. */
+  --leg-tint: 12%;
+  --leg-base: var(--surface);
+  --leg-radius: var(--radius-pill);
+  --leg-icon-tint: 100%;
+  --leg-icon-ink: 0%;
+  /* Onglets, boutons, dossiers. */
+  --tab-radius: var(--radius-pill);
+  --btn-radius: var(--radius-pill);
+  --group-edge-style: dashed;
+  --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
+  --group-radius: var(--radius-xl);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0e1a1c;
+    --surface: #152427;
+    --surface-2: #1c2f32;
+    --fg: #e4efef;
+    --muted: #93a9ab;
+    --line: #26393c;
+    --accent: #33c1c6;
+    --accent-strong: #7fd8db;
+    --accent-soft: #16383b;
+    --on-accent: #08191b;
+    --focus: #7fd8db;
+    --ok: #5fd394;
+    --ok-soft: #163626;
+    --warn: #f0b347;
+    --warn-soft: #3a2d12;
+    --on-warn: #1f1606;
+    --bad: #ff7d96;
+    --bad-soft: #3d1c24;
+    --on-bad: #2a0d14;
+    --type-transport: #7d8f91;
+    --shadow-card: 0 2px 0 rgb(0 0 0 / 30%);
+    --shadow-float: 0 4px 14px -6px rgb(0 0 0 / 70%);
+    --shadow-window: 0 18px 40px -24px rgb(0 0 0 / 80%);
+    --scrim: rgb(0 0 0 / 55%);
+    --leg-base: var(--surface);
+    --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
+    color-scheme: dark;
+  }
+}
+
+[data-theme='pastel-dark'] {
+  --bg: #0e1a1c;
+  --surface: #152427;
+  --surface-2: #1c2f32;
+  --fg: #e4efef;
+  --muted: #93a9ab;
+  --line: #26393c;
+  --accent: #33c1c6;
+  --accent-strong: #7fd8db;
+  --accent-soft: #16383b;
+  --on-accent: #08191b;
+  --focus: #7fd8db;
+  --ok: #5fd394;
+  --ok-soft: #163626;
+  --warn: #f0b347;
+  --warn-soft: #3a2d12;
+  --on-warn: #1f1606;
+  --bad: #ff7d96;
+  --bad-soft: #3d1c24;
+  --on-bad: #2a0d14;
+  --type-transport: #7d8f91;
+  --shadow-card: 0 2px 0 rgb(0 0 0 / 30%);
+  --shadow-float: 0 4px 14px -6px rgb(0 0 0 / 70%);
+  --shadow-window: 0 18px 40px -24px rgb(0 0 0 / 80%);
+  --scrim: rgb(0 0 0 / 55%);
+  --leg-base: var(--surface);
+  --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color-scheme: dark;
+}

@@ -20,8 +20,6 @@
     onHover: (key: string | null) => void;
     /** Horaires calculés par le moteur (absents hors d'un jour). */
     time?: ScheduledItem | null;
-    /** Colonne d'heures à gauche de la carte (timeline d'un jour). */
-    timeColumn?: boolean;
   }
 
   let {
@@ -34,17 +32,17 @@
     onDelete,
     onHover,
     time = null,
-    timeColumn = false,
   }: Props = $props();
 
   const info = $derived(step.type ? STEP_TYPE_INFO[step.type] : null);
   const late = $derived(
     time?.issues.reduce((t, i) => t + (i.kind === 'conflict' ? i.lateMin : 0), 0) ?? 0,
   );
-  const times = $derived.by(() => {
+  /** Horaires affichés à droite : début mis en avant, fin dessous. */
+  const clock = $derived.by(() => {
     if (!time || step.kind === 'group') return null;
     const offset = time.end.dayOffset > 0 ? ` (+${time.end.dayOffset} j)` : '';
-    return `${time.start.time} → ${time.end.time}${offset}`;
+    return { start: time.start.time, end: `${time.end.time}${offset}` };
   });
   const Icon = $derived(
     step.type ? STEP_ICONS[step.type] : step.kind === 'group' ? GROUP_ICON : null,
@@ -56,7 +54,6 @@
 {/if}
 <div
   class="card"
-  class:with-clock={timeColumn}
   class:highlighted
   class:conflict={late > 0}
   data-testid="step-card"
@@ -69,10 +66,6 @@
   onmouseenter={() => onHover(step.id)}
   onmouseleave={() => onHover(null)}
 >
-  {#if timeColumn}
-    <!-- Heure de début dans la colonne de gauche (l'horaire complet reste dans la carte). -->
-    <span class="clock" data-testid="step-clock" aria-hidden="true">{time?.start.time ?? ''}</span>
-  {/if}
   <div class="box">
     <button type="button" class="main" onclick={() => onEdit(step)}>
       <span class="icon">
@@ -90,7 +83,6 @@
             {info?.label ?? 'Étape'} · {formatDuration(step.durationMin)} sur place
           {/if}
         </span>
-        {#if times}<span class="times">{times}</span>{/if}
         <span class="pills">
           {#if late > 0}
             <span class="chip late">Conflit +{formatDuration(late)}</span>
@@ -109,6 +101,14 @@
           {/if}
         </span>
       </span>
+      {#if clock}
+        <!-- Façon agenda : début en gros, fin dessous. Texte lu : « début → fin ». -->
+        <span class="clock">
+          <span class="visually-hidden">{clock.start} → {clock.end}</span>
+          <span class="start" data-testid="step-start" aria-hidden="true">{clock.start}</span>
+          <span class="end" aria-hidden="true">→ {clock.end}</span>
+        </span>
+      {/if}
     </button>
     {#if canEdit}
       <div class="actions">
@@ -127,22 +127,8 @@
 </div>
 
 <style>
-  /* Avec colonne d'heures : grille « heure | carte », comme l'agenda de la maquette. */
-  .card.with-clock {
-    display: grid;
-    grid-template-columns: var(--clock-width) 1fr;
-    gap: var(--clock-gap);
-  }
-
   .card[draggable='true'] {
     cursor: grab;
-  }
-
-  .clock {
-    padding-top: 15px;
-    font: 500 11px var(--font-mono);
-    color: var(--muted);
-    text-align: right;
   }
 
   .box {
@@ -150,26 +136,28 @@
     display: flex;
     align-items: stretch;
     min-width: 0;
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, var(--c) 11%, var(--surface));
-    box-shadow: 0 2px 0 color-mix(in srgb, var(--c) 30%, transparent);
-    transition:
-      box-shadow 0.15s,
-      transform 0.15s;
+    border: var(--card-edge) solid var(--line);
+    border-radius: var(--card-radius);
+    background: color-mix(in srgb, var(--c) var(--card-tint), var(--surface));
+    box-shadow: 0 2px 0 color-mix(in srgb, var(--c) var(--card-lift), transparent);
+    transition: box-shadow 0.15s;
   }
 
   .card.conflict .box {
     box-shadow: 0 0 0 2px var(--bad);
   }
 
+  /* Mise en évidence sans déplacement : un liseré seulement (rien ne bouge au survol). */
   .card.highlighted .box {
     box-shadow: 0 0 0 2px var(--c);
-    transform: translateX(2px);
   }
 
+  /* Temps libre centré sur la ligne de la timeline, sur fond plein pour la masquer. */
   .free {
-    margin: 0;
-    padding: var(--space-1) 0 var(--space-1) var(--leg-indent, var(--space-6));
+    align-self: center;
+    margin: var(--space-1) 0;
+    padding: 0 var(--space-2);
+    background: var(--surface);
     color: var(--ok);
     font: 600 11px var(--font-mono);
   }
@@ -195,9 +183,9 @@
     place-items: center;
     width: 38px;
     height: 38px;
-    border-radius: 50%;
-    background: var(--c);
-    color: var(--on-type);
+    border-radius: var(--icon-radius);
+    background: color-mix(in srgb, var(--c) var(--icon-tint), transparent);
+    color: color-mix(in srgb, var(--c) var(--icon-ink), var(--on-type));
   }
 
   .label {
@@ -255,15 +243,39 @@
     display: none;
   }
 
-  .times {
-    order: 4;
-    font: 500 11.5px var(--font-mono);
+  .clock {
+    flex: none;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding-left: var(--space-3);
+    border-left: 1.5px solid color-mix(in srgb, var(--c) 25%, var(--line));
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .start {
+    font: 700 17px/1.1 var(--font-mono);
     color: var(--fg);
   }
 
-  .times::after {
-    content: ' ·';
+  .card.conflict .start {
+    color: var(--bad);
+  }
+
+  .end {
+    font: 500 11px var(--font-mono);
     color: var(--muted);
+    white-space: nowrap;
   }
 
   .meta {
@@ -300,16 +312,17 @@
   }
 
   /* Actions en surimpression au survol : elles ne prennent pas de largeur au texte. */
+  /* À gauche, sur l'icône : l'heure, à droite, reste visible au survol. */
   .actions {
     position: absolute;
     top: var(--space-1);
-    right: var(--space-1);
+    left: var(--space-1);
     bottom: var(--space-1);
     display: flex;
     flex-direction: column;
     justify-content: center;
     border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--c) 11%, var(--surface));
+    background: color-mix(in srgb, var(--c) var(--card-tint), var(--surface));
     opacity: 0;
     transition: opacity 0.12s;
   }
