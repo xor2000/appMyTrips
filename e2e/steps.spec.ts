@@ -152,7 +152,11 @@ test('une idée apparaît sur la carte, sans numéro ni trajet', async ({ page }
   await expect(dialog).toHaveCount(0);
 
   // Marqueur « Idée » distinct ; l'étape du jour garde le numéro 1 ; aucun tracé de trajet.
-  await expect(page.getByRole('button', { name: 'Idée · Musée d’Orsay' })).toBeVisible();
+  const ideaMarker = page.getByRole('button', { name: 'Idée · Musée d’Orsay' });
+  await expect(ideaMarker).toBeVisible();
+  // Une ampoule plutôt que le mot « Idée ».
+  await expect(ideaMarker.locator('svg')).toHaveCount(1);
+  await expect(ideaMarker).toHaveText('');
   await expect(page.getByRole('button', { name: '1 · Musée du Louvre' })).toBeVisible();
   await expect(page.getByTestId('trip-map')).toHaveAttribute('data-leg-lines', '0');
   await expect(page.getByTestId('day-timeline').getByTestId('leg-tile')).toHaveCount(0);

@@ -35,3 +35,10 @@ type d'étape « Parking » avec son icône.
 - Test existant mis à jour : la vue d'ensemble ignorait les idées, c'est le comportement demandé
   qui change.
 - Suites : voir le compte rendu de la session.
+
+## Retour après déploiement
+
+- Le repère d'une idée affiche une ampoule (icône lucide `lightbulb`, construite en SVG dans
+  `TripMap.svelte`, les marqueurs étant créés hors des composants Svelte) au lieu du mot « Idée » ;
+  le nom accessible reste « Idée · nom ». E2e `steps.spec.ts` complété (icône présente, aucun
+  texte), vu en échec puis au vert.
