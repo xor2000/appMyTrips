@@ -18,7 +18,7 @@ mobile dédiée viendra plus tard et réutilisera la logique métier de `package
 - **Découverte** : bouton « Explorer » de la carte. On coche des catégories (restaurants, musées…), les
   lieux de la zone visible s'affichent en liste et en marqueurs, et s'ajoutent en un clic au jour
   sélectionné ou aux idées.
-- **Carte** : étapes numérotées du jour (ou « J2 » en vue d'ensemble), séjours « H », et **idées** qui ont un lieu, marquées « Idée » (marqueur clair à contour pointillé, sans numéro ni trajet : les tracés ne relient que des étapes placées). Le cadrage suit les étapes placées ; les idées ne servent qu'à défaut.
+- **Carte** : étapes numérotées du jour (ou « J2 » en vue d'ensemble), séjours « H », et **idées** qui ont un lieu, marquées d'une ampoule (marqueur clair à contour pointillé, nom accessible « Idée · … », sans numéro ni trajet : les tracés ne relient que des étapes placées). Le cadrage suit les étapes placées ; les idées ne servent qu'à défaut.
 - **Hors ligne** : consultation en lecture seule des voyages déjà ouverts (ou préparés), carte de leur zone comprise ; l'édition se fait en ligne.
 - **Partage** : un voyage peut être partagé en lecture seule ou en modification.
 

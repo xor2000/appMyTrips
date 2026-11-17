@@ -168,7 +168,9 @@
         markers.set(p.key, entry);
       }
       entry.marker.setLngLat([p.lng, p.lat]);
-      entry.el.textContent = p.label;
+      // Idée : ampoule plutôt que du texte (le nom accessible garde « Idée · … »).
+      if (p.idea) entry.el.replaceChildren(lightbulbIcon());
+      else entry.el.textContent = p.label;
       entry.el.title = p.name;
       entry.el.setAttribute('aria-label', `${p.label} · ${p.name}`);
       entry.el.style.setProperty('--c', `var(${p.color})`);
@@ -176,6 +178,31 @@
       entry.el.classList.toggle('idea', p.idea);
     }
   });
+
+  /** Icône lucide « lightbulb » (marqueurs créés hors des composants Svelte). */
+  function lightbulbIcon(): SVGSVGElement {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '15');
+    svg.setAttribute('height', '15');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2.2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const d of [
+      'M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5',
+      'M9 18h6',
+      'M10 22h4',
+    ]) {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      svg.append(path);
+    }
+    return svg;
+  }
 
   /** Couleur réelle d'une variable CSS (MapLibre ne lit pas les variables). */
   function cssColor(name: string) {
@@ -508,7 +535,6 @@
     border: 2px dashed var(--c);
     background: var(--surface);
     color: var(--c);
-    font-size: 11px;
   }
 
   /* Lieux proposés : petites pastilles atténuées, sous les étapes du voyage. */
