@@ -271,6 +271,9 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - **Plan** : OpenFreeMap, style Liberty (`https://tiles.openfreemap.org/styles/liberty`), sans clé et fourni sans garantie.
   - **Topo** : OpenTopoMap (tuiles raster).
   - Les URL sont centralisées dans `apps/web/src/lib/map/styles.ts`.
+  - **Défauts du style Liberty neutralisés** (même fichier, branchés dans `TripMap.svelte`) :
+    - `guardMissingNumbers` (option `transformStyle` de la carte, reprise par chaque `setStyle`) : une comparaison numérique sur une propriété souvent absente (`["<=", ["get", "ref_length"], 6]` des panneaux de route, `rank`, `admin_level`) reçoit `["has", …]` devant elle. MapLibre consignait sinon un avertissement par tuile avant de retomber sur `false`. Seules les comparaisons à la racine du filtre ou dans des `all` sont protégées : sous `!` ou `any`, le résultat changerait ;
+    - `missingImageResolver` (`setMissingStyleImageResolver`) : une icône absente du sprite d'OpenFreeMap (`sports_centre`, `gate`, `bollard`…) est remplacée par une image transparente de 1 × 1 px, sans avertissement.
   - Le worker de MapLibre est émis par Vite et déclaré avec `setWorkerUrl`.
 
 - **Géocodage** : Photon (Komoot), appelé par le Worker (`/api/geocode`), en français, User-Agent identifié sans donnée personnelle. URL configurable par la variable `PHOTON_URL` (défaut `https://photon.komoot.io`). Le type d'étape est deviné depuis les tags OSM (`core.stepTypeFromOsm`).

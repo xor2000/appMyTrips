@@ -9,7 +9,12 @@
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
-  import { styleFor, type MapStyleId } from '#lib/map/styles.ts';
+  import {
+    guardMissingNumbers,
+    missingImageResolver,
+    styleFor,
+    type MapStyleId,
+  } from '#lib/map/styles.ts';
 
   interface Props {
     points?: MapPoint[];
@@ -90,11 +95,14 @@
       const m = new lib.Map({
         container,
         style: styleFor(styleId),
+        // Appliquée aussi aux setStyle suivants (changement de fond).
+        transformStyle: guardMissingNumbers,
         // Vue d'ensemble de l'Europe tant que le voyage n'a pas d'étapes.
         center: [8, 47],
         zoom: 4,
         attributionControl: false,
       });
+      m.setMissingStyleImageResolver(missingImageResolver(m));
       m.addControl(new lib.NavigationControl({ showCompass: false }), 'bottom-right');
       m.addControl(
         new lib.AttributionControl({
