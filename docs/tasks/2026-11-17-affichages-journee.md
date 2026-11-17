@@ -50,3 +50,16 @@ déposer compris en métro), plein écran avec tous les jours en colonnes.
 
 - Ligne de métro sur téléphone (pensée pour un écran large) et vue « Tout le voyage » en métro
   (liste des jours, comme l'affichage liste).
+
+## Retour après déploiement : trajets trop larges en métro
+
+- Les tuiles de trajet de la liste (`LegTile`, avec ses 7 boutons de mode) prenaient environ
+  250 px entre deux stations. La ligne de métro utilise désormais `legs/MetroLeg.svelte` :
+  84 px, posé sur la ligne comme une station (durée au-dessus, rond du mode sur la ligne, mode,
+  distance et origine dessous), clic pour modifier ; sans trajet, un « + » se déplie pour
+  choisir le mode (Échap le replie), avec la reprise d'un trajet saisi à la main. Mêmes actions
+  (`addLeg`, `editingLegId`) via le snippet `metroLegAfter` de la page.
+- TDD : `MetroLeg.test.ts`, vu en échec puis au vert ; e2e `layouts.spec.ts` (« + » à déplier,
+  largeur ≤ 150 px) mis à jour avant l'implémentation, mais lancé seulement après. Mesuré : trajets de 84 px centrés sur la ligne (79 px, comme les stations),
+  ligne de 2426 à 1530 px pour la journée test.
+- Lint, tests web (285), e2e `layouts` et `legs` (8/8) au vert.

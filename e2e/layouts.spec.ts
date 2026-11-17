@@ -98,10 +98,16 @@ test('ligne de métro : ajouter, relier par un trajet, réordonner et glisser', 
   await addPlace(page, add, 'Orsay', 'Musée d’Orsay');
   await expect.poll(() => stopNames(page)).toEqual(['Musée du Louvre', 'Musée d’Orsay']);
 
-  // Trajet entre les deux stations (même tuile que dans la liste).
+  // Trajet entre les deux stations : « + » compact qui se déplie pour choisir le mode.
   const line = page.getByTestId('day-timeline');
-  await line.getByTestId('leg-tile').getByRole('button', { name: 'Trajet en Voiture' }).click();
-  await expect(line.getByTestId('leg-tile')).toContainText('Voiture');
+  const leg = line.getByTestId('metro-leg');
+  await leg.getByRole('button', { name: 'Ajouter un trajet' }).click();
+  await leg.getByRole('button', { name: 'Trajet en Voiture' }).click();
+  await expect(leg).toContainText('Voiture');
+  await expect(leg.getByRole('button', { name: /^Trajet en/ })).toHaveCount(0);
+  // Compact : pas plus large qu'une station.
+  const box = await leg.boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(150);
 
   // Plus tard : l'ordre change.
   await page.getByTestId('metro-stop').first().hover();
