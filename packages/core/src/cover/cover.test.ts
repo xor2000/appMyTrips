@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { commonsSearchUrl, coverQuery, parseCommonsResponse, TripCover } from './cover';
+import {
+  commonsSearchUrl,
+  coverQuery,
+  fixCoverThumb,
+  parseCommonsResponse,
+  TripCover,
+} from './cover';
 
 /** Page de fichier Commons (API `formatversion=2`). */
 function page(index: number, title: string, info: Record<string, unknown> = {}) {
@@ -66,7 +72,7 @@ describe('parseCommonsResponse', () => {
     ]);
     expect(covers[0]).toEqual({
       url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/1.jpg/1280px-1.jpg',
-      thumbUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/1.jpg/640px-1.jpg',
+      thumbUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/1.jpg/500px-1.jpg',
       author: 'Jean Dupont',
       license: 'CC BY-SA 4.0',
       sourceUrl: 'https://commons.wikimedia.org/wiki/File:1.jpg',
@@ -83,6 +89,8 @@ describe('parseCommonsResponse', () => {
           page(3, 'File:Blason Annecy.jpg'),
           page(4, 'File:Portrait.jpg', { width: 2000, height: 3000 }),
           page(5, 'File:Petite.jpg', { width: 640, height: 400 }),
+          // Moins de 1280 px : Commons renverrait l'original (limité), pas une vignette standard.
+          page(8, 'File:Moyenne.jpg', { width: 1100, height: 700 }),
           page(6, 'File:Logo.png', { mime: 'image/png' }),
           page(7, 'File:Mont Blanc.jpg'),
         ],
@@ -123,5 +131,21 @@ describe('TripCover', () => {
     };
     expect(TripCover.safeParse(ok).success).toBe(true);
     expect(TripCover.safeParse({ ...ok, url: 'javascript:alert(1)' }).success).toBe(false);
+  });
+});
+
+describe('vignette Commons', () => {
+  it('largeur standard 500 px (Wikimedia refuse 640 px : 400)', () => {
+    const [cover] = parseCommonsResponse({ query: { pages: [page(1, 'File:Alpes.jpg')] } });
+    expect(cover!.thumbUrl).toContain('/500px-');
+  });
+
+  it('corrige une vignette 640 px enregistrée avant la correction', () => {
+    expect(
+      fixCoverThumb('https://thumb.wikimedia.org/x/a.jpg/640px-a.jpg?utm_source=commons'),
+    ).toBe('https://thumb.wikimedia.org/x/a.jpg/500px-a.jpg?utm_source=commons');
+    expect(fixCoverThumb('https://thumb.wikimedia.org/x/a.jpg/500px-a.jpg')).toBe(
+      'https://thumb.wikimedia.org/x/a.jpg/500px-a.jpg',
+    );
   });
 });
