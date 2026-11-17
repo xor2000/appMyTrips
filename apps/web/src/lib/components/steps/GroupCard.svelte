@@ -19,7 +19,7 @@
     onHover: (key: string | null) => void;
     /** Dépôt dans le dossier, à l'index donné parmi ses étapes (sans l'élément déplacé). */
     onDropInto: (stepId: string, index: number) => void;
-    /** Rendu après chaque étape du dossier : tuile de trajet. */
+    /** Rendu après chaque étape du dossier sauf la dernière : tuile de trajet. */
     after?: Snippet<[string]>;
     times?: Map<string, ScheduledItem>;
   }
@@ -96,7 +96,10 @@
             {onDelete}
             {onHover}
           />
-          {@render after?.(child.id)}
+          <!-- Le trajet qui suit la dernière étape sort du dossier (rendu par la timeline). -->
+          {#if i < item.children.length - 1}
+            {@render after?.(child.id)}
+          {/if}
         {/each}
         {#if canEdit}
           <DropZone

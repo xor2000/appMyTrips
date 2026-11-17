@@ -113,6 +113,11 @@
             {times}
             onDropInto={(id, index) => onDrop(id, { parentId: item.group.id, index })}
           />
+          <!-- Comme pour une étape : le trajet vers la suite se place entre le dossier et elle. -->
+          {@const last = item.children.at(-1)}
+          {#if last}
+            {@render after?.(last.id)}
+          {/if}
         {/if}
       {/if}
     {/each}

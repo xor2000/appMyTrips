@@ -1,5 +1,6 @@
 import { dayTimeline } from '@mytrips/core';
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { makeStay, makeStep } from '#lib/test/fixtures.ts';
 import Timeline from './Timeline.svelte';
@@ -65,5 +66,35 @@ describe('Timeline', () => {
     expect(screen.queryByText('Notre-Dame')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Déplier Vieux-Port' }));
     expect(screen.getByText('Notre-Dame')).toBeTruthy();
+  });
+
+  it('le trajet qui suit un dossier est hors du dossier, comme entre deux étapes', () => {
+    const g = makeStep({
+      id: 'g',
+      kind: 'group',
+      type: null,
+      name: 'Vieux-Port',
+      lat: null,
+      lng: null,
+      position: 'a1',
+    });
+    const c1 = makeStep({ id: 'c1', parentId: 'g', name: 'Notre-Dame', position: 'a1' });
+    const c2 = makeStep({ id: 'c2', parentId: 'g', name: 'Restaurant du port', position: 'a2' });
+    const s3 = makeStep({ id: 's3', name: 'Aéroport', position: 'a2' });
+    const after = createRawSnippet((key: () => string) => ({
+      render: () => `<div data-testid="after-${key()}"></div>`,
+    }));
+    setup(dayTimeline('2026-07-10', [g, c1, c2, s3], []), { after });
+    const group = screen.getByTestId('group-card');
+    // Entre deux étapes du dossier : dedans.
+    expect(group.contains(screen.getByTestId('after-c1'))).toBe(true);
+    // De la dernière étape du dossier vers l'étape suivante : après le dossier, avant l'étape.
+    const out = screen.getByTestId('after-c2');
+    expect(group.contains(out)).toBe(false);
+    expect(group.compareDocumentPosition(out) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const next = screen
+      .getAllByTestId('step-card')
+      .find((c) => c.textContent?.includes('Aéroport'))!;
+    expect(out.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
