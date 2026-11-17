@@ -2,6 +2,7 @@
   import { STEP_TYPE_INFO, type ScheduledItem, type Step } from '@mytrips/core';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
+  import Hourglass from 'lucide-svelte/icons/hourglass';
   import Lock from 'lucide-svelte/icons/lock';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { formatDuration, formatKm } from '#lib/format.ts';
@@ -50,7 +51,10 @@
 </script>
 
 {#if time && time.freeBeforeMin >= 5}
-  <p class="free">⧗ {formatDuration(time.freeBeforeMin)} libre</p>
+  <p class="free" data-testid="free-time">
+    <Hourglass size={14} aria-hidden="true" />
+    {formatDuration(time.freeBeforeMin)} de temps libre
+  </p>
 {/if}
 <div
   class="card"
@@ -152,14 +156,19 @@
     box-shadow: 0 0 0 2px var(--c);
   }
 
-  /* Temps libre centré sur la ligne de la timeline, sur fond plein pour la masquer. */
+  /* Temps libre : pastille verte centrée sur la ligne de la timeline (fond plein qui la masque). */
   .free {
     align-self: center;
-    margin: var(--space-1) 0;
-    padding: 0 var(--space-2);
-    background: var(--surface);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-2) 0;
+    padding: var(--space-1) var(--space-3);
+    border: 1.5px dashed var(--ok);
+    border-radius: var(--radius-pill);
+    background: var(--ok-soft);
     color: var(--ok);
-    font: 600 11px var(--font-mono);
+    font: 700 13px var(--font-display);
   }
 
   .main {

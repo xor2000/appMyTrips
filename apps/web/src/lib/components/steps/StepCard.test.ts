@@ -86,7 +86,10 @@ describe('StepCard', () => {
     });
     expect(screen.getByText('Conflit +20 min')).toBeTruthy();
     expect(screen.getByTestId('step-card').classList.contains('conflict')).toBe(true);
-    expect(screen.getByText('⧗ 1 h 15 libre')).toBeTruthy();
+    // Pastille bien visible, avec une icône : « 1 h 15 de temps libre ».
+    const free = screen.getByTestId('free-time');
+    expect(free.textContent?.trim()).toBe('1 h 15 de temps libre');
+    expect(free.querySelector('svg')).toBeTruthy();
   });
 
   it('arrivée le lendemain : « +1 j »', () => {
