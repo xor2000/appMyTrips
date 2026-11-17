@@ -2,7 +2,9 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { onMount } from 'svelte';
   import { STEP_TYPE_INFO, type Poi } from '@mytrips/core';
+  import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
+  import Search from 'lucide-svelte/icons/search';
   import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
@@ -30,6 +32,10 @@
     /** Mode « Explorer » ; le bouton n'apparaît que si `onToggleExplore` est fourni. */
     exploring?: boolean;
     onToggleExplore?: () => void;
+    /** « Préparer hors ligne » dans les outils de la carte (absent si non fourni). */
+    onOffline?: () => void;
+    /** Champ « Rechercher un lieu » flottant : ouvre l'ajout de lieu (absent si non fourni). */
+    onSearch?: () => void;
     /** Tracés des trajets du jour, colorés par mode ; `highlighted` met en évidence leur clé. */
     lines?: LegLine[];
   }
@@ -49,6 +55,8 @@
     onHoverPoi = () => {},
     exploring = false,
     onToggleExplore,
+    onOffline,
+    onSearch,
     lines = [],
   }: Props = $props();
 
@@ -302,12 +310,13 @@
 <!-- data-leg-lines : nombre de tracés (le canevas WebGL n'est pas lisible par les e2e). -->
 <div class="map-wrap" data-testid="trip-map" data-leg-lines={lines.length}>
   <div class="map" bind:this={container}></div>
+  {#if onSearch && !exploring}
+    <button type="button" class="search" onclick={onSearch}>
+      <Search size={15} />Rechercher un lieu, une adresse…
+    </button>
+  {/if}
+  <!-- Outils regroupés dans une seule pilule, comme sur la maquette. -->
   <div class="tools">
-    {#if onToggleExplore}
-      <button type="button" class="explore" aria-pressed={exploring} onclick={onToggleExplore}>
-        <Compass size={15} />Explorer
-      </button>
-    {/if}
     <div class="styles" role="group" aria-label="Fond de carte">
       <button type="button" aria-pressed={styleId === 'plan'} onclick={() => selectStyle('plan')}>
         Plan
@@ -316,6 +325,23 @@
         Topo
       </button>
     </div>
+    {#if onToggleExplore || onOffline}
+      <span class="sep" aria-hidden="true"></span>
+    {/if}
+    {#if onToggleExplore}
+      <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
+        <Compass size={15} />Explorer
+      </button>
+    {/if}
+    {#if onOffline}
+      <button
+        type="button"
+        class="tool icon"
+        aria-label="Préparer hors ligne"
+        title="Préparer hors ligne"
+        onclick={onOffline}><CloudDownload size={15} /></button
+      >
+    {/if}
   </div>
   {#if menu}
     <div class="menu" style={`left: ${menu.x}px; top: ${menu.y}px`}>
@@ -339,53 +365,85 @@
 
   .tools {
     position: absolute;
-    top: var(--space-4);
-    right: var(--space-4);
+    top: 14px;
+    right: 14px;
     display: flex;
-    gap: var(--space-2);
-  }
-
-  .explore {
-    display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    border: 0;
-    border-radius: var(--radius-pill);
-    padding: var(--space-1) var(--space-3);
+    padding: 5px;
+    border-radius: var(--radius-md);
     background: var(--surface);
-    color: var(--fg);
-    font: 600 13px var(--font-display);
     box-shadow: var(--shadow-float);
-    cursor: pointer;
-  }
-
-  .explore[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--on-accent);
   }
 
   .styles {
     display: flex;
     gap: var(--space-1);
-    padding: var(--space-1);
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    box-shadow: var(--shadow-float);
   }
 
-  .styles button {
+  .styles button,
+  .tool {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 28px;
+    padding: 0 var(--space-2);
     border: 0;
-    border-radius: var(--radius-pill);
-    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted);
-    font: 600 13px var(--font-display);
+    font: 600 12px var(--font-display);
     cursor: pointer;
   }
 
-  .styles button[aria-pressed='true'] {
+  .styles button:hover,
+  .tool:hover {
+    color: var(--fg);
+  }
+
+  .styles button[aria-pressed='true'],
+  .tool[aria-pressed='true'] {
     background: var(--accent-soft);
     color: var(--accent-strong);
+  }
+
+  .tool.icon {
+    width: 28px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sep {
+    align-self: stretch;
+    width: 1px;
+    margin: 3px 2px;
+    background: var(--line);
+  }
+
+  .search {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(360px, calc(100% - 300px));
+    min-width: 160px;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-float);
+    color: var(--muted);
+    font: 400 13px var(--font-body);
+    text-align: left;
+    cursor: text;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .search:hover {
+    color: var(--fg);
   }
 
   .menu {
@@ -421,12 +479,12 @@
     min-width: 30px;
     height: 30px;
     padding: 0 6px;
-    border: 2px solid #fff;
+    border: 2px solid var(--marker-ring);
     border-radius: 15px 15px 15px 4px;
     background: var(--c);
-    color: #fff;
+    color: var(--on-type);
     font: 700 12px var(--font-display);
-    box-shadow: 0 3px 8px -2px rgb(0 0 0 / 35%);
+    box-shadow: var(--shadow-marker);
     cursor: pointer;
     transition: transform 0.12s;
   }
@@ -448,7 +506,7 @@
     border: 2px solid var(--surface);
     border-radius: 50%;
     background: color-mix(in srgb, var(--c) 55%, var(--surface));
-    box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+    box-shadow: var(--shadow-marker);
     cursor: pointer;
     transition: transform 0.12s;
   }

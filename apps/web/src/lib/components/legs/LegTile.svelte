@@ -101,7 +101,7 @@
 <style>
   .leg {
     display: flex;
-    padding: var(--space-1) 0 var(--space-1) var(--space-6);
+    padding: var(--space-1) 0 var(--space-1) var(--leg-indent, var(--space-6));
   }
 
   .pill {

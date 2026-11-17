@@ -22,6 +22,8 @@
     /** Rendu après chaque étape du dossier : tuile de trajet. */
     after?: Snippet<[string]>;
     times?: Map<string, ScheduledItem>;
+    /** Colonne d'heures à gauche du dossier (timeline d'un jour). */
+    timeColumn?: boolean;
   }
 
   let {
@@ -36,6 +38,7 @@
     onDropInto,
     after,
     times = new Map(),
+    timeColumn = false,
   }: Props = $props();
 
   let open = $state(true);
@@ -46,79 +49,104 @@
   }
 </script>
 
-<div class="group" role="listitem" data-testid="group-card" data-step-id={item.group.id}>
-  <div
-    class="header"
-    role="presentation"
-    draggable={canEdit ? 'true' : 'false'}
-    ondragstart={(e) => startDrag(e, item.group.id, 'group')}
-    ondragend={endDrag}
-  >
-    <button
-      type="button"
-      class="toggle"
-      class:open
-      aria-label={`${open ? 'Replier' : 'Déplier'} ${item.group.name}`}
-      aria-expanded={open}
-      onclick={() => (open = !open)}
+<div
+  class="group-row"
+  class:with-clock={timeColumn}
+  role="listitem"
+  data-testid="group-card"
+  data-step-id={item.group.id}
+>
+  {#if timeColumn}
+    <span class="clock" aria-hidden="true">{times.get(item.group.id)?.start.time ?? ''}</span>
+  {/if}
+  <div class="group">
+    <div
+      class="header"
+      role="presentation"
+      draggable={canEdit ? 'true' : 'false'}
+      ondragstart={(e) => startDrag(e, item.group.id, 'group')}
+      ondragend={endDrag}
     >
-      <ChevronRight size={16} />
-    </button>
-    <button type="button" class="title" onclick={() => onEdit(item.group)}>
-      <span class="icon"><Icon size={16} /></span>
-      <span class="name">{item.group.name}</span>
-      {#if times.get(item.group.id)}
-        {@const t = times.get(item.group.id)!}
-        <span class="times">{t.start.time} → {t.end.time}</span>
-      {/if}
-      <span class="count">{plural(item.children.length, 'étape')}</span>
-    </button>
-  </div>
-  {#if open}
-    <div class="children" role="list">
-      {#each item.children as child, i (child.id)}
+      <button
+        type="button"
+        class="toggle"
+        class:open
+        aria-label={`${open ? 'Replier' : 'Déplier'} ${item.group.name}`}
+        aria-expanded={open}
+        onclick={() => (open = !open)}
+      >
+        <ChevronRight size={16} />
+      </button>
+      <button type="button" class="title" onclick={() => onEdit(item.group)}>
+        <span class="icon"><Icon size={16} /></span>
+        <span class="name">{item.group.name}</span>
+        {#if times.get(item.group.id)}
+          {@const t = times.get(item.group.id)!}
+          <span class="times">{t.start.time} → {t.end.time}</span>
+        {/if}
+        <span class="count">{plural(item.children.length, 'étape')}</span>
+      </button>
+    </div>
+    {#if open}
+      <div class="children" role="list">
+        {#each item.children as child, i (child.id)}
+          {#if canEdit}
+            <DropZone
+              stepsOnly
+              label={`Déposer dans ${item.group.name}`}
+              onDrop={(id) => onDropInto(id, indexWithout(id, i))}
+            />
+          {/if}
+          <StepCard
+            step={child}
+            label={labels.get(child.id) ?? null}
+            {canEdit}
+            highlighted={highlighted === child.id}
+            time={times.get(child.id) ?? null}
+            {onEdit}
+            {onMove}
+            {onDelete}
+            {onHover}
+          />
+          {@render after?.(child.id)}
+        {/each}
         {#if canEdit}
           <DropZone
             stepsOnly
-            label={`Déposer dans ${item.group.name}`}
-            onDrop={(id) => onDropInto(id, indexWithout(id, i))}
+            label={`Déposer à la fin de ${item.group.name}`}
+            onDrop={(id) => onDropInto(id, indexWithout(id, item.children.length))}
           />
         {/if}
-        <StepCard
-          step={child}
-          label={labels.get(child.id) ?? null}
-          {canEdit}
-          highlighted={highlighted === child.id}
-          time={times.get(child.id) ?? null}
-          {onEdit}
-          {onMove}
-          {onDelete}
-          {onHover}
-        />
-        {@render after?.(child.id)}
-      {/each}
-      {#if canEdit}
-        <DropZone
-          stepsOnly
-          label={`Déposer à la fin de ${item.group.name}`}
-          onDrop={(id) => onDropInto(id, indexWithout(id, item.children.length))}
-        />
-      {/if}
-      {#if item.children.length === 0}
-        <p class="empty">Glissez des étapes ici.</p>
-      {/if}
-    </div>
-  {/if}
+        {#if item.children.length === 0}
+          <p class="empty">Glissez des étapes ici.</p>
+        {/if}
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
+  .group-row.with-clock {
+    display: grid;
+    grid-template-columns: var(--clock-width) 1fr;
+    gap: var(--clock-gap);
+  }
+
+  .clock {
+    padding-top: 12px;
+    font: 500 11px var(--font-mono);
+    color: var(--muted);
+    text-align: right;
+  }
+
   .group {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
+    min-width: 0;
     padding: var(--space-2);
-    border: 2px dashed color-mix(in srgb, var(--accent) 35%, transparent);
-    border-radius: 22px;
+    border: 1.5px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+    border-radius: var(--radius-xl);
     background: color-mix(in srgb, var(--accent) 4%, var(--surface));
   }
 
@@ -182,6 +210,8 @@
   }
 
   .children {
+    /* Dans un dossier : pas de colonne d'heures, trajets en léger retrait. */
+    --leg-indent: var(--space-6);
     display: flex;
     flex-direction: column;
     padding-left: var(--space-2);

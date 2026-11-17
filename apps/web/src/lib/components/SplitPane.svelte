@@ -103,12 +103,13 @@
 
   .left {
     overflow: auto;
-    background: var(--bg);
+    background: var(--surface);
   }
 
   .handle {
     cursor: col-resize;
-    background: var(--line);
+    /* Filet d'1 px comme sur la maquette, dans une poignée de 6 px facile à saisir. */
+    background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat var(--surface);
     transition: background-color 0.15s;
   }
 

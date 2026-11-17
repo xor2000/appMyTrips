@@ -74,6 +74,28 @@ describe('StepCard', () => {
     expect(screen.getByText('⧗ 1 h 15 libre')).toBeTruthy();
   });
 
+  it('colonne d’heures : l’heure de début à gauche de la carte, horaire complet dedans', () => {
+    setup({
+      timeColumn: true,
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '08:35', dayOffset: 0 },
+        end: { time: '10:35', dayOffset: 0 },
+        timezone: 'Europe/Paris',
+        freeBeforeMin: 0,
+        issues: [],
+      },
+    });
+    expect(screen.getByTestId('step-clock').textContent?.trim()).toBe('08:35');
+    expect(screen.getByTestId('step-card').textContent).toContain('08:35 → 10:35');
+  });
+
+  it('sans colonne d’heures (idées) : pas d’heure à gauche', () => {
+    setup();
+    expect(screen.queryByTestId('step-clock')).toBeNull();
+  });
+
   it('arrivée le lendemain : « +1 j »', () => {
     setup({
       time: {

@@ -64,7 +64,7 @@
     height: 30px;
     border-radius: 50%;
     background: var(--type-hotel);
-    color: #fff;
+    color: var(--on-type);
   }
 
   .text {

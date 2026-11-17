@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countdownLabel,
+  dayHoursLabel,
   dayTabLabel,
   formatDuration,
   formatPeriod,
@@ -66,5 +67,16 @@ describe('formatDistance', () => {
     expect(formatDistance(1_234)).toBe('1,2 km');
     expect(formatDistance(12_345)).toBe('12 km');
     expect(formatDistance(72_000)).toBe('72 km');
+  });
+});
+
+describe('dayHoursLabel', () => {
+  it('donne les heures de la journée et sa durée', () => {
+    expect(dayHoursLabel('08:00', '22:00')).toBe('08:00 → 22:00 · 14 h');
+    expect(dayHoursLabel('07:30', '21:45')).toBe('07:30 → 21:45 · 14 h 15');
+  });
+
+  it('compte une fin après minuit sur le lendemain', () => {
+    expect(dayHoursLabel('18:00', '01:00')).toBe('18:00 → 01:00 · 7 h');
   });
 });

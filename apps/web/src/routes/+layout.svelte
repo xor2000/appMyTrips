@@ -1,6 +1,7 @@
 <script lang="ts">
   import '@fontsource-variable/outfit';
   import '@fontsource-variable/inter';
+  import '@fontsource-variable/jetbrains-mono';
   import '#lib/styles/global.css';
   import '#lib/styles/controls.css';
   import { onMount, type Snippet } from 'svelte';

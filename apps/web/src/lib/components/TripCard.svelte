@@ -83,8 +83,8 @@
     flex-direction: column;
     gap: var(--space-1);
     padding: var(--space-6) var(--space-6) var(--space-8);
-    background: color-mix(in srgb, var(--tint) 85%, white);
-    color: #fff;
+    background: color-mix(in srgb, var(--tint) 85%, var(--on-type));
+    color: var(--on-type);
   }
 
   .eyebrow {
@@ -105,8 +105,8 @@
     position: absolute;
     top: var(--space-4);
     right: var(--space-4);
-    background: rgb(255 255 255 / 25%);
-    color: #fff;
+    background: color-mix(in srgb, var(--on-type) 25%, transparent);
+    color: var(--on-type);
   }
 
   .body {

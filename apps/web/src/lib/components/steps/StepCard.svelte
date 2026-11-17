@@ -20,6 +20,8 @@
     onHover: (key: string | null) => void;
     /** Horaires calculés par le moteur (absents hors d'un jour). */
     time?: ScheduledItem | null;
+    /** Colonne d'heures à gauche de la carte (timeline d'un jour). */
+    timeColumn?: boolean;
   }
 
   let {
@@ -32,6 +34,7 @@
     onDelete,
     onHover,
     time = null,
+    timeColumn = false,
   }: Props = $props();
 
   const info = $derived(step.type ? STEP_TYPE_INFO[step.type] : null);
@@ -53,6 +56,7 @@
 {/if}
 <div
   class="card"
+  class:with-clock={timeColumn}
   class:highlighted
   class:conflict={late > 0}
   data-testid="step-card"
@@ -65,102 +69,109 @@
   onmouseenter={() => onHover(step.id)}
   onmouseleave={() => onHover(null)}
 >
-  <button type="button" class="main" onclick={() => onEdit(step)}>
-    <span class="icon">
-      {#if Icon}<Icon size={18} />{/if}
-      {#if label}<span class="label">{label}</span>{/if}
-    </span>
-    <span class="text">
-      <span class="name">{step.name}</span>
-      <span class="meta">
-        {#if step.kind === 'group'}
-          Dossier
-        {:else}
-          {info?.label ?? 'Étape'} · {formatDuration(step.durationMin)} sur place
-        {/if}
-      </span>
-      <!-- Après le type : le nom accessible garde la forme « nom type… ». -->
-      {#if times}<span class="times">{times}</span>{/if}
-    </span>
-    <span class="pills">
-      {#if late > 0}
-        <span class="chip late">Conflit +{formatDuration(late)}</span>
-      {/if}
-      {#if step.fixedStart}
-        <span class="chip fixed" title="Heure fixe"><Lock size={11} />{step.fixedStart}</span>
-      {/if}
-      {#if step.gpx}
-        <span class="chip gpx">GPX {formatKm(step.gpx.stats.distanceM)}</span>
-        {#if step.gpx.stats.ascentM !== null}
-          <span class="chip gpx">D+ {step.gpx.stats.ascentM} m</span>
-        {/if}
-      {/if}
-      {#if step.bookingRef}
-        <span class="chip booking">Résa {step.bookingRef}</span>
-      {/if}
-    </span>
-  </button>
-  {#if canEdit}
-    <div class="actions">
-      <button type="button" aria-label={`Monter ${step.name}`} onclick={() => onMove(step, -1)}>
-        <ChevronUp size={16} />
-      </button>
-      <button type="button" aria-label={`Descendre ${step.name}`} onclick={() => onMove(step, 1)}>
-        <ChevronDown size={16} />
-      </button>
-      <button type="button" aria-label={`Supprimer ${step.name}`} onclick={() => onDelete(step)}>
-        <Trash2 size={15} />
-      </button>
-    </div>
+  {#if timeColumn}
+    <!-- Heure de début dans la colonne de gauche (l'horaire complet reste dans la carte). -->
+    <span class="clock" data-testid="step-clock" aria-hidden="true">{time?.start.time ?? ''}</span>
   {/if}
+  <div class="box">
+    <button type="button" class="main" onclick={() => onEdit(step)}>
+      <span class="icon">
+        {#if Icon}<Icon size={18} />{/if}
+        {#if label}<span class="label">{label}</span>{/if}
+      </span>
+      <!-- Ordre du DOM : nom, type, horaires, pastilles (le nom accessible garde la forme
+           « nom type… »). La mise en page place les pastilles à côté du nom. -->
+      <span class="text">
+        <span class="name">{step.name}</span>
+        <span class="meta">
+          {#if step.kind === 'group'}
+            Dossier
+          {:else}
+            {info?.label ?? 'Étape'} · {formatDuration(step.durationMin)} sur place
+          {/if}
+        </span>
+        {#if times}<span class="times">{times}</span>{/if}
+        <span class="pills">
+          {#if late > 0}
+            <span class="chip late">Conflit +{formatDuration(late)}</span>
+          {/if}
+          {#if step.fixedStart}
+            <span class="chip fixed" title="Heure fixe"><Lock size={10} />{step.fixedStart}</span>
+          {/if}
+          {#if step.gpx}
+            <span class="chip gpx">GPX {formatKm(step.gpx.stats.distanceM)}</span>
+            {#if step.gpx.stats.ascentM !== null}
+              <span class="chip gpx">D+ {step.gpx.stats.ascentM} m</span>
+            {/if}
+          {/if}
+          {#if step.bookingRef}
+            <span class="chip booking">Résa {step.bookingRef}</span>
+          {/if}
+        </span>
+      </span>
+    </button>
+    {#if canEdit}
+      <div class="actions">
+        <button type="button" aria-label={`Monter ${step.name}`} onclick={() => onMove(step, -1)}>
+          <ChevronUp size={16} />
+        </button>
+        <button type="button" aria-label={`Descendre ${step.name}`} onclick={() => onMove(step, 1)}>
+          <ChevronDown size={16} />
+        </button>
+        <button type="button" aria-label={`Supprimer ${step.name}`} onclick={() => onDelete(step)}>
+          <Trash2 size={15} />
+        </button>
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
-  .card {
-    position: relative;
-    display: flex;
-    align-items: stretch;
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, var(--c) 11%, var(--surface));
-    box-shadow: 0 2px 0 color-mix(in srgb, var(--c) 28%, transparent);
-    transition:
-      box-shadow 0.15s,
-      transform 0.15s;
+  /* Avec colonne d'heures : grille « heure | carte », comme l'agenda de la maquette. */
+  .card.with-clock {
+    display: grid;
+    grid-template-columns: var(--clock-width) 1fr;
+    gap: var(--clock-gap);
   }
 
   .card[draggable='true'] {
     cursor: grab;
   }
 
-  .card.conflict {
+  .clock {
+    padding-top: 15px;
+    font: 500 11px var(--font-mono);
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .box {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--c) 11%, var(--surface));
+    box-shadow: 0 2px 0 color-mix(in srgb, var(--c) 30%, transparent);
+    transition:
+      box-shadow 0.15s,
+      transform 0.15s;
+  }
+
+  .card.conflict .box {
     box-shadow: 0 0 0 2px var(--bad);
+  }
+
+  .card.highlighted .box {
+    box-shadow: 0 0 0 2px var(--c);
+    transform: translateX(2px);
   }
 
   .free {
     margin: 0;
-    padding: var(--space-1) 0 var(--space-1) var(--space-6);
+    padding: var(--space-1) 0 var(--space-1) var(--leg-indent, var(--space-6));
     color: var(--ok);
-    font: 600 12px var(--font-mono);
-  }
-
-  .times {
-    font: 600 12px var(--font-mono);
-    color: var(--fg);
-  }
-
-  .gpx {
-    background: color-mix(in srgb, var(--type-hike) 16%, transparent);
-    color: var(--type-hike);
-  }
-
-  .late {
-    background: var(--bad-soft);
-    color: var(--bad);
-  }
-
-  .card.highlighted {
-    box-shadow: 0 0 0 2px var(--c);
-    transform: translateX(2px);
+    font: 600 11px var(--font-mono);
   }
 
   .main {
@@ -169,7 +180,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3);
+    padding: 10px var(--space-3);
     border: 0;
     background: transparent;
     color: var(--fg);
@@ -186,7 +197,7 @@
     height: 38px;
     border-radius: 50%;
     background: var(--c);
-    color: #fff;
+    color: var(--on-type);
   }
 
   .label {
@@ -204,34 +215,81 @@
     box-shadow: var(--shadow-card);
   }
 
+  /*
+   * Ligne 1 : nom et pastilles ; ligne 2 : horaires puis type et durée. L'ordre visuel diffère de
+   * l'ordre du DOM (voir plus haut) grâce à `order` et à un saut de ligne en ::after.
+   */
   .text {
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+  }
+
+  .text::after {
+    content: '';
+    order: 3;
+    flex-basis: 100%;
+    height: 0;
   }
 
   .name {
-    font-family: var(--font-display);
-    font-weight: 700;
+    order: 1;
+    max-width: 100%;
     overflow: hidden;
+    font: 700 14px var(--font-display);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .pills {
+    order: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .pills:empty {
+    display: none;
+  }
+
+  .times {
+    order: 4;
+    font: 500 11.5px var(--font-mono);
+    color: var(--fg);
+  }
+
+  .times::after {
+    content: ' ·';
+    color: var(--muted);
+  }
+
   .meta {
+    order: 5;
     font-size: 12px;
     color: var(--muted);
   }
 
-  .pills {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
+  .chip {
+    padding: 1px 7px;
+    border-radius: 6px;
+    font-size: 10.5px;
+  }
+
+  .gpx {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  .late {
+    background: var(--bad-soft);
+    color: var(--bad);
   }
 
   .fixed {
+    gap: 3px;
     background: color-mix(in srgb, var(--type-air) 16%, transparent);
     color: var(--type-air);
   }
@@ -241,11 +299,17 @@
     color: var(--accent-strong);
   }
 
+  /* Actions en surimpression au survol : elles ne prennent pas de largeur au texte. */
   .actions {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    bottom: var(--space-1);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding-right: var(--space-1);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--c) 11%, var(--surface));
     opacity: 0;
     transition: opacity 0.12s;
   }
