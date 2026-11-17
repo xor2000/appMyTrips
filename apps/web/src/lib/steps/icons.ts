@@ -12,6 +12,7 @@ import Plane from 'lucide-svelte/icons/plane';
 import Ship from 'lucide-svelte/icons/ship';
 import ShoppingBag from 'lucide-svelte/icons/shopping-bag';
 import Sparkles from 'lucide-svelte/icons/sparkles';
+import SquareParking from 'lucide-svelte/icons/square-parking';
 import TrainFront from 'lucide-svelte/icons/train-front';
 import Trees from 'lucide-svelte/icons/trees';
 import Umbrella from 'lucide-svelte/icons/umbrella';
@@ -35,6 +36,7 @@ export const STEP_ICONS: Record<StepType, Icon> = {
   airport: Plane,
   station: TrainFront,
   port: Ship,
+  parking: SquareParking,
   hike: Mountain,
   activity: Sparkles,
   other: MapPin,

@@ -173,6 +173,7 @@
       entry.el.setAttribute('aria-label', `${p.label} · ${p.name}`);
       entry.el.style.setProperty('--c', `var(${p.color})`);
       entry.el.classList.toggle('faded', p.faded);
+      entry.el.classList.toggle('idea', p.idea);
     }
   });
 
@@ -282,16 +283,19 @@
   // Recadrage sur les points quand la vue change (jour sélectionné, ajout du premier point…).
   $effect(() => {
     const m = map;
-    const key = `${fitKey}|${points.length}`;
+    // Cadrage sur les étapes placées ; les idées ne servent que s'il n'y a rien d'autre.
+    const placed = points.filter((p) => !p.idea);
+    const framed = placed.length > 0 ? placed : points;
+    const key = `${fitKey}|${framed.length}`;
     if (!m || !LngLatBoundsClass || key === lastFit) return;
     lastFit = key;
-    if (points.length === 0) return;
-    if (points.length === 1) {
-      m.easeTo({ center: [points[0]!.lng, points[0]!.lat], zoom: Math.max(m.getZoom(), 13) });
+    if (framed.length === 0) return;
+    if (framed.length === 1) {
+      m.easeTo({ center: [framed[0]!.lng, framed[0]!.lat], zoom: Math.max(m.getZoom(), 13) });
       return;
     }
     const bounds = new LngLatBoundsClass();
-    for (const p of points) bounds.extend([p.lng, p.lat]);
+    for (const p of framed) bounds.extend([p.lng, p.lat]);
     m.fitBounds(bounds, { padding: 70, maxZoom: 14, duration: 600 });
   });
 
@@ -496,6 +500,15 @@
 
   :global(.map-marker.faded) {
     opacity: 0.45;
+  }
+
+  /* Idée (pas encore placée) : marqueur clair à contour pointillé, sans numéro, sous les étapes. */
+  :global(.map-marker.idea) {
+    z-index: 0;
+    border: 2px dashed var(--c);
+    background: var(--surface);
+    color: var(--c);
+    font-size: 11px;
   }
 
   /* Lieux proposés : petites pastilles atténuées, sous les étapes du voyage. */

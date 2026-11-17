@@ -142,6 +142,37 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
   await expect(ideas.getByTestId('step-card')).toHaveCount(1);
 });
 
+test('une idée apparaît sur la carte, sans numéro ni trajet', async ({ page }) => {
+  await createTripAndOpenDay1(page);
+  await addPlace(page, 'Louvre', 'Musée du Louvre');
+  await page.getByRole('button', { name: 'Ajouter une idée' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
+  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
+  await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // Marqueur « Idée » distinct ; l'étape du jour garde le numéro 1 ; aucun tracé de trajet.
+  await expect(page.getByRole('button', { name: 'Idée · Musée d’Orsay' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '1 · Musée du Louvre' })).toBeVisible();
+  await expect(page.getByTestId('trip-map')).toHaveAttribute('data-leg-lines', '0');
+  await expect(page.getByTestId('day-timeline').getByTestId('leg-tile')).toHaveCount(0);
+
+  // Aussi sur la carte de tout le voyage.
+  await page.getByRole('tab', { name: 'Tout le voyage' }).click();
+  await expect(page.getByRole('button', { name: 'Idée · Musée d’Orsay' })).toBeVisible();
+});
+
+test('type « Parking » : choisi dans l’éditeur, avec son libellé', async ({ page }) => {
+  await createTripAndOpenDay1(page);
+  await addPlace(page, 'Louvre', 'Musée du Louvre');
+  await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
+  const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
+  await editor.getByLabel('Type').selectOption({ label: 'Parking' });
+  await editor.getByRole('button', { name: 'Enregistrer' }).click();
+  const card = page.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' });
+  await expect(card).toContainText('Parking ·');
+});
+
 test('supprimer une étape demande confirmation', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');

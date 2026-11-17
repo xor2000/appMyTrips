@@ -18,6 +18,7 @@ mobile dédiée viendra plus tard et réutilisera la logique métier de `package
 - **Découverte** : bouton « Explorer » de la carte. On coche des catégories (restaurants, musées…), les
   lieux de la zone visible s'affichent en liste et en marqueurs, et s'ajoutent en un clic au jour
   sélectionné ou aux idées.
+- **Carte** : étapes numérotées du jour (ou « J2 » en vue d'ensemble), séjours « H », et **idées** qui ont un lieu, marquées « Idée » (marqueur clair à contour pointillé, sans numéro ni trajet : les tracés ne relient que des étapes placées). Le cadrage suit les étapes placées ; les idées ne servent qu'à défaut.
 - **Hors ligne** : consultation en lecture seule des voyages déjà ouverts (ou préparés), carte de leur zone comprise ; l'édition se fait en ligne.
 - **Partage** : un voyage peut être partagé en lecture seule ou en modification.
 
@@ -148,7 +149,7 @@ Authentification faite maison (issue #19), sans Cloudflare Access. Code dans `ap
 - **`days`** : `id`, `trip_id`, `date` (unique par voyage), `day_start` et `day_end` (NULL = heures du voyage), `notes`.
 - **`steps`** : étapes et dossiers.
   - Placement : `id`, `trip_id`, `day_id` (NULL = liste d'idées), `parent_id` (dossier), `position` (clé d'ordre fractionnaire parmi les frères), `kind` (`step` | `group`).
-  - Contenu : `type` (16 types, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
+  - Contenu : `type` (17 types dont `parking`, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
 - **`cover_cache`** : `query` (`v2:` + mots-clés en minuscules ; la version écarte les recherches enregistrées avant le passage aux vignettes standard), `payload` (photos trouvées, JSON, éventuellement vide), `created_at`. Valable 30 jours ; une réponse en erreur n'y entre pas.
 - **`poi_cache`** : `key` (`<catégorie>:13:<x>:<y>`, case de carte au zoom 13), `payload` (lieux normalisés, JSON), `source` (`overpass` | `geoapify`), `created_at`. Valable 7 jours.
 - **`stays`** : séjours. `id`, `trip_id`, `name`, `lat`, `lng`, `address`, `check_in_date`/`check_in_time` (défaut 17:00), `check_out_date`/`check_out_time` (défaut 10:00), `booking_ref`, `notes`.
