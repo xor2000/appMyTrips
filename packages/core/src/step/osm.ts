@@ -28,6 +28,8 @@ const BY_TAG: Record<string, StepType> = {
   'railway=halt': 'station',
   'public_transport=station': 'station',
   'amenity=ferry_terminal': 'port',
+  'amenity=parking': 'parking',
+  'amenity=parking_entrance': 'parking',
 };
 
 /** Type d'étape deviné depuis un tag OpenStreetMap (clé=valeur), « other » par défaut. */

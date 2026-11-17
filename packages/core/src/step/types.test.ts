@@ -21,4 +21,11 @@ describe('types d’étape', () => {
     expect(defaultDuration('airport')).toBe(120);
     expect(defaultDuration('station')).toBe(20);
   });
+
+  it('propose un type « Parking » (court arrêt, couleur des transports)', () => {
+    expect(STEP_TYPES).toContain('parking');
+    expect(STEP_TYPE_INFO.parking.label).toBe('Parking');
+    expect(STEP_TYPE_INFO.parking.color).toBe('--type-transport');
+    expect(defaultDuration('parking')).toBe(10);
+  });
 });

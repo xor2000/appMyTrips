@@ -91,13 +91,14 @@ describe('mapPoints', () => {
     expect(points[1]).toMatchObject({ key: 'stay:h:2026-07-10:end', color: '--type-hotel' });
   });
 
-  it('en vue « Tout le voyage », étiquette chaque étape avec son jour et ignore les idées', () => {
+  it('en vue « Tout le voyage », étiquette chaque étape avec son jour, les idées « Idée »', () => {
     const steps = [step('a'), step('b', { dayId: 'd2' }), step('idee', { dayId: null })];
     const points = mapPoints({ days, steps, stays: [stay] }, null);
     expect(points.map((p) => [p.key, p.label])).toEqual([
       ['a', 'J1'],
       ['b', 'J2'],
       ['stay:h', 'H'],
+      ['idee', 'Idée'],
     ]);
   });
 
@@ -131,5 +132,37 @@ describe('mapPoints', () => {
       'd1',
     );
     expect(points).toEqual([]);
+  });
+
+  describe('idées', () => {
+    const data = () => ({
+      days,
+      steps: [
+        step('a'),
+        step('i1', { dayId: null, name: 'Musée à voir', lat: 45.5, lng: 6.5 }),
+        step('i2', { dayId: null, name: 'Sans lieu', lat: null, lng: null }),
+        step('b', { position: 'b' }),
+      ],
+      stays: [] as Stay[],
+    });
+
+    it('apparaissent sur la carte d’un jour, sans compter dans la numérotation', () => {
+      const points = mapPoints(data(), 'd1');
+      expect(points.filter((p) => !p.idea).map((p) => p.label)).toEqual(['1', '2']);
+      const idea = points.find((p) => p.key === 'i1');
+      expect(idea).toMatchObject({ label: 'Idée', idea: true, stepId: 'i1', name: 'Musée à voir' });
+      expect(points.find((p) => p.key === 'i2')).toBeUndefined();
+    });
+
+    it('apparaissent aussi sur la carte de tout le voyage', () => {
+      const points = mapPoints(data(), null);
+      expect(points.find((p) => p.key === 'i1')).toMatchObject({ label: 'Idée', idea: true });
+    });
+
+    it('les étapes d’un jour ne sont pas des idées', () => {
+      for (const p of mapPoints(data(), 'd1').filter((p) => p.key !== 'i1')) {
+        expect(p.idea).toBe(false);
+      }
+    });
   });
 });

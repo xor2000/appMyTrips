@@ -20,6 +20,8 @@ describe('stepTypeFromOsm', () => {
     ['aeroway', 'aerodrome', 'airport'],
     ['railway', 'station', 'station'],
     ['amenity', 'ferry_terminal', 'port'],
+    ['amenity', 'parking', 'parking'],
+    ['amenity', 'parking_entrance', 'parking'],
     ['shop', 'bakery', 'shopping'],
   ] as const)('%s=%s → %s', (key, value, expected) => {
     expect(stepTypeFromOsm(key, value)).toBe(expected);

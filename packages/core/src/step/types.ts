@@ -13,6 +13,7 @@ export const STEP_TYPES = [
   'airport',
   'station',
   'port',
+  'parking',
   'hike',
   'activity',
   'other',
@@ -42,6 +43,7 @@ export const STEP_TYPE_INFO: Record<StepType, StepTypeInfo> = {
   airport: { label: 'Aéroport', color: '--type-air', defaultDurationMin: 120 },
   station: { label: 'Gare', color: '--type-air', defaultDurationMin: 20 },
   port: { label: 'Port', color: '--type-air', defaultDurationMin: 30 },
+  parking: { label: 'Parking', color: '--type-transport', defaultDurationMin: 10 },
   // Calculée depuis le tracé GPX au lot 6 ; valeur provisoire d'ici là.
   hike: { label: 'Randonnée', color: '--type-hike', defaultDurationMin: 180 },
   activity: { label: 'Activité', color: '--type-poi', defaultDurationMin: 60 },

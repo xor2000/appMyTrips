@@ -14,6 +14,8 @@ export interface MapPoint {
   /** Variable CSS de la couleur du type. */
   color: string;
   faded: boolean;
+  /** Idée (étape sans jour) : marqueur distinct, hors numérotation et hors trajets. */
+  idea: boolean;
 }
 
 function stepPoint(s: Step, label: string): MapPoint | null {
@@ -27,7 +29,17 @@ function stepPoint(s: Step, label: string): MapPoint | null {
     label,
     color: s.type ? STEP_TYPE_INFO[s.type].color : '--type-transport',
     faded: false,
+    idea: false,
   };
+}
+
+/** Idées du voyage (étapes sans jour) qui ont un lieu. */
+function ideaPoints(steps: Step[]): MapPoint[] {
+  return steps
+    .filter((s) => s.dayId === null && s.kind === 'step')
+    .map((s) => stepPoint(s, 'Idée'))
+    .filter((p): p is MapPoint => p !== null)
+    .map((p) => ({ ...p, idea: true }));
 }
 
 function stayPoint(stay: Stay, key: string): MapPoint {
@@ -40,12 +52,15 @@ function stayPoint(stay: Stay, key: string): MapPoint {
     label: 'H',
     color: '--type-hotel',
     faded: false,
+    idea: false,
   };
 }
 
 /**
  * Marqueurs de la carte. Pour un jour : étapes numérotées dans l'ordre de la timeline, séjours « H ».
  * Pour tout le voyage (selectedDay = null) : chaque étape porte son jour, chaque séjour une fois.
+ * Dans les deux cas, les idées qui ont un lieu s'ajoutent, marquées « Idée » (pas de numéro, pas
+ * de trajet : les tracés viennent des trajets, qui ne relient que des étapes placées).
  */
 export function mapPoints(
   data: { days: Day[]; steps: Step[]; stays: Stay[] },
@@ -87,7 +102,7 @@ export function mapPoints(
         }
       }
     }
-    return points;
+    return [...points, ...ideaPoints(data.steps)];
   }
 
   data.days.forEach((day, i) => {
@@ -105,5 +120,5 @@ export function mapPoints(
     }
   });
   for (const stay of data.stays) points.push(stayPoint(stay, `stay:${stay.id}`));
-  return points;
+  return [...points, ...ideaPoints(data.steps)];
 }
