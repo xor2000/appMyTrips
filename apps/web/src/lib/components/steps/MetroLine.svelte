@@ -24,7 +24,7 @@
     onDelete: (step: Step) => void;
     onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
-    /** Tuile de trajet après un point de passage (la même que dans la liste). */
+    /** Trajet après un point de passage (MetroLeg : compact, mêmes actions que la liste). */
     after?: Snippet<[string]>;
     times?: Map<string, ScheduledItem>;
   }
@@ -99,7 +99,7 @@
 {/snippet}
 
 {#snippet slot(key: string)}
-  <!-- Tuile de trajet centrée sur la ligne. -->
+  <!-- Trajet posé sur la ligne. -->
   <div class="slot">{@render after?.(key)}</div>
 {/snippet}
 
@@ -255,12 +255,11 @@
       0 calc(var(--metro-top) + var(--metro-node) / 2 - 2px) / 100% 4px no-repeat;
   }
 
+  /* Le trajet (MetroLeg) a ses propres hauteurs de tête et de nœud, comme une station. */
   .slot {
     flex: none;
     display: flex;
-    align-items: center;
-    min-height: var(--metro-node);
-    margin-top: var(--metro-top);
+    align-items: flex-start;
   }
 
   .slot:empty {

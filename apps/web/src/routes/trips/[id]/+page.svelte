@@ -96,6 +96,7 @@
   import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
   import StepEditor from '#lib/components/steps/StepEditor.svelte';
+  import MetroLeg from '#lib/components/legs/MetroLeg.svelte';
   import MetroLine from '#lib/components/steps/MetroLine.svelte';
   import Timeline from '#lib/components/steps/Timeline.svelte';
   import LayoutSwitch from '#lib/components/LayoutSwitch.svelte';
@@ -803,6 +804,23 @@
   {/if}
 {/snippet}
 
+<!-- Ligne de métro : trajet compact sur la ligne (mêmes actions que la tuile de la liste). -->
+{#snippet metroLegAfter(key: string)}
+  {@const pair = pairs.get(key)}
+  {#if pair}
+    <MetroLeg
+      {pair}
+      leg={pair.leg}
+      {canEdit}
+      highlighted={highlighted === `${pair.fromKey}>${pair.toKey}`}
+      suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
+      onCreate={(input) => addLeg(pair, input)}
+      onEdit={(leg) => (editingLegId = leg.id)}
+      onHover={(k) => (highlighted = k)}
+    />
+  {/if}
+{/snippet}
+
 {#if status === 'loading'}
   <p class="state">Chargement du voyage…</p>
 {:else if status === 'not_found'}
@@ -1102,7 +1120,7 @@
                       onDelete={askDelete}
                       onHover={(k) => (highlighted = k)}
                       onDrop={drop}
-                      after={legAfter}
+                      after={metroLegAfter}
                       {times}
                     />
                   </div>
