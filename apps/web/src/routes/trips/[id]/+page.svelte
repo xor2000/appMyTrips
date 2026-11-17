@@ -23,7 +23,6 @@
     type StepType,
     type StayItem,
     type TripSnapshot,
-    type TripSummary,
   } from '@mytrips/core';
   import { untrack } from 'svelte';
   import { resolve } from '$app/paths';
@@ -49,6 +48,7 @@
     searchPlaces,
     updateLeg,
     updateStay,
+    searchCovers,
     updateTrip,
     type MapView,
     type StepInput,
@@ -73,6 +73,7 @@
   import { connection } from '#lib/offline/connection.svelte.ts';
   import { TILE_CACHE, offlineStore } from '#lib/offline/instance.ts';
   import { isNetworkError, loadWithFallback } from '#lib/offline/load.ts';
+  import { summaryFromSnapshot } from '#lib/home.ts';
   import { glyphUrls, prefetchAll, resolveTileTemplate, tileUrl } from '#lib/offline/prefetch.ts';
   import type { PreparedTrip } from '#lib/offline/store.ts';
   import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
@@ -254,11 +255,7 @@
         writeCopy: async (data) => {
           await offlineStore.saveTrip(tripId, data);
           // La liste hors ligne doit contenir ce voyage, même ouvert après elle.
-          await offlineStore.upsertTripInList({
-            ...data.trip,
-            role: data.role,
-            dayCount: data.days.length,
-          } satisfies TripSummary);
+          await offlineStore.upsertTripInList(summaryFromSnapshot(data));
         },
         onNetworkError: () => connection.markOffline(),
       });
@@ -1028,6 +1025,9 @@
   {#if editing}
     <TripFormDialog
       initial={{ name: trip.name, startDate: trip.startDate, endDate: trip.endDate }}
+      cover={trip.cover}
+      searchCovers={online ? (query) => searchCovers(query) : undefined}
+      places={steps.filter((s) => s.kind === 'step' && s.dayId).map((s) => s.name)}
       onSubmit={(values) => saveTrip(values)}
       onClose={() => (editing = false)}
     />

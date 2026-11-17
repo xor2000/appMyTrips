@@ -22,4 +22,6 @@ export interface Bindings {
   GEOAPIFY_API_KEY?: string;
   /** URL de l'API Places de Geoapify ; défaut https://api.geoapify.com. */
   GEOAPIFY_URL?: string;
+  /** URL de base de Wikimedia Commons (photos de couverture) ; défaut https://commons.wikimedia.org. */
+  COMMONS_URL?: string;
 }

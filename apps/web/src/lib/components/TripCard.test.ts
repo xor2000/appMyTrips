@@ -1,24 +1,10 @@
 import type { TripSummary } from '@mytrips/core';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { makeCover, makeTripSummary } from '#lib/test/fixtures.ts';
 import TripCard from './TripCard.svelte';
 
-const trip: TripSummary = {
-  id: '3f0fa7bf-e95b-4fee-ab08-b30a6385734f',
-  ownerEmail: 'alice@example.test',
-  name: 'Voyage test Alpes',
-  startDate: '2026-07-10',
-  endDate: '2026-07-12',
-  dayStart: '08:00',
-  dayEnd: '22:00',
-  defaultTimezone: 'Europe/Paris',
-  hikeSpeedKmh: 3.5,
-  version: 1,
-  createdAt: '2026-06-01T00:00:00Z',
-  updatedAt: '2026-06-01T00:00:00Z',
-  role: 'owner',
-  dayCount: 3,
-};
+const trip: TripSummary = makeTripSummary();
 
 describe('TripCard', () => {
   it('affiche le nom, la période, le nombre de jours et le compte à rebours', () => {
@@ -68,5 +54,50 @@ describe('TripCard', () => {
   it('hors ligne (lecture seule) : pas de suppression', () => {
     render(TripCard, { props: { trip, today: '2026-06-17', onDelete: vi.fn(), readOnly: true } });
     expect(screen.queryByRole('button', { name: 'Supprimer' })).toBeNull();
+  });
+
+  it('affiche la photo de couverture et son crédit, lien vers Commons', () => {
+    const cover = makeCover();
+    render(TripCard, {
+      props: { trip: { ...trip, cover }, today: '2026-06-17', onDelete: vi.fn() },
+    });
+    const img = document.querySelector('img');
+    expect(img?.getAttribute('src')).toBe(cover.thumbUrl);
+    const credit = screen.getByRole('link', { name: /Jean Dupont/ });
+    expect(credit.getAttribute('href')).toBe(cover.sourceUrl);
+    expect(credit.textContent).toContain('CC BY-SA 4.0');
+  });
+
+  it('sans photo : pas d’image, la teinte reste', () => {
+    render(TripCard, { props: { trip, today: '2026-06-17', onDelete: vi.fn() } });
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('affiche les chiffres et les principaux lieux', () => {
+    render(TripCard, {
+      props: {
+        trip: { ...trip, stepCount: 4, distanceM: 1200, places: ['MuCEM', 'Vieux-Port'] },
+        today: '2026-06-17',
+        onDelete: vi.fn(),
+      },
+    });
+    expect(screen.getByText('4 étapes')).toBeTruthy();
+    expect(screen.getByText('1,2 km')).toBeTruthy();
+    expect(screen.getByText('MuCEM')).toBeTruthy();
+    expect(screen.getByText('Vieux-Port')).toBeTruthy();
+  });
+
+  it('voyage en cours : indique le jour du voyage', () => {
+    render(TripCard, { props: { trip, today: '2026-07-11', onDelete: vi.fn() } });
+    expect(screen.getByText('En cours · jour 2')).toBeTruthy();
+  });
+
+  it('photo qui ne charge plus : l’image est masquée, la teinte reprend', async () => {
+    render(TripCard, {
+      props: { trip: { ...trip, cover: makeCover() }, today: '2026-06-17', onDelete: vi.fn() },
+    });
+    const img = document.querySelector('img')!;
+    await fireEvent.error(img);
+    expect(img.hidden).toBe(true);
   });
 });

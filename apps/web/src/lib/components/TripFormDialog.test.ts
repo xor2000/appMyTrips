@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { makeCover } from '#lib/test/fixtures.ts';
 import TripFormDialog from './TripFormDialog.svelte';
 
 async function fill(name: string, start: string, end: string) {
@@ -57,5 +58,36 @@ describe('TripFormDialog', () => {
     await fill('Alpes', '2026-07-10', '2026-07-12');
     await fireEvent.click(screen.getByRole('button', { name: 'Créer le voyage' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Serveur indisponible');
+  });
+
+  it('modification : changer la photo du voyage', async () => {
+    const current = makeCover({ author: 'Anne' });
+    const other = makeCover({
+      url: 'https://x/2.jpg',
+      thumbUrl: 'https://x/2-640.jpg',
+      author: 'Bruno',
+    });
+    const searchCovers = vi.fn().mockResolvedValue([other]);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(TripFormDialog, {
+      props: {
+        initial: { name: 'Voyage test Alpes', startDate: '2026-07-10', endDate: '2026-07-12' },
+        cover: current,
+        searchCovers,
+        onSubmit,
+        onClose: vi.fn(),
+      },
+    });
+    expect(screen.getByText(/Anne/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Changer la photo' }));
+    expect(searchCovers).toHaveBeenCalledWith('Alpes');
+    await fireEvent.click(await screen.findByRole('radio', { name: 'Photo 1 : Bruno' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Voyage test Alpes',
+      startDate: '2026-07-10',
+      endDate: '2026-07-12',
+      cover: other,
+    });
   });
 });

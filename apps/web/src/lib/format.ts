@@ -38,6 +38,22 @@ export function countdownLabel(startDate: string, endDate: string, today: string
   return 'Terminé';
 }
 
+/** Où en est un voyage à la date `today` : à venir, en cours (bornes comprises) ou passé. */
+export function tripPhase(
+  startDate: string,
+  endDate: string,
+  today: string,
+): 'upcoming' | 'ongoing' | 'past' {
+  if (toDayNumber(today) < toDayNumber(startDate)) return 'upcoming';
+  if (toDayNumber(today) <= toDayNumber(endDate)) return 'ongoing';
+  return 'past';
+}
+
+/** Numéro du jour du voyage à la date `today` (1 = premier jour). */
+export function tripDayNumber(startDate: string, today: string): number {
+  return toDayNumber(today) - toDayNumber(startDate) + 1;
+}
+
 /** « ven. 10 juil. » (onglet d'un jour). */
 export function dayTabLabel(date: string): string {
   return tabFormat.format(new Date(`${date}T00:00:00Z`));

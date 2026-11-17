@@ -1,4 +1,13 @@
-import type { Day, Member, Role, Trip, TripRole, TripSnapshot, TripSummary } from '@mytrips/core';
+import {
+  TripCover,
+  type Day,
+  type Member,
+  type Role,
+  type Trip,
+  type TripRole,
+  type TripSnapshot,
+  type TripSummary,
+} from '@mytrips/core';
 import { getLegs } from './legs';
 import { getStays, getSteps } from './steps';
 
@@ -12,6 +21,7 @@ interface TripRow {
   day_end: string;
   default_timezone: string;
   hike_speed_kmh: number;
+  cover: string | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -36,10 +46,22 @@ function toTrip(r: TripRow): Trip {
     dayEnd: r.day_end,
     defaultTimezone: r.default_timezone,
     hikeSpeedKmh: r.hike_speed_kmh,
+    cover: parseCover(r.cover),
     version: r.version,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+/** Photo enregistrée (JSON) ; null si absente ou illisible. */
+function parseCover(raw: string | null): TripCover | null {
+  if (!raw) return null;
+  try {
+    const parsed = TripCover.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 function toDay(r: DayRow): Day {
@@ -110,12 +132,36 @@ export async function listTrips(db: D1Database, email: string): Promise<TripSumm
     .prepare(
       `SELECT t.*,
               CASE WHEN t.owner_email = ?1 THEN 'owner' ELSE m.role END AS role,
-              (SELECT COUNT(*) FROM days d WHERE d.trip_id = t.id) AS day_count
+              (SELECT COUNT(*) FROM days d WHERE d.trip_id = t.id) AS day_count,
+              (SELECT COUNT(*) FROM steps s
+                 WHERE s.trip_id = t.id AND s.kind = 'step' AND s.day_id IS NOT NULL) AS step_count,
+              (SELECT COALESCE(SUM(l.distance_m), 0) FROM legs l WHERE l.trip_id = t.id)
+                AS distance_m,
+              (SELECT json_group_array(name) FROM (
+                 SELECT s.name FROM steps s JOIN days d ON d.id = s.day_id
+                 WHERE s.trip_id = t.id AND s.kind = 'step'
+                 ORDER BY d.date, s.position
+                 LIMIT 3)) AS places
        FROM trips t LEFT JOIN trip_members m ON m.trip_id = t.id AND m.email = ?1
        WHERE t.owner_email = ?1 OR m.email IS NOT NULL
        ORDER BY t.start_date, t.name`,
     )
     .bind(email)
-    .all<TripRow & { role: TripRole; day_count: number }>();
-  return results.map((r) => ({ ...toTrip(r), role: r.role, dayCount: r.day_count }));
+    .all<
+      TripRow & {
+        role: TripRole;
+        day_count: number;
+        step_count: number;
+        distance_m: number;
+        places: string;
+      }
+    >();
+  return results.map((r) => ({
+    ...toTrip(r),
+    role: r.role,
+    dayCount: r.day_count,
+    stepCount: r.step_count,
+    distanceM: Math.round(r.distance_m),
+    places: JSON.parse(r.places) as string[],
+  }));
 }

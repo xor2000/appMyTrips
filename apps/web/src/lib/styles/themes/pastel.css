@@ -45,6 +45,15 @@
   /* Marqueurs de carte : liseré blanc dans les deux thèmes, comme sur la maquette. */
   --marker-ring: #ffffff;
 
+  /* Texte et pastilles posés sur une photo (accueil) : identiques dans tous les thèmes. */
+  --photo-ink: #ffffff;
+  --photo-scrim: rgb(8 22 26 / 72%);
+  --photo-chip: rgb(255 255 255 / 88%);
+  --photo-chip-ink: #14282b;
+  --photo-glass: rgb(255 255 255 / 16%);
+  --photo-glass-edge: rgb(255 255 255 / 30%);
+  --photo-shade: rgb(0 0 0 / 25%);
+
   --shadow-card: 0 2px 0 rgb(10 60 64 / 6%);
   --shadow-float: 0 4px 14px -6px rgb(10 60 64 / 30%);
   --shadow-window: 0 18px 40px -24px rgb(10 60 64 / 35%);
