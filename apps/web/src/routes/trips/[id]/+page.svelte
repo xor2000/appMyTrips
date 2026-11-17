@@ -18,6 +18,7 @@
     type Poi,
     type PoiCategory,
     type Role,
+    type ScheduledItem,
     type Step,
     type StepPatch,
     type StepType,
@@ -59,7 +60,6 @@
   import {
     dayHikeLines,
     dayLegLines,
-    dayPairs,
     isManual,
     suggestionFor,
     type DayPair,
@@ -74,6 +74,7 @@
   import { TILE_CACHE, offlineStore } from '#lib/offline/instance.ts';
   import { isNetworkError, loadWithFallback } from '#lib/offline/load.ts';
   import { summaryFromSnapshot } from '#lib/home.ts';
+  import { buildDayViews } from '#lib/trips/dayViews.ts';
   import { glyphUrls, prefetchAll, resolveTileTemplate, tileUrl } from '#lib/offline/prefetch.ts';
   import type { PreparedTrip } from '#lib/offline/store.ts';
   import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
@@ -95,7 +96,10 @@
   import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
   import StepEditor from '#lib/components/steps/StepEditor.svelte';
+  import MetroLine from '#lib/components/steps/MetroLine.svelte';
   import Timeline from '#lib/components/steps/Timeline.svelte';
+  import LayoutSwitch from '#lib/components/LayoutSwitch.svelte';
+  import { readLayout, saveLayout, type LayoutId } from '#lib/layout.ts';
   import DaySummary from '#lib/components/schedule/DaySummary.svelte';
   import ReorganizePanel from '#lib/components/schedule/ReorganizePanel.svelte';
 
@@ -104,6 +108,15 @@
   let loadError = $state<string | null>(null);
   let notice = $state<string | null>(null);
   let selectedDay = $state<string | null>(null);
+  /** Affichage de la journée (liste, ligne de métro, plein écran), mémorisé par appareil. */
+  let layout = $state<LayoutId>(readLayout());
+  /** Plein écran : carte ou timeline des jours en colonnes. */
+  let boardMode = $state<'map' | 'timeline'>('timeline');
+
+  function changeLayout(id: LayoutId) {
+    layout = id;
+    saveLayout(id);
+  }
   let editing = $state(false);
   let sharing = $state(false);
   /** Modification de période en attente de confirmation (jours non vides à supprimer). */
@@ -179,12 +192,10 @@
   );
   const ideas = $derived(steps.filter((s) => s.dayId === null && s.parentId === null));
   const points = $derived(mapPoints({ days, steps, stays }, selectedDay));
-  const labels = $derived(new Map(points.map((p) => [p.key, p.label])));
   const editingStep = $derived(steps.find((s) => s.id === editingStepId) ?? null);
   const editingStay = $derived(stays.find((s) => s.id === editingStayId) ?? null);
   const dayLabel = $derived(day ? `J${days.indexOf(day) + 1}` : null);
   const legs = $derived(snapshot?.legs ?? []);
-  const pairs = $derived(dayPairs(items, legs));
   const legLines = $derived(exploring ? [] : [...dayHikeLines(items), ...dayLegLines(items, legs)]);
   const editingLeg = $derived(legs.find((l) => l.id === editingLegId) ?? null);
 
@@ -203,8 +214,13 @@
   const schedules = $derived(
     new Map(trip ? days.map((d) => [d.id, scheduleDay(dayInput(d))]) : []),
   );
-  const daySchedule = $derived(day ? (schedules.get(day.id) ?? null) : null);
-  const times = $derived(new Map((daySchedule?.items ?? []).map((i) => [i.key, i])));
+  /** Modèle de chaque jour, partagé par les trois affichages (voir lib/trips/dayViews.ts). */
+  const dayViews = $derived(buildDayViews({ days, steps, stays, legs }, schedules));
+  const dayView = $derived(dayViews.find((v) => v.day.id === selectedDay) ?? null);
+  const labels = $derived(dayView?.labels ?? new Map<string, string>());
+  const times = $derived(dayView?.times ?? new Map<string, ScheduledItem>());
+  /** Paires de trajets de tous les jours : la tuile d'un trajet se trouve par son départ. */
+  const pairs = $derived(new Map(dayViews.flatMap((v) => [...v.pairs])));
   const alerts = $derived(
     new Set(
       [...schedules]
@@ -814,6 +830,7 @@
           </p>
         </div>
         <div class="tools">
+          <LayoutSwitch value={layout} onChange={changeLayout} />
           {#if canEdit}
             <button
               type="button"
@@ -857,60 +874,224 @@
       {/if}
     </header>
 
+    {#snippet explorePanel()}
+      <div class="block">
+        <ExplorePanel
+          categories={poiCategories}
+          {pois}
+          status={poiStatus}
+          error={poiError}
+          {zoomTooLow}
+          stale={poiStale}
+          {dayLabel}
+          {canEdit}
+          {addedRefs}
+          selectedId={selectedPoi}
+          onToggleCategory={toggleCategory}
+          onSearch={searchPois}
+          onAdd={addPoi}
+          onSelect={pickPoi}
+          onHover={(poiId) => (hoveredPoi = poiId)}
+          onBack={toggleExplore}
+          loadWiki={(ref) => poiWiki(ref)}
+        />
+      </div>
+    {/snippet}
+
+    {#snippet dayHead(d: Day)}
+      {@const summary = schedules.get(d.id)?.summary}
+      <div class="dayhead">
+        <div class="day-head">
+          <h2>{dayTitle(d.date)}</h2>
+          <p class="hours">{dayHoursLabel(d.dayStart ?? trip.dayStart, d.dayEnd ?? trip.dayEnd)}</p>
+        </div>
+        {#if summary}
+          <DaySummary
+            {summary}
+            {canEdit}
+            onReorganize={() => {
+              selectedDay = d.id;
+              reorganizing = true;
+            }}
+          />
+        {/if}
+        {#if d.notes}
+          <p class="notes">{d.notes}</p>
+        {/if}
+      </div>
+    {/snippet}
+
+    {#snippet addBar(dayId: string)}
+      {#if canEdit}
+        <!-- Les ajouts visent ce jour (utile en plein écran, où tous les jours sont visibles). -->
+        <div class="add-bar">
+          <button
+            type="button"
+            class="add-main"
+            onclick={() => {
+              selectedDay = dayId;
+              adding = { kind: 'place', type: null };
+            }}><span aria-hidden="true">+</span> Ajouter un lieu</button
+          >
+          <div class="add-more">
+            <button
+              type="button"
+              class="btn btn-soft"
+              onclick={() => {
+                selectedDay = dayId;
+                adding = { kind: 'stay' };
+              }}
+            >
+              Ajouter un séjour
+            </button>
+            <button
+              type="button"
+              class="btn btn-soft"
+              onclick={() => {
+                selectedDay = dayId;
+                adding = { kind: 'group' };
+              }}
+            >
+              Nouveau dossier
+            </button>
+            <label class="btn btn-soft file">
+              Importer une randonnée (GPX)
+              <input
+                type="file"
+                accept=".gpx,application/gpx+xml"
+                onchange={(e) => {
+                  selectedDay = dayId;
+                  pickHikeFile(e);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      {/if}
+    {/snippet}
+
+    {#snippet allDays()}
+      <div class="block">
+        <h2>Tout le voyage</h2>
+        <ol class="day-list">
+          {#each days as d, i (d.id)}
+            {@const count = steps.filter((s) => s.dayId === d.id && s.kind === 'step').length}
+            <li>
+              <button type="button" onclick={() => (selectedDay = d.id)}>
+                <b>J{i + 1}</b>
+                <span class="grow">{dayTitle(d.date)}</span>
+                <span class="count">{plural(count, 'étape')}</span>
+              </button>
+            </li>
+          {/each}
+        </ol>
+      </div>
+    {/snippet}
+
+    {#snippet ideasBlock()}
+      <div class="block">
+        <IdeasPanel
+          {ideas}
+          {canEdit}
+          {highlighted}
+          onAdd={() => (adding = { kind: 'idea', type: null })}
+          onEdit={(s) => (editingStepId = s.id)}
+          onMove={move}
+          onDelete={askDelete}
+          onHover={(k) => (highlighted = k)}
+          onDrop={drop}
+        />
+      </div>
+    {/snippet}
+
+    {#snippet tripMap()}
+      <TripMap
+        {points}
+        {highlighted}
+        fitKey={selectedDay ?? 'all'}
+        onHover={(k) => (highlighted = k)}
+        onPick={pickPoint}
+        onAddHere={canEdit ? addHere : undefined}
+        onViewChange={(v) => (mapView = v)}
+        pois={exploring ? pois : []}
+        {selectedPoi}
+        {hoveredPoi}
+        onPickPoi={pickPoi}
+        onHoverPoi={(poiId) => (hoveredPoi = poiId)}
+        {exploring}
+        onToggleExplore={online ? toggleExplore : undefined}
+        onOffline={online ? openOffline : undefined}
+        onSearch={canEdit
+          ? () => (adding = { kind: selectedDay ? 'place' : 'idea', type: null })
+          : undefined}
+        lines={legLines}
+      />
+    {/snippet}
+
+    <!-- Trois affichages de la journée (lib/layout.ts) : mêmes données, mêmes actions. -->
     <div class="body">
-      <SplitPane>
-        {#snippet left()}
-          <section class="panel">
-            {#if exploring}
-              <div class="block">
-                <ExplorePanel
-                  categories={poiCategories}
-                  {pois}
-                  status={poiStatus}
-                  error={poiError}
-                  {zoomTooLow}
-                  stale={poiStale}
-                  {dayLabel}
-                  {canEdit}
-                  {addedRefs}
-                  selectedId={selectedPoi}
-                  onToggleCategory={toggleCategory}
-                  onSearch={searchPois}
-                  onAdd={addPoi}
-                  onSelect={pickPoi}
-                  onHover={(poiId) => (hoveredPoi = poiId)}
-                  onBack={toggleExplore}
-                  loadWiki={(ref) => poiWiki(ref)}
-                />
-              </div>
-            {:else}
-              {#if day}
-                <div class="dayhead">
-                  <div class="day-head">
-                    <h2>{dayTitle(day.date)}</h2>
-                    <p class="hours">
-                      {dayHoursLabel(day.dayStart ?? trip.dayStart, day.dayEnd ?? trip.dayEnd)}
-                    </p>
+      {#if layout === 'list'}
+        <SplitPane>
+          {#snippet left()}
+            <section class="panel">
+              {#if exploring}
+                {@render explorePanel()}
+              {:else}
+                {#if day}
+                  {@render dayHead(day)}
+                  <div class="block">
+                    <div
+                      data-testid="day-timeline"
+                      role="presentation"
+                      ondragover={onFileDragOver}
+                      ondrop={onFileDrop}
+                    >
+                      <Timeline
+                        {items}
+                        {labels}
+                        {canEdit}
+                        {highlighted}
+                        onEdit={(s) => (editingStepId = s.id)}
+                        onEditStay={editStay}
+                        onMove={move}
+                        onDelete={askDelete}
+                        onHover={(k) => (highlighted = k)}
+                        onDrop={drop}
+                        after={legAfter}
+                        {times}
+                      />
+                    </div>
+                    {@render addBar(day.id)}
                   </div>
-                  {#if daySchedule}
-                    <DaySummary
-                      summary={daySchedule.summary}
-                      {canEdit}
-                      onReorganize={() => (reorganizing = true)}
-                    />
-                  {/if}
-                  {#if day.notes}
-                    <p class="notes">{day.notes}</p>
-                  {/if}
-                </div>
-                <div class="block">
+                {:else}
+                  {@render allDays()}
+                {/if}
+                {@render ideasBlock()}
+              {/if}
+            </section>
+          {/snippet}
+          {#snippet right()}
+            {@render tripMap()}
+          {/snippet}
+        </SplitPane>
+      {:else if layout === 'metro'}
+        <div class="metro-layout">
+          <div class="metro-map">{@render tripMap()}</div>
+          <section class="metro-panel" aria-label="Journée">
+            {#if exploring}
+              <div class="metro-main">{@render explorePanel()}</div>
+            {:else}
+              <div class="metro-main">
+                {#if day}
+                  {@render dayHead(day)}
                   <div
+                    class="metro-scroll"
                     data-testid="day-timeline"
                     role="presentation"
                     ondragover={onFileDragOver}
                     ondrop={onFileDrop}
                   >
-                    <Timeline
+                    <MetroLine
                       {items}
                       {labels}
                       {canEdit}
@@ -925,100 +1106,80 @@
                       {times}
                     />
                   </div>
-                  {#if canEdit}
-                    <div class="add-bar">
-                      <button
-                        type="button"
-                        class="add-main"
-                        onclick={() => (adding = { kind: 'place', type: null })}
-                        ><span aria-hidden="true">+</span> Ajouter un lieu</button
-                      >
-                      <div class="add-more">
-                        <button
-                          type="button"
-                          class="btn btn-soft"
-                          onclick={() => (adding = { kind: 'stay' })}
-                        >
-                          Ajouter un séjour
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn-soft"
-                          onclick={() => (adding = { kind: 'group' })}
-                        >
-                          Nouveau dossier
-                        </button>
-                        <label class="btn btn-soft file">
-                          Importer une randonnée (GPX)
-                          <input
-                            type="file"
-                            accept=".gpx,application/gpx+xml"
-                            onchange={pickHikeFile}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {:else}
-                <div class="block">
-                  <h2>Tout le voyage</h2>
-                  <ol class="day-list">
-                    {#each days as d, i (d.id)}
-                      {@const count = steps.filter(
-                        (s) => s.dayId === d.id && s.kind === 'step',
-                      ).length}
-                      <li>
-                        <button type="button" onclick={() => (selectedDay = d.id)}>
-                          <b>J{i + 1}</b>
-                          <span class="grow">{dayTitle(d.date)}</span>
-                          <span class="count">{plural(count, 'étape')}</span>
-                        </button>
-                      </li>
-                    {/each}
-                  </ol>
-                </div>
-              {/if}
-              <div class="block">
-                <IdeasPanel
-                  {ideas}
-                  {canEdit}
-                  {highlighted}
-                  onAdd={() => (adding = { kind: 'idea', type: null })}
-                  onEdit={(s) => (editingStepId = s.id)}
-                  onMove={move}
-                  onDelete={askDelete}
-                  onHover={(k) => (highlighted = k)}
-                  onDrop={drop}
-                />
+                  <div class="block">{@render addBar(day.id)}</div>
+                {:else}
+                  {@render allDays()}
+                {/if}
               </div>
+              <aside class="metro-ideas">{@render ideasBlock()}</aside>
             {/if}
           </section>
-        {/snippet}
-        {#snippet right()}
-          <TripMap
-            {points}
-            {highlighted}
-            fitKey={selectedDay ?? 'all'}
-            onHover={(k) => (highlighted = k)}
-            onPick={pickPoint}
-            onAddHere={canEdit ? addHere : undefined}
-            onViewChange={(v) => (mapView = v)}
-            pois={exploring ? pois : []}
-            {selectedPoi}
-            {hoveredPoi}
-            onPickPoi={pickPoi}
-            onHoverPoi={(poiId) => (hoveredPoi = poiId)}
-            {exploring}
-            onToggleExplore={online ? toggleExplore : undefined}
-            onOffline={online ? openOffline : undefined}
-            onSearch={canEdit
-              ? () => (adding = { kind: selectedDay ? 'place' : 'idea', type: null })
-              : undefined}
-            lines={legLines}
-          />
-        {/snippet}
-      </SplitPane>
+        </div>
+      {:else}
+        <div class="board-layout">
+          <div class="board-bar">
+            <div class="seg" role="group" aria-label="Plein écran">
+              <button
+                type="button"
+                aria-pressed={boardMode === 'map'}
+                onclick={() => (boardMode = 'map')}>Carte</button
+              >
+              <button
+                type="button"
+                aria-pressed={boardMode === 'timeline'}
+                onclick={() => (boardMode = 'timeline')}>Timeline</button
+              >
+            </div>
+          </div>
+          {#if boardMode === 'map'}
+            <div class="board-map">
+              {@render tripMap()}
+              {#if exploring}
+                <aside class="board-explore">{@render explorePanel()}</aside>
+              {/if}
+            </div>
+          {:else}
+            <div class="board-columns" data-testid="board">
+              {#each dayViews as v (v.day.id)}
+                <section class="board-col" aria-label={`J${v.index + 1}`}>
+                  <p class="board-day">J{v.index + 1}</p>
+                  {@render dayHead(v.day)}
+                  <div class="block">
+                    <div
+                      data-testid="day-timeline"
+                      role="presentation"
+                      ondragover={onFileDragOver}
+                      ondrop={(e) => {
+                        selectedDay = v.day.id;
+                        onFileDrop(e);
+                      }}
+                    >
+                      <Timeline
+                        items={v.items}
+                        labels={v.labels}
+                        {canEdit}
+                        {highlighted}
+                        onEdit={(s) => (editingStepId = s.id)}
+                        onEditStay={editStay}
+                        onMove={move}
+                        onDelete={askDelete}
+                        onHover={(k) => (highlighted = k)}
+                        onDrop={(id, target) => drop(id, { ...target, dayId: v.day.id })}
+                        after={legAfter}
+                        times={v.times}
+                      />
+                    </div>
+                    {@render addBar(v.day.id)}
+                  </div>
+                </section>
+              {/each}
+              <section class="board-col board-ideas" aria-label="Idées du voyage">
+                {@render ideasBlock()}
+              </section>
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -1361,6 +1522,127 @@
     min-height: 28px;
     padding: 0 var(--space-3);
     font-size: 12px;
+  }
+
+  /* Ligne de métro : carte en haut, journée en ligne dessous, idées à droite. */
+  .metro-layout {
+    display: grid;
+    grid-template-rows: minmax(240px, 1fr) auto;
+    height: 100%;
+  }
+
+  .metro-map {
+    position: relative;
+    min-height: 0;
+  }
+
+  .metro-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    max-height: 52vh;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .metro-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: auto;
+  }
+
+  .metro-scroll {
+    overflow-x: auto;
+    padding-top: var(--space-2);
+  }
+
+  .metro-ideas {
+    border-left: 1px solid var(--line);
+    overflow: auto;
+  }
+
+  /* Plein écran : carte ou colonnes de jours sur toute la surface. */
+  .board-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .board-bar {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+  }
+
+  .seg button {
+    padding: var(--space-1) var(--space-4);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted);
+    font: 600 13px var(--font-display);
+    cursor: pointer;
+  }
+
+  .seg button[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .board-map {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .board-explore {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 380px;
+    overflow: auto;
+    background: var(--surface);
+    box-shadow: var(--shadow-float);
+  }
+
+  .board-columns {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(340px, 1fr);
+    overflow-x: auto;
+    background: var(--bg);
+  }
+
+  .board-col {
+    min-width: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .board-day {
+    margin: var(--space-3) 14px 0;
+    font: 800 13px var(--font-display);
+    color: var(--accent-strong);
+  }
+
+  .board-ideas {
+    background: var(--bg);
   }
 
   .day-list {

@@ -2,12 +2,20 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import PasswordForm from '#lib/components/auth/PasswordForm.svelte';
+  import LayoutPicker from '#lib/components/LayoutPicker.svelte';
   import ThemePicker from '#lib/components/ThemePicker.svelte';
+  import { readLayout, saveLayout, type LayoutId } from '#lib/layout.ts';
   import { changePassword, logout } from '#lib/api.ts';
   import { session } from '#lib/auth/session.svelte.ts';
   import { clearOfflineData } from '#lib/offline/instance.ts';
 
   let error = $state<string | null>(null);
+  let layout = $state<LayoutId>(readLayout());
+
+  function changeLayout(id: LayoutId) {
+    layout = id;
+    saveLayout(id);
+  }
 
   async function signOut() {
     error = null;
@@ -35,8 +43,11 @@
 
   <section class="panel">
     <h2>Apparence</h2>
-    <p class="muted">Le thème est mémorisé sur cet appareil.</p>
+    <p class="muted">Le thème et l’affichage sont mémorisés sur cet appareil.</p>
     <ThemePicker />
+    <h3>Affichage de la journée</h3>
+    <p class="muted">Changeable aussi depuis la page d’un voyage.</p>
+    <LayoutPicker value={layout} onChange={changeLayout} />
   </section>
 
   <section class="panel">
