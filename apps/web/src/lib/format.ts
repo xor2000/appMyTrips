@@ -70,6 +70,17 @@ export function formatDuration(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, '0')}`;
 }
 
+/** Heures d'une journée et sa durée : « 08:00 → 22:00 · 14 h » (fin après minuit : le lendemain). */
+export function dayHoursLabel(start: string, end: string): string {
+  const toMin = (t: string) => {
+    const [h = 0, m = 0] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+  let minutes = toMin(end) - toMin(start);
+  if (minutes <= 0) minutes += 24 * 60;
+  return `${start} → ${end} · ${formatDuration(minutes)}`;
+}
+
 /** « 850 m », « 1,2 km », « 72 km ». */
 export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;

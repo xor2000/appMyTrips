@@ -56,6 +56,21 @@ describe('StepCard', () => {
     expect(screen.getByText('08:35 → 10:35')).toBeTruthy();
   });
 
+  it('met en avant l’heure de début, à droite de la carte', () => {
+    setup({
+      time: {
+        key: 's1',
+        kind: 'step',
+        start: { time: '08:35', dayOffset: 0 },
+        end: { time: '10:35', dayOffset: 0 },
+        timezone: 'Europe/Paris',
+        freeBeforeMin: 0,
+        issues: [],
+      },
+    });
+    expect(screen.getByTestId('step-start').textContent).toBe('08:35');
+  });
+
   it('signale un conflit (retard) et le temps libre avant une heure fixe', () => {
     setup({
       step: makeStep({ fixedStart: '10:30' }),

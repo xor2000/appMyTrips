@@ -31,6 +31,15 @@ describe('DaySummary', () => {
     expect(bar).toBeTruthy();
   });
 
+  it('légende chiffrée sous la barre', () => {
+    render(DaySummary, { props: { summary, canEdit: true, onReorganize: vi.fn() } });
+    const legend = screen.getByTestId('day-legend');
+    expect(legend.textContent).toContain('sur place 5 h');
+    expect(legend.textContent).toContain('trajets 1 h');
+    expect(legend.textContent).toContain('libre 30 min');
+    expect(legend.textContent).toContain('dépassement 54 min');
+  });
+
   it('sans problème : pas de bandeau ; en lecture seule, pas de bouton', () => {
     render(DaySummary, {
       props: {

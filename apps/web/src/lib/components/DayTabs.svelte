@@ -80,7 +80,7 @@
     gap: 0;
     padding: var(--space-1) var(--space-3);
     border: 0;
-    border-radius: var(--radius-pill);
+    border-radius: var(--tab-radius);
     background: var(--surface-2);
     color: var(--muted);
     font-family: var(--font-display);

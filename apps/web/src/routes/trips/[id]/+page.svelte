@@ -53,7 +53,7 @@
     type MapView,
     type StepInput,
   } from '#lib/api.ts';
-  import { dayTitle, formatPeriod, plural } from '#lib/format.ts';
+  import { dayHoursLabel, dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
   import { poiStepInput, sameView } from '#lib/poi/explore.ts';
   import {
@@ -77,7 +77,6 @@
   import type { PreparedTrip } from '#lib/offline/store.ts';
   import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
   import OfflineDialog from '#lib/components/offline/OfflineDialog.svelte';
-  import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Redo2 from 'lucide-svelte/icons/redo-2';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
@@ -818,15 +817,6 @@
           </p>
         </div>
         <div class="tools">
-          {#if online}
-            <button
-              type="button"
-              class="btn btn-ghost icon-btn"
-              aria-label="Préparer hors ligne"
-              title="Préparer hors ligne"
-              onclick={openOffline}><CloudDownload size={16} /></button
-            >
-          {/if}
           {#if canEdit}
             <button
               type="button"
@@ -875,122 +865,136 @@
         {#snippet left()}
           <section class="panel">
             {#if exploring}
-              <ExplorePanel
-                categories={poiCategories}
-                {pois}
-                status={poiStatus}
-                error={poiError}
-                {zoomTooLow}
-                stale={poiStale}
-                {dayLabel}
-                {canEdit}
-                {addedRefs}
-                selectedId={selectedPoi}
-                onToggleCategory={toggleCategory}
-                onSearch={searchPois}
-                onAdd={addPoi}
-                onSelect={pickPoi}
-                onHover={(poiId) => (hoveredPoi = poiId)}
-                onBack={toggleExplore}
-                loadWiki={(ref) => poiWiki(ref)}
-              />
+              <div class="block">
+                <ExplorePanel
+                  categories={poiCategories}
+                  {pois}
+                  status={poiStatus}
+                  error={poiError}
+                  {zoomTooLow}
+                  stale={poiStale}
+                  {dayLabel}
+                  {canEdit}
+                  {addedRefs}
+                  selectedId={selectedPoi}
+                  onToggleCategory={toggleCategory}
+                  onSearch={searchPois}
+                  onAdd={addPoi}
+                  onSelect={pickPoi}
+                  onHover={(poiId) => (hoveredPoi = poiId)}
+                  onBack={toggleExplore}
+                  loadWiki={(ref) => poiWiki(ref)}
+                />
+              </div>
             {:else}
               {#if day}
-                <div class="day-head">
-                  <h2>{dayTitle(day.date)}</h2>
-                  <p class="hours">{day.dayStart ?? trip.dayStart} → {day.dayEnd ?? trip.dayEnd}</p>
-                </div>
-                {#if daySchedule}
-                  <DaySummary
-                    summary={daySchedule.summary}
-                    {canEdit}
-                    onReorganize={() => (reorganizing = true)}
-                  />
-                {/if}
-                {#if day.notes}
-                  <p class="notes">{day.notes}</p>
-                {/if}
-                <div
-                  data-testid="day-timeline"
-                  role="presentation"
-                  ondragover={onFileDragOver}
-                  ondrop={onFileDrop}
-                >
-                  <Timeline
-                    {items}
-                    {labels}
-                    {canEdit}
-                    {highlighted}
-                    onEdit={(s) => (editingStepId = s.id)}
-                    onEditStay={editStay}
-                    onMove={move}
-                    onDelete={askDelete}
-                    onHover={(k) => (highlighted = k)}
-                    onDrop={drop}
-                    after={legAfter}
-                    {times}
-                  />
-                </div>
-                {#if canEdit}
-                  <div class="add-bar">
-                    <button
-                      type="button"
-                      class="btn btn-primary"
-                      onclick={() => (adding = { kind: 'place', type: null })}
-                      >Ajouter un lieu</button
-                    >
-                    <button
-                      type="button"
-                      class="btn btn-soft"
-                      onclick={() => (adding = { kind: 'stay' })}
-                    >
-                      Ajouter un séjour
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-soft"
-                      onclick={() => (adding = { kind: 'group' })}
-                    >
-                      Nouveau dossier
-                    </button>
-                    <label class="btn btn-soft file">
-                      Importer une randonnée (GPX)
-                      <input
-                        type="file"
-                        accept=".gpx,application/gpx+xml"
-                        onchange={pickHikeFile}
-                      />
-                    </label>
+                <div class="dayhead">
+                  <div class="day-head">
+                    <h2>{dayTitle(day.date)}</h2>
+                    <p class="hours">
+                      {dayHoursLabel(day.dayStart ?? trip.dayStart, day.dayEnd ?? trip.dayEnd)}
+                    </p>
                   </div>
-                {/if}
+                  {#if daySchedule}
+                    <DaySummary
+                      summary={daySchedule.summary}
+                      {canEdit}
+                      onReorganize={() => (reorganizing = true)}
+                    />
+                  {/if}
+                  {#if day.notes}
+                    <p class="notes">{day.notes}</p>
+                  {/if}
+                </div>
+                <div class="block">
+                  <div
+                    data-testid="day-timeline"
+                    role="presentation"
+                    ondragover={onFileDragOver}
+                    ondrop={onFileDrop}
+                  >
+                    <Timeline
+                      {items}
+                      {labels}
+                      {canEdit}
+                      {highlighted}
+                      onEdit={(s) => (editingStepId = s.id)}
+                      onEditStay={editStay}
+                      onMove={move}
+                      onDelete={askDelete}
+                      onHover={(k) => (highlighted = k)}
+                      onDrop={drop}
+                      after={legAfter}
+                      {times}
+                    />
+                  </div>
+                  {#if canEdit}
+                    <div class="add-bar">
+                      <button
+                        type="button"
+                        class="add-main"
+                        onclick={() => (adding = { kind: 'place', type: null })}
+                        ><span aria-hidden="true">+</span> Ajouter un lieu</button
+                      >
+                      <div class="add-more">
+                        <button
+                          type="button"
+                          class="btn btn-soft"
+                          onclick={() => (adding = { kind: 'stay' })}
+                        >
+                          Ajouter un séjour
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-soft"
+                          onclick={() => (adding = { kind: 'group' })}
+                        >
+                          Nouveau dossier
+                        </button>
+                        <label class="btn btn-soft file">
+                          Importer une randonnée (GPX)
+                          <input
+                            type="file"
+                            accept=".gpx,application/gpx+xml"
+                            onchange={pickHikeFile}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
               {:else}
-                <h2>Tout le voyage</h2>
-                <ol class="day-list">
-                  {#each days as d, i (d.id)}
-                    {@const count = steps.filter(
-                      (s) => s.dayId === d.id && s.kind === 'step',
-                    ).length}
-                    <li>
-                      <button type="button" onclick={() => (selectedDay = d.id)}>
-                        <b>J{i + 1}</b>
-                        <span class="grow">{dayTitle(d.date)}</span>
-                        <span class="count">{plural(count, 'étape')}</span>
-                      </button>
-                    </li>
-                  {/each}
-                </ol>
+                <div class="block">
+                  <h2>Tout le voyage</h2>
+                  <ol class="day-list">
+                    {#each days as d, i (d.id)}
+                      {@const count = steps.filter(
+                        (s) => s.dayId === d.id && s.kind === 'step',
+                      ).length}
+                      <li>
+                        <button type="button" onclick={() => (selectedDay = d.id)}>
+                          <b>J{i + 1}</b>
+                          <span class="grow">{dayTitle(d.date)}</span>
+                          <span class="count">{plural(count, 'étape')}</span>
+                        </button>
+                      </li>
+                    {/each}
+                  </ol>
+                </div>
               {/if}
-              <IdeasPanel
-                {ideas}
-                {canEdit}
-                {highlighted}
-                onAdd={() => (adding = { kind: 'idea', type: null })}
-                onEdit={(s) => (editingStepId = s.id)}
-                onMove={move}
-                onDelete={askDelete}
-                onHover={(k) => (highlighted = k)}
-                onDrop={drop}
-              />
+              <div class="block">
+                <IdeasPanel
+                  {ideas}
+                  {canEdit}
+                  {highlighted}
+                  onAdd={() => (adding = { kind: 'idea', type: null })}
+                  onEdit={(s) => (editingStepId = s.id)}
+                  onMove={move}
+                  onDelete={askDelete}
+                  onHover={(k) => (highlighted = k)}
+                  onDrop={drop}
+                />
+              </div>
             {/if}
           </section>
         {/snippet}
@@ -1010,6 +1014,10 @@
             onHoverPoi={(poiId) => (hoveredPoi = poiId)}
             {exploring}
             onToggleExplore={online ? toggleExplore : undefined}
+            onOffline={online ? openOffline : undefined}
+            onSearch={canEdit
+              ? () => (adding = { kind: selectedDay ? 'place' : 'idea', type: null })
+              : undefined}
             lines={legLines}
           />
         {/snippet}
@@ -1272,40 +1280,87 @@
     min-height: 0;
   }
 
+  /* Panneau gauche façon maquette : en-tête du jour séparé par un filet, puis la timeline. */
   .panel {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-6);
+    min-height: 100%;
+    background: var(--surface);
   }
 
   .panel h2 {
-    font-size: 20px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .dayhead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3) 14px;
   }
 
   .day-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--space-3);
+    gap: var(--space-1) var(--space-3);
   }
 
   .hours {
     margin: 0;
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 11.5px;
     color: var(--muted);
   }
 
   .notes {
     margin: 0;
+    font-size: 13px;
     white-space: pre-wrap;
   }
 
   .add-bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .add-main {
+    min-height: 40px;
+    border: 1.5px dashed var(--accent);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--accent-strong);
+    font: 600 14px var(--font-display);
+    cursor: pointer;
+    transition: background-color 0.15s;
+  }
+
+  .add-main:hover {
+    background: var(--accent-soft);
+  }
+
+  .add-more {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-1);
+  }
+
+  .add-more .btn {
+    min-height: 28px;
+    padding: 0 var(--space-3);
+    font-size: 12px;
   }
 
   .day-list {
@@ -1325,8 +1380,7 @@
     padding: var(--space-3) var(--space-4);
     border: 0;
     border-radius: var(--radius-md);
-    background: var(--surface);
-    box-shadow: var(--shadow-card);
+    background: var(--bg);
     color: var(--fg);
     text-align: left;
     cursor: pointer;

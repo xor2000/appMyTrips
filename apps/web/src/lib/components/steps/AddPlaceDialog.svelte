@@ -84,6 +84,6 @@
 
   .types .chip[aria-pressed='true'] {
     background: var(--c, var(--accent));
-    color: #fff;
+    color: var(--on-type);
   }
 </style>

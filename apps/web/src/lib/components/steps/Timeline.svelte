@@ -67,7 +67,7 @@
     {/if}
   </div>
 {:else}
-  <div class="timeline" role="list">
+  <div class="timeline" class:editable={canEdit} role="list">
     {#each items as item (item.key)}
       {#if item.kind === 'stay'}
         {#if item.edge === 'end' && canEdit}
@@ -126,9 +126,33 @@
 {/if}
 
 <style>
+  /*
+   * Ligne de la timeline au milieu des cartes : visible entre les étapes (zones de dépôt
+   * transparentes), masquée par les cartes et les tuiles de trajet, centrées dessus.
+   */
   .timeline {
+    position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: var(--space-4);
+    bottom: var(--space-4);
+    left: 50%;
+    border-left: 2px dashed var(--line);
+  }
+
+  /*
+   * En édition, une zone de dépôt (--space-3) précède chaque étape, donc suit chaque trajet : le
+   * trajet reçoit la même hauteur en plus au-dessus pour rester centré entre les deux étapes.
+   */
+  .timeline.editable {
+    --leg-offset: var(--space-3);
   }
 
   .empty {

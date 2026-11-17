@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 8788;
-const MOCK_PORT = 8798;
+// Ports réglables (E2E_PORT, E2E_MOCK_PORT) : une autre copie du projet peut déjà occuper les
+// ports par défaut, et `reuseExistingServer` ferait alors tourner les tests contre son serveur.
+const PORT = Number(process.env.E2E_PORT ?? 8788);
+const MOCK_PORT = Number(process.env.E2E_MOCK_PORT ?? 8798);
 
 // Les e2e tournent sur le build de production servi par le Worker (wrangler dev),
 // pour que le service worker et le fallback SPA se comportent comme en production.

@@ -1,15 +1,16 @@
 /*
- * Tokens du design « Pastel ludique » : aplats pastel par type d'étape, formes arrondies,
- * trajets en pilule. Toute couleur de composant passe par ces variables (thème clair et sombre).
+ * Tokens communs à tous les thèmes : polices, rayons, espacements. Les couleurs et les variables de
+ * forme des composants sont définies par les fichiers de `themes/` (un fichier par thème).
  */
 :root {
   --font-display: 'Outfit Variable', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
   --radius-pill: 999px;
 
   --space-1: 4px;
@@ -18,85 +19,4 @@
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
-
-  --bg: #f7f5ff;
-  --surface: #ffffff;
-  --surface-2: #f0eefb;
-  --fg: #1d1b33;
-  --muted: #6b6889;
-  --line: #e4e1f3;
-  --accent: #0b8f94;
-  --accent-strong: #08686c;
-  --accent-soft: #d9f4f3;
-  --on-accent: #ffffff;
-  --focus: #7c6cf2;
-
-  --ok: #1c9a5b;
-  --ok-soft: #dff5e9;
-  --warn: #c77700;
-  --warn-soft: #fff1d3;
-  --bad: #d23c5a;
-  --bad-soft: #fde5eb;
-
-  /* Couleurs par type d'étape (aplats). */
-  --type-hotel: #8b74e8;
-  --type-food: #f08a4b;
-  --type-poi: #18a8ad;
-  --type-museum: #d65a9b;
-  --type-air: #4a7fe6;
-  --type-hike: #38a865;
-  --type-transport: #9a8f7a;
-
-  --shadow-card: 0 2px 0 rgb(29 27 51 / 6%);
-  --shadow-float: 0 12px 30px -16px rgb(29 27 51 / 35%);
-
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #15131f;
-    --surface: #1e1c2b;
-    --surface-2: #272439;
-    --fg: #ecebf7;
-    --muted: #a3a0bf;
-    --line: #34314a;
-    --accent: #38c4c9;
-    --accent-strong: #7fdcdf;
-    --accent-soft: #163a3c;
-    --on-accent: #0c1f20;
-    --focus: #a99cff;
-    --ok: #5fd394;
-    --ok-soft: #173a28;
-    --warn: #f0b347;
-    --warn-soft: #3b2d12;
-    --bad: #ff7d96;
-    --bad-soft: #3e1c25;
-    --shadow-card: 0 2px 0 rgb(0 0 0 / 30%);
-    --shadow-float: 0 12px 30px -16px rgb(0 0 0 / 70%);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #15131f;
-  --surface: #1e1c2b;
-  --surface-2: #272439;
-  --fg: #ecebf7;
-  --muted: #a3a0bf;
-  --line: #34314a;
-  --accent: #38c4c9;
-  --accent-strong: #7fdcdf;
-  --accent-soft: #163a3c;
-  --on-accent: #0c1f20;
-  --focus: #a99cff;
-  --ok: #5fd394;
-  --ok-soft: #173a28;
-  --warn: #f0b347;
-  --warn-soft: #3b2d12;
-  --bad: #ff7d96;
-  --bad-soft: #3e1c25;
-  --shadow-card: 0 2px 0 rgb(0 0 0 / 30%);
-  --shadow-float: 0 12px 30px -16px rgb(0 0 0 / 70%);
-  color-scheme: dark;
 }

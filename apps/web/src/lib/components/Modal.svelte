@@ -45,7 +45,7 @@
     display: grid;
     place-items: center;
     padding: var(--space-6);
-    background: rgb(29 27 51 / 35%);
+    background: var(--scrim);
     animation: fade 0.15s ease-out;
   }
 
