@@ -18,6 +18,11 @@ mobile dédiée viendra plus tard et réutilisera la logique métier de `package
 - **Découverte** : bouton « Explorer » de la carte. On coche des catégories (restaurants, musées…), les
   lieux de la zone visible s'affichent en liste et en marqueurs, et s'ajoutent en un clic au jour
   sélectionné ou aux idées.
+- **Affichages de la journée** (`lib/layout.ts`), au choix sur « Mon compte » (`LayoutPicker`) ou par le sélecteur rapide de la page voyage (`LayoutSwitch`), mémorisé par appareil (`localStorage`, `mytrips.layout`) ; les trois sont maintenus et ont la même édition (ajout, modification, suppression, trajets, dossiers, idées, glisser-déposer) :
+  - **Liste et carte** (`list`, par défaut) : timeline verticale à gauche, carte à droite (panneau redimensionnable) ;
+  - **Ligne de métro** (`metro`, `MetroLine`, `MetroStop`) : carte en haut, journée en ligne horizontale dessous (stations avec heure de début en avant, tuiles de trajet de la liste sur la ligne, dossiers encadrés, zones de dépôt verticales de largeur fixe, plus tôt / plus tard), idées à droite ;
+  - **Plein écran** (`board`) : bascule Carte / Timeline ; la timeline montre tous les jours en colonnes (composant `Timeline` de la liste, dépôt avec le jour de la colonne, ajouts dans la colonne), idées en dernière colonne.
+  - Socle commun : `lib/trips/dayViews.ts` (`buildDayViews` : éléments, paires de trajets, horaires et numéros de chaque jour), mêmes fenêtres d'édition et mêmes actions de la page voyage.
 - **Carte** : étapes numérotées du jour (ou « J2 » en vue d'ensemble), séjours « H », et **idées** qui ont un lieu, marquées d'une ampoule (marqueur clair à contour pointillé, nom accessible « Idée · … », sans numéro ni trajet : les tracés ne relient que des étapes placées). Le cadrage suit les étapes placées ; les idées ne servent qu'à défaut.
 - **Hors ligne** : consultation en lecture seule des voyages déjà ouverts (ou préparés), carte de leur zone comprise ; l'édition se fait en ligne.
 - **Partage** : un voyage peut être partagé en lecture seule ou en modification.
