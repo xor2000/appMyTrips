@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Stay, Step } from '../step/schemas';
 import type { Leg } from '../leg/schemas';
+import { TripCover } from '../cover/cover';
 import { toDayNumber } from './days';
 
 /** Durée maximale d'un voyage, en jours. */
@@ -80,6 +81,8 @@ export const TripPatch = z
     dayEnd: TimeOfDay,
     defaultTimezone: TimeZone,
     hikeSpeedKmh: HikeSpeed,
+    /** Photo de couverture (null : aucune). */
+    cover: TripCover.nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Aucune modification')
@@ -118,6 +121,8 @@ export interface Trip {
   dayEnd: string;
   defaultTimezone: string;
   hikeSpeedKmh: number;
+  /** Photo de couverture (Wikimedia Commons), ou null. */
+  cover: TripCover | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -142,6 +147,12 @@ export interface Member {
 export interface TripSummary extends Trip {
   role: TripRole;
   dayCount: number;
+  /** Étapes placées dans un jour (dossiers et idées exclus). */
+  stepCount: number;
+  /** Somme des distances des trajets, en mètres. */
+  distanceM: number;
+  /** Noms des trois premières étapes du voyage, dans l'ordre des jours. */
+  places: string[];
 }
 
 /** Voyage complet (GET /api/trips/:id). */

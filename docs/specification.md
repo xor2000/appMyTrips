@@ -62,12 +62,16 @@ Monorepo pnpm :
 
 - **Données** : copie IndexedDB (`idb-keyval`, `lib/offline/store.ts`) de la liste des voyages et de chaque instantané ouvert, avec sa date, mise à jour à chaque chargement et à chaque modification réussie ; un voyage ouvert après la liste y est ajouté. Hors ligne (ou sur échec réseau), la page se charge depuis cette copie (`loadWithFallback`) ; une erreur de l'API (404, 403) n'est jamais masquée par la copie. Le moteur d'horaires recalcule tout localement.
 - **Connexion** (`lib/offline/connection.svelte.ts`) : `navigator.onLine`, événements `online`/`offline`, échec réseau d'un appel. Hors ligne : bandeau « Hors ligne · consultation seule · données du JJ/MM à HH:mm » et lecture seule (même mécanisme que le rôle `viewer`, découverte de lieux masquée). Au retour du réseau, les données sont rechargées.
-- **Service worker** (stratégies runtime de Workbox, `vite.config.ts`) : style, sprites, polices et TileJSON d'OpenFreeMap en `StaleWhileRevalidate` ; tuiles OpenFreeMap en `CacheFirst` (`ofm-tiles`, 20 000 au plus, 60 jours) ; tuiles OpenTopoMap en `CacheFirst` (5 000 au plus) ; vignettes Wikipédia en `CacheFirst` (500 au plus). Les réponses de `/api` ne sont **pas** mises en cache par le service worker.
+- **Service worker** (stratégies runtime de Workbox, `vite.config.ts`) : style, sprites, polices et TileJSON d'OpenFreeMap en `StaleWhileRevalidate` ; tuiles OpenFreeMap en `CacheFirst` (`ofm-tiles`, 20 000 au plus, 60 jours) ; tuiles OpenTopoMap en `CacheFirst` (5 000 au plus) ; vignettes Wikipédia et photos de couverture (`upload.wikimedia.org`, `thumb.wikimedia.org`) en `CacheFirst` (500 au plus). Les réponses de `/api` ne sont **pas** mises en cache par le service worker.
 - **« Préparer hors ligne »** (outils de la carte) : emprise de chaque jour (`core.tripBboxes` : étapes, sorties, tracés GPX et de trajets, séjours, marge de 10 %) ; tuiles des zooms 6 à 14 sans doublon (`core.planOfflineTiles`), plafond de 4 000 tuiles (zoom maximal abaissé au-delà) ; estimation à 25 Ko par tuile ; préchargement à la demande seulement, 4 requêtes en parallèle au plus, avec barre de progression ; polices (plages 0–1023) et sprites du style aussi. `navigator.storage.persist()` est demandé ; l'espace utilisé est affiché, « Libérer » retire du cache les tuiles propres au voyage. Le statut « Disponible hors ligne » s'affiche sur la carte du voyage dans la liste.
 
 **Design** : direction « Pastel ludique » par défaut, alignée sur la maquette de l'étude initiale (artifact « MyTrips — étude », direction C), et thème « Carnet clair » (direction A).
 
 - Tokens communs dans `apps/web/src/lib/styles/tokens.css` : polices, rayons (8 / 12 / 18 / 22 px), espacements.
+- **Accueil** (`routes/+page.svelte`, `lib/home.ts`) : voyage en cours, sinon prochain départ, mis en avant (`NextTrip` : photo 1280 px, compte à rebours ou « J2 sur 3 », chiffres, lieux) ; puis « En cours et à venir » et « Souvenirs » (voyages passés, photo désaturée). Cartes photo (`TripCard`) : nom sur la photo, pastille d'état (« Dans 12 jours », « En cours · jour 2 », « Terminé »), jours, étapes et distance, trois premiers lieux, crédit. Sans photo : teinte stable du voyage (`lib/trips/tint.ts`). Le texte posé sur les photos utilise les variables `--photo-*`, identiques dans tous les thèmes.
+  - **Photo automatique** (`lib/covers.ts`) : à l'affichage de l'accueil en ligne, chaque voyage sans photo que l'utilisateur peut modifier reçoit la première photo trouvée, un voyage après l'autre ; sans mot-clé ni résultat, il n'est plus cherché sur cet appareil (`localStorage`, `mytrips.coverTried`) ; une erreur réseau ou un conflit de version ne marque rien.
+  - **Changer la photo** : section « Photo du voyage » de « Modifier le voyage » (`CoverPicker`, recherche libre, photos numérotées dans l'ordre de la recherche, « Sans photo »).
+  - La liste hors ligne est calculée depuis le voyage complet (`summaryFromSnapshot`) et une copie plus ancienne est complétée au chargement (`normalizeTripSummary`).
 - **Thèmes** : un fichier CSS par thème dans `lib/styles/themes/`, qui définit couleurs et variables de forme sous `[data-theme='…']` (sélecteur valable sur `<html>` comme sur un élément, pour les aperçus). Aucune couleur en dur dans les composants.
   - `pastel.css` : Pastel ludique, sans attribut (clair ou sombre selon le système), `pastel-light` ou `pastel-dark` ; neutres vert d'eau (`--bg` #f6f8f8, `--line` #dde6e7, `--fg` #14282b), accent sarcelle, couleurs par type d'étape, texte sur aplat (`--on-type`, `--on-warn`, `--on-bad`), ombres, voile des fenêtres (`--scrim`).
   - `carnet.css` : Carnet clair (`carnet`), cartes blanches à filet fin, icônes teintées, trajets en bandes grises, rayons plus petits. Clair uniquement.
@@ -128,22 +132,24 @@ Authentification faite maison (issue #19), sans Cloudflare Access. Code dans `ap
 
 ## 4. Schéma de données (D1)
 
-| Migration            | Contenu                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------- |
-| `0001_init.sql`      | Table technique `meta (key TEXT PK, value TEXT)`                                                  |
-| `0002_trips.sql`     | `trips`, `trip_members`, `days`                                                                   |
-| `0003_steps.sql`     | `steps` (étapes et dossiers), `stays` (séjours)                                                   |
-| `0004_poi_cache.sql` | `poi_cache` (cache de la découverte de lieux)                                                     |
-| `0005_legs.sql`      | `legs` (trajets), `route_cache` (itinéraires)                                                     |
-| `0006_gpx.sql`       | colonnes GPX des étapes (randonnées)                                                              |
-| `0007_auth.sql`      | `users`, `sessions`, `invitations`, `password_resets`, `auth_attempts`, `ip_bans`, `captcha_used` |
+| Migration             | Contenu                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `0001_init.sql`       | Table technique `meta (key TEXT PK, value TEXT)`                                                  |
+| `0002_trips.sql`      | `trips`, `trip_members`, `days`                                                                   |
+| `0003_steps.sql`      | `steps` (étapes et dossiers), `stays` (séjours)                                                   |
+| `0004_poi_cache.sql`  | `poi_cache` (cache de la découverte de lieux)                                                     |
+| `0005_legs.sql`       | `legs` (trajets), `route_cache` (itinéraires)                                                     |
+| `0006_gpx.sql`        | colonnes GPX des étapes (randonnées)                                                              |
+| `0007_auth.sql`       | `users`, `sessions`, `invitations`, `password_resets`, `auth_attempts`, `ip_bans`, `captcha_used` |
+| `0008_trip_cover.sql` | `trips.cover`, `cover_cache` (photos de couverture)                                               |
 
-- **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `version` (verrou optimiste), `created_at`, `updated_at`.
+- **`trips`** : `id` (UUID), `owner_email`, `name`, `start_date`, `end_date` (AAAA-MM-JJ), `day_start` et `day_end` (HH:mm, défauts 08:00 et 22:00), `default_timezone` (IANA), `hike_speed_kmh` (3.5), `cover` (photo de couverture, JSON `TripCover` ou NULL), `version` (verrou optimiste), `created_at`, `updated_at`.
 - **`trip_members`** : (`trip_id`, `email`) clé primaire, `role` (`viewer` | `editor`), `created_at`.
 - **`days`** : `id`, `trip_id`, `date` (unique par voyage), `day_start` et `day_end` (NULL = heures du voyage), `notes`.
 - **`steps`** : étapes et dossiers.
   - Placement : `id`, `trip_id`, `day_id` (NULL = liste d'idées), `parent_id` (dossier), `position` (clé d'ordre fractionnaire parmi les frères), `kind` (`step` | `group`).
   - Contenu : `type` (16 types, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
+- **`cover_cache`** : `query` (mots-clés en minuscules), `payload` (photos trouvées, JSON, éventuellement vide), `created_at`. Valable 30 jours ; une réponse en erreur n'y entre pas.
 - **`poi_cache`** : `key` (`<catégorie>:13:<x>:<y>`, case de carte au zoom 13), `payload` (lieux normalisés, JSON), `source` (`overpass` | `geoapify`), `created_at`. Valable 7 jours.
 - **`stays`** : séjours. `id`, `trip_id`, `name`, `lat`, `lng`, `address`, `check_in_date`/`check_in_time` (défaut 17:00), `check_out_date`/`check_out_time` (défaut 10:00), `booking_ref`, `notes`.
 
@@ -221,7 +227,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 | POST    | `/api/admin/resets`                          | admin        | `201 { token, expiresAt }` · `{ email }`                                                  |
 | GET     | `/api/admin/bans`                            | admin        | `200 { bans: IpBan[] }`                                                                   |
 | DELETE  | `/api/admin/bans/:ip`                        | admin        | `204`                                                                                     |
-| GET     | `/api/trips`                                 | connecté     | `200 { trips: TripSummary[] }` (avec rôle)                                                |
+| GET     | `/api/trips`                                 | connecté     | `200 { trips: TripSummary[] }` (rôle, photo, `stepCount`, `distanceM`, `places`)          |
 | POST    | `/api/trips`                                 | connecté     | `201 TripSnapshot`                                                                        |
 | GET     | `/api/trips/:id`                             | lecture      | `200 TripSnapshot` (voyage, rôle, jours, membres, étapes, séjours)                        |
 | PATCH   | `/api/trips/:id[?force=true]`                | modification | `200 TripSnapshot` · `If-Match` obligatoire                                               |
@@ -239,6 +245,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 | GET     | `/api/geocode/reverse?lat=&lng=`             | connecté     | `200 { result: Place                                                                      | null }`                         |
 | GET     | `/api/poi?bbox=O,S,E,N&zoom=&categories=a,b` | connecté     | `200 { pois: Poi[], source }` (zone visible, zoom ≥ 12, 40 cases au plus)                 |
 | GET     | `/api/poi/wiki?ref=`                         | connecté     | `200 { summary }` (`ref` : `Q123` ou `langue:titre` ; `summary` : `WikiSummary` ou null)  |
+| GET     | `/api/covers?q=`                             | connecté     | `200 { covers: TripCover[] }` (Commons, 8 au plus) · `400 invalid_query` · `502`          |
 | POST    | `/api/trips/:id/legs`                        | modification | `201 TripSnapshot` · `If-Match` · remplace le trajet de la même paire                     |
 | PATCH   | `/api/trips/:id/legs/:legId`                 | modification | `200 TripSnapshot` · `If-Match` · `null` remet au routeur, `recompute: true`              |
 | DELETE  | `/api/trips/:id/legs/:legId`                 | modification | `200 TripSnapshot` · `If-Match`                                                           |
@@ -270,6 +277,12 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - **cache D1** par case de zoom 13 et catégorie, 7 jours ; seules les cases manquantes sont demandées, en une requête sur la zone qui les couvre ;
   - **classement** : lieux avec article Wikipédia d'abord, puis distance au centre ; 200 lieux au plus par catégorie ; lieux sans nom ignorés ; liens non http(s) écartés ;
   - **Wikipédia** : résumé et vignette par l'API REST (`/page/summary`), chargés à la sélection d'un lieu. Avec un identifiant Wikidata, article français sinon anglais. La langue d'un tag `wikipedia` est strictement validée (elle devient un sous-domaine).
+- **Photos de couverture** (`/api/covers`, logique pure dans `packages/core/src/cover`) :
+  - **Wikimedia Commons**, API `w/api.php` (recherche dans l'espace « Fichier », `filetype:bitmap`, `imageinfo` en 1280 px avec auteur et licence), par le Worker avec User-Agent identifié (plus `CONTACT_URL`) ; URL configurable par `COMMONS_URL` (défaut `https://commons.wikimedia.org`, services factices en e2e) ;
+  - **filtre** : JPEG en paysage (rapport ≥ 1,2) d'au moins 1000 px, sans cartes, drapeaux, blasons ni logos (titre du fichier) ; 8 photos au plus, dans l'ordre de pertinence ; vignette 640 px déduite de l'URL 1280 px ;
+  - **mots-clés** (`coverQuery`) : nom du voyage sans les mots génériques (« voyage », « test », « vacances », « week-end »…), les nombres ni les années ; à défaut, le premier lieu des étapes ;
+  - **photo enregistrée** sur le voyage (`PATCH` avec `cover`) : images seulement de `upload.wikimedia.org` ou `thumb.wikimedia.org` (https), page de crédit sur `commons.wikimedia.org`, ou origine de `COMMONS_URL` ; sinon `400 invalid_cover` (une adresse quelconque permettrait à l'éditeur d'un voyage partagé de suivre ses lecteurs) ;
+  - **crédit** affiché sous chaque photo (auteur, licence, lien vers la page du fichier).
 - **Ajout d'un lieu découvert** : étape pré-remplie (nom, type, point, adresse, horaires d'ouverture, `osm_ref`) ; site, téléphone et cuisine dans les notes. Un lieu dont l'`osm_ref` est déjà dans le voyage est marqué « Déjà ajouté ».
 
 - **Routage** (`apps/api/src/routing/providers.ts`, `POST /api/route` et création des trajets) :
@@ -332,6 +345,7 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (r
   - les liens d'invitation non utilisés ne se listent ni ne se révoquent (ils expirent en 7 jours ; un membre ajouté par erreur se retire) ;
   - les sessions expirées et les invitations ou liens de réinitialisation périmés ne sont pas purgés de la base.
 - **`@vite-pwa/sveltekit` 2 très récent** (dépend d'`@unplugin-pwa` 0.0.x) : surveiller les mises à jour, et l'option `globStrict: false` rendue nécessaire par le motif `prerendered/**` ajouté d'office.
+- **Photos de couverture** : qualité inégale des premiers résultats de Commons (une photo d'un autre lieu au nom proche est possible ; « Changer la photo » y remédie) ; le cache `cover_cache` n'est jamais purgé ; une image qui ne charge plus (photo supprimée de Commons) est masquée et la teinte du voyage reprend, mais la photo reste enregistrée.
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
 - **Trajets** :
   - **Transitous** : conditions de sa politique d'usage remplies le 16/11/2026 : dépôt public sous licence MIT, `CONTACT_URL` (URL du dépôt) dans les `vars` de `wrangler.jsonc`, lien vers ses sources dans l'attribution de la carte ;

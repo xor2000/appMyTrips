@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countdownLabel,
   dayHoursLabel,
+  tripPhase,
   dayTabLabel,
   formatDuration,
   formatPeriod,
@@ -78,5 +79,14 @@ describe('dayHoursLabel', () => {
 
   it('compte une fin après minuit sur le lendemain', () => {
     expect(dayHoursLabel('18:00', '01:00')).toBe('18:00 → 01:00 · 7 h');
+  });
+});
+
+describe('tripPhase', () => {
+  it('à venir, en cours (bornes comprises) ou passé', () => {
+    expect(tripPhase('2026-07-10', '2026-07-12', '2026-07-09')).toBe('upcoming');
+    expect(tripPhase('2026-07-10', '2026-07-12', '2026-07-10')).toBe('ongoing');
+    expect(tripPhase('2026-07-10', '2026-07-12', '2026-07-12')).toBe('ongoing');
+    expect(tripPhase('2026-07-10', '2026-07-12', '2026-07-13')).toBe('past');
   });
 });

@@ -2,6 +2,7 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { sameOrigin, sessionAuth, type AuthEnv } from './auth/session';
 import { adminRoutes } from './routes/admin';
 import { me, privateAuthRoutes, publicAuthRoutes } from './routes/auth';
+import { coverRoutes } from './routes/covers';
 import { geocodeRoutes } from './routes/geocode';
 import { invitationRoutes } from './routes/invitations';
 import { legRoutes, routeRoutes } from './routes/legs';
@@ -36,6 +37,7 @@ export function createApp(
   const outbound = options.fetch ?? ((input, init) => fetch(input, init));
   app.route('/geocode', geocodeRoutes(outbound));
   app.route('/poi', poiRoutes(outbound));
+  app.route('/covers', coverRoutes(outbound));
   app.route('/trips', legRoutes(outbound));
   app.route('/route', routeRoutes(outbound));
 

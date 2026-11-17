@@ -3,9 +3,12 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { createTrip, deleteTrip, listTrips } from '#lib/api.ts';
-  import { todayIso } from '#lib/format.ts';
+  import { createTrip, deleteTrip, listTrips, searchCovers, updateTrip } from '#lib/api.ts';
+  import { autoCovers } from '#lib/covers.ts';
+  import { plural, todayIso } from '#lib/format.ts';
+  import { groupTrips, normalizeTripSummary } from '#lib/home.ts';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+  import NextTrip from '#lib/components/NextTrip.svelte';
   import TripCard from '#lib/components/TripCard.svelte';
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
   import InstallPrompt from '#lib/components/offline/InstallPrompt.svelte';
@@ -24,6 +27,33 @@
   let prepared = $state<Set<string>>(new Set());
   const online = $derived(connection.online);
   const today = todayIso();
+  const groups = $derived(groupTrips(trips, today));
+  const summary = $derived(
+    [
+      groups.next || groups.upcoming.length > 0
+        ? plural((groups.next ? 1 : 0) + groups.upcoming.length, 'voyage') + ' en vue'
+        : null,
+      groups.past.length > 0 ? plural(groups.past.length, 'souvenir') : null,
+    ]
+      .filter(Boolean)
+      .join(', '),
+  );
+
+  /** Photo automatique des voyages qui n'en ont pas (voir lib/covers.ts), en ligne seulement. */
+  async function fillCovers() {
+    if (!connection.online) return;
+    await autoCovers(trips, {
+      search: (query) => searchCovers(query),
+      save: async (trip, cover) => {
+        const snapshot = await updateTrip(trip.id, trip.version, { cover });
+        trips = trips.map((t) =>
+          t.id === trip.id
+            ? { ...t, cover: snapshot.trip.cover, version: snapshot.trip.version }
+            : t,
+        );
+      },
+    });
+  }
 
   async function load() {
     try {
@@ -34,10 +64,11 @@
         writeCopy: (data) => offlineStore.saveTripList(data),
         onNetworkError: () => connection.markOffline(),
       });
-      trips = result.data;
+      trips = result.data.map(normalizeTripSummary);
       savedAt = result.savedAt;
       prepared = new Set(await offlineStore.listPrepared().catch(() => []));
       error = null;
+      if (!savedAt) fillCovers();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -73,7 +104,7 @@
   <section class="hero">
     <div>
       <h1>Mes voyages</h1>
-      <p>Jours, étapes, trajets et carte : ton carnet de route, organisé.</p>
+      <p>{summary || 'Jours, étapes, trajets et carte : ton carnet de route, organisé.'}</p>
     </div>
     <div class="hero-actions">
       <InstallPrompt />
@@ -107,17 +138,47 @@
       {/if}
     </div>
   {:else}
-    <div class="grid">
-      {#each trips as trip (trip.id)}
-        <TripCard
-          {trip}
-          {today}
-          onDelete={(t) => (toDelete = t)}
-          offlineReady={prepared.has(trip.id)}
-          readOnly={!online}
-        />
-      {/each}
-    </div>
+    {#if groups.next}
+      <NextTrip
+        trip={groups.next}
+        {today}
+        onDelete={(t) => (toDelete = t)}
+        offlineReady={prepared.has(groups.next.id)}
+        readOnly={!online}
+      />
+    {/if}
+    {#if groups.upcoming.length > 0}
+      <section class="group" aria-labelledby="upcoming-title">
+        <h2 id="upcoming-title">En cours et à venir</h2>
+        <div class="grid">
+          {#each groups.upcoming as trip (trip.id)}
+            <TripCard
+              {trip}
+              {today}
+              onDelete={(t) => (toDelete = t)}
+              offlineReady={prepared.has(trip.id)}
+              readOnly={!online}
+            />
+          {/each}
+        </div>
+      </section>
+    {/if}
+    {#if groups.past.length > 0}
+      <section class="group" aria-labelledby="past-title">
+        <h2 id="past-title">Souvenirs</h2>
+        <div class="grid">
+          {#each groups.past as trip (trip.id)}
+            <TripCard
+              {trip}
+              {today}
+              onDelete={(t) => (toDelete = t)}
+              offlineReady={prepared.has(trip.id)}
+              readOnly={!online}
+            />
+          {/each}
+        </div>
+      </section>
+    {/if}
   {/if}
 </div>
 
@@ -165,10 +226,21 @@
     color: var(--muted);
   }
 
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .group h2 {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--space-6);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
   }
 
   .empty {
