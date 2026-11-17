@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
 import { ALICE, BOB, addMember, addStep, call, createTrip, makeCaller } from './helpers';
 
@@ -38,7 +39,7 @@ const coverCaller = (fetcher: typeof fetch, bindings: Record<string, string | un
 
 const cover = {
   url: 'https://upload.wikimedia.org/thumb/x/1.jpg/1280px-1.jpg',
-  thumbUrl: 'https://upload.wikimedia.org/thumb/x/1.jpg/640px-1.jpg',
+  thumbUrl: 'https://upload.wikimedia.org/thumb/x/1.jpg/500px-1.jpg',
   author: 'Jean Dupont',
   license: 'CC BY-SA 4.0',
   sourceUrl: 'https://commons.wikimedia.org/wiki/File:Photo_1.jpg',
@@ -66,6 +67,20 @@ describe('GET /api/covers', () => {
     expect(again.status).toBe(200);
     expect(again.body.covers).toHaveLength(2);
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignore les recherches mises en cache avant le passage aux vignettes standard', async () => {
+    const q = uniqueQuery('Porto');
+    const old = { ...cover, thumbUrl: 'https://upload.wikimedia.org/thumb/x/1.jpg/640px-1.jpg' };
+    await env.DB.prepare('INSERT INTO cover_cache (query, payload, created_at) VALUES (?, ?, ?)')
+      .bind(q.toLowerCase(), JSON.stringify([old]), new Date().toISOString())
+      .run();
+    const fetcher = fakeCommons();
+    const res = await coverCaller(fetcher)(ALICE, 'GET', `/api/covers?q=${encodeURIComponent(q)}`);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(res.body.covers[0].thumbUrl).toBe(
+      'https://upload.wikimedia.org/thumb/x/1.jpg/500px-1.jpg',
+    );
   });
 
   it('utilise COMMONS_URL (services factices des e2e)', async () => {
@@ -119,6 +134,18 @@ describe('photo de couverture du voyage', () => {
       { 'if-match': String(set.body.trip.version) },
     );
     expect(cleared.body.trip.cover).toBeNull();
+  });
+
+  it('renvoie une vignette 640 px enregistrée avant la correction en 500 px', async () => {
+    const snap = await createTrip();
+    const old = { ...cover, thumbUrl: 'https://upload.wikimedia.org/thumb/x/1.jpg/640px-1.jpg' };
+    await env.DB.prepare('UPDATE trips SET cover = ? WHERE id = ?')
+      .bind(JSON.stringify(old), snap.trip.id)
+      .run();
+    const res = await call(ALICE, 'GET', `/api/trips/${snap.trip.id}`);
+    expect(res.body.trip.cover.thumbUrl).toBe(
+      'https://upload.wikimedia.org/thumb/x/1.jpg/500px-1.jpg',
+    );
   });
 
   it('refuse une photo mal formée', async () => {

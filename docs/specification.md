@@ -149,7 +149,7 @@ Authentification faite maison (issue #19), sans Cloudflare Access. Code dans `ap
 - **`steps`** : étapes et dossiers.
   - Placement : `id`, `trip_id`, `day_id` (NULL = liste d'idées), `parent_id` (dossier), `position` (clé d'ordre fractionnaire parmi les frères), `kind` (`step` | `group`).
   - Contenu : `type` (16 types, NULL pour un dossier), `name`, `lat`/`lng` (NULL pour un dossier), `address`, `exit_lat`/`exit_lng` (point de sortie, NULL = entrée), `duration_min`, `fixed_start` (HH:mm), `timezone` (IANA, déduit du point), `opening_hours`, `osm_ref`, `booking_ref`, `booking_url`, `notes`.
-- **`cover_cache`** : `query` (mots-clés en minuscules), `payload` (photos trouvées, JSON, éventuellement vide), `created_at`. Valable 30 jours ; une réponse en erreur n'y entre pas.
+- **`cover_cache`** : `query` (`v2:` + mots-clés en minuscules ; la version écarte les recherches enregistrées avant le passage aux vignettes standard), `payload` (photos trouvées, JSON, éventuellement vide), `created_at`. Valable 30 jours ; une réponse en erreur n'y entre pas.
 - **`poi_cache`** : `key` (`<catégorie>:13:<x>:<y>`, case de carte au zoom 13), `payload` (lieux normalisés, JSON), `source` (`overpass` | `geoapify`), `created_at`. Valable 7 jours.
 - **`stays`** : séjours. `id`, `trip_id`, `name`, `lat`, `lng`, `address`, `check_in_date`/`check_in_time` (défaut 17:00), `check_out_date`/`check_out_time` (défaut 10:00), `booking_ref`, `notes`.
 
@@ -279,7 +279,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - **Wikipédia** : résumé et vignette par l'API REST (`/page/summary`), chargés à la sélection d'un lieu. Avec un identifiant Wikidata, article français sinon anglais. La langue d'un tag `wikipedia` est strictement validée (elle devient un sous-domaine).
 - **Photos de couverture** (`/api/covers`, logique pure dans `packages/core/src/cover`) :
   - **Wikimedia Commons**, API `w/api.php` (recherche dans l'espace « Fichier », `filetype:bitmap`, `imageinfo` en 1280 px avec auteur et licence), par le Worker avec User-Agent identifié (plus `CONTACT_URL`) ; URL configurable par `COMMONS_URL` (défaut `https://commons.wikimedia.org`, services factices en e2e) ;
-  - **filtre** : JPEG en paysage (rapport ≥ 1,2) d'au moins 1000 px, sans cartes, drapeaux, blasons ni logos (titre du fichier) ; 8 photos au plus, dans l'ordre de pertinence ; vignette 640 px déduite de l'URL 1280 px ;
+  - **filtre** : JPEG en paysage (rapport ≥ 1,2) d'au moins 1280 px, sans cartes, drapeaux, blasons ni logos (titre du fichier) ; 8 photos au plus, dans l'ordre de pertinence ; vignette **500 px** déduite de l'URL 1280 px (`fixCoverThumb`). Wikimedia ne sert que des largeurs standard (330, 500, 960, 1280 px…) : une autre largeur (640 px) répond 400, et une image de moins de 1280 px renverrait l'original, limité (429). Une vignette 640 px déjà enregistrée sur un voyage est corrigée à la lecture ;
   - **mots-clés** (`coverQuery`) : nom du voyage sans les mots génériques (« voyage », « test », « vacances », « week-end »…), les nombres ni les années ; à défaut, le premier lieu des étapes ;
   - **photo enregistrée** sur le voyage (`PATCH` avec `cover`) : images seulement de `upload.wikimedia.org` ou `thumb.wikimedia.org` (https), page de crédit sur `commons.wikimedia.org`, ou origine de `COMMONS_URL` ; sinon `400 invalid_cover` (une adresse quelconque permettrait à l'éditeur d'un voyage partagé de suivre ses lecteurs) ;
   - **crédit** affiché sous chaque photo (auteur, licence, lien vers la page du fichier).

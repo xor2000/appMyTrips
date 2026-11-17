@@ -52,7 +52,9 @@ export function coverRoutes(fetchImpl: typeof fetch) {
   routes.get('/', async (c) => {
     const raw = (c.req.query('q') ?? '').trim().replace(/\s+/g, ' ');
     if (raw === '' || raw.length > MAX_QUERY) return c.json({ error: 'invalid_query' }, 400);
-    const key = raw.toLowerCase();
+    // Clé versionnée : la v1 contenait des vignettes 640 px et des images de moins de 1280 px,
+    // que Wikimedia refuse de servir (400, 429). Changer de version oublie l'ancien cache.
+    const key = `v2:${raw.toLowerCase()}`;
     const db = c.env.DB;
 
     const cached = await getCachedCovers(db, key);

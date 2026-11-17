@@ -12,7 +12,7 @@ const HttpUrl = z
 export const TripCover = z.object({
   /** Image large (1280 px), pour la mise en avant. */
   url: HttpUrl,
-  /** Vignette (640 px), pour les cartes. */
+  /** Vignette (500 px), pour les cartes et le choix de la photo. */
   thumbUrl: HttpUrl,
   author: z.string().trim().min(1).max(200),
   license: z.string().trim().min(1).max(100),
@@ -105,11 +105,26 @@ export function commonsSearchUrl(base: string, query: string): string {
   return `${base.replace(/\/+$/, '')}/w/api.php?${search}`;
 }
 
+/**
+ * Largeur des vignettes : Wikimedia ne sert plus que des largeurs standard (330, 500, 960,
+ * 1280 px…) et répond 400 aux autres (640 px, par exemple).
+ */
+const THUMB_WIDTH = 500;
+
+/**
+ * Vignette d'une image Commons : même adresse que l'image 1280 px, en 500 px. Corrige aussi une
+ * vignette 640 px enregistrée avant le passage aux largeurs standard.
+ */
+export function fixCoverThumb(url: string): string {
+  return url.replace(/\/(?:1280|640)px-/, `/${THUMB_WIDTH}px-`);
+}
+
 /** Titres de fichiers qui ne sont pas des photos de paysage. */
 const NOT_A_PHOTO =
   /\b(map|carte|karte|mapa|locator|location|flag|drapeau|blason|coat of arms|wappen|logo|emblem|diagram|plan|scheme|sch[ée]ma)\b/i;
 
-const MIN_WIDTH = 1000;
+// Au moins 1280 px : Commons fournit alors une vraie vignette 1280 px (sinon il renvoie l'original).
+const MIN_WIDTH = 1280;
 const MIN_RATIO = 1.2;
 
 interface CommonsImageInfo {
@@ -165,7 +180,7 @@ export function parseCommonsResponse(body: unknown): TripCover[] {
     const large = typeof info.thumburl === 'string' ? info.thumburl : info.url;
     const candidate = {
       url: large,
-      thumbUrl: typeof large === 'string' ? large.replace('/1280px-', '/640px-') : large,
+      thumbUrl: typeof large === 'string' ? fixCoverThumb(large) : large,
       author: plainText(info.extmetadata?.Artist?.value) || 'Auteur inconnu',
       license: plainText(info.extmetadata?.LicenseShortName?.value) || 'Licence inconnue',
       sourceUrl: info.descriptionurl,

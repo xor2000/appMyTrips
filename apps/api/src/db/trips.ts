@@ -1,5 +1,6 @@
 import {
   TripCover,
+  fixCoverThumb,
   type Day,
   type Member,
   type Role,
@@ -58,7 +59,10 @@ function parseCover(raw: string | null): TripCover | null {
   if (!raw) return null;
   try {
     const parsed = TripCover.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    // Vignette 640 px enregistrée avant le passage aux largeurs standard de Wikimedia.
+    return parsed.success
+      ? { ...parsed.data, thumbUrl: fixCoverThumb(parsed.data.thumbUrl) }
+      : null;
   } catch {
     return null;
   }
