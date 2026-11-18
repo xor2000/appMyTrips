@@ -282,7 +282,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 - **Découverte de lieux** (`/api/poi`, logique pure dans `packages/core/src/poi`) :
   - **9 catégories** (`POI_CATEGORIES`) avec leurs tags OSM, leurs catégories Geoapify et leur type d'étape ;
   - **Overpass** en premier : instances de `OVERPASS_URLS` (défaut `overpass-api.de`, puis `overpass.private.coffee`), requête QL `nwr[...]["name"](bbox); out center tags;`, POST avec User-Agent identifié ;
-  - **Geoapify** (API Places v2, 500 lieux au plus par appel) en **secours** si toutes les instances échouent : HTTP en erreur (dont 429), réseau, délai de 8 s dépassé, ou réponse tronquée (`remark` contenant « error »). Seulement si le secret `GEOAPIFY_API_KEY` est défini ; chaque secours est tracé dans les journaux du Worker ;
+  - **Geoapify** (API Places v2, 500 lieux au plus par appel) en **secours** si toutes les instances échouent : HTTP en erreur (dont 429), réseau, délai de 4 s dépassé par instance (8 s pour Geoapify, dernier recours), ou réponse tronquée (`remark` contenant « error »). Seulement si le secret `GEOAPIFY_API_KEY` est défini ; chaque secours est tracé dans les journaux du Worker ;
   - **cache D1** par case de zoom 13 et catégorie, 7 jours ; seules les cases manquantes sont demandées, en une requête sur la zone qui les couvre ;
   - **classement** : lieux avec article Wikipédia d'abord, puis distance au centre ; 200 lieux au plus par catégorie ; lieux sans nom ignorés ; liens non http(s) écartés ;
   - **Wikipédia** : résumé et vignette par l'API REST (`/page/summary`), chargés à la sélection d'un lieu. Avec un identifiant Wikidata, article français sinon anglais. La langue d'un tag `wikipedia` est strictement validée (elle devient un sous-domaine).
