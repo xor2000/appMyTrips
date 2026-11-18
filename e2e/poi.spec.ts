@@ -18,6 +18,42 @@ test.beforeEach(async ({ context }) => {
 
 const uniqueName = (label: string) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
+/** Accès de test exposés par la carte (TripMap.svelte) : les lieux sont dessinés en WebGL. */
+interface MapTestWindow {
+  __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
+  __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
+}
+
+/** Lieux de la découverte dessinés sur la carte (vides tant que la carte n'est pas prête). */
+const renderedPois = (page: Page) =>
+  page.evaluate(() => (window as MapTestWindow).__mapPoisForTests?.() ?? []);
+
+const renderedPoiNames = async (page: Page) => (await renderedPois(page)).map((p) => p.name).sort();
+
+/** Clic sur la carte, à l'endroit d'un point géographique. */
+async function clickMapAt(page: Page, lngLat: [number, number]) {
+  const point = await page.evaluate(
+    (position) => (window as MapTestWindow).__mapProjectForTests?.(position),
+    lngLat,
+  );
+  const box = await page.locator('.maplibregl-canvas').boundingBox();
+  if (!point || !box) throw new Error('carte indisponible');
+  await page.mouse.click(box.x + point.x, box.y + point.y);
+}
+
+async function exploreMuseums(page: Page) {
+  await page.getByRole('button', { name: 'Explorer' }).click();
+  const explore = page.getByRole('region', { name: 'Explorer' });
+  await explore
+    .getByRole('group', { name: 'Catégories' })
+    .getByRole('button', { name: /Musées/ })
+    .click();
+  await expect(
+    explore.getByRole('list', { name: 'Lieux trouvés' }).getByRole('listitem'),
+  ).toHaveCount(3);
+  return explore;
+}
+
 /**
  * Voyage de 3 jours avec le Louvre en J1 : la carte se centre dessus (zoom 13, assez près pour
  * explorer). Les lieux viennent du faux Overpass (e2e/mock-services.mjs).
@@ -58,7 +94,7 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
   await expect(list.getByRole('listitem', { name: 'Musée du Louvre' })).toContainText(
     'Déjà ajouté',
   );
-  await expect(page.locator('.poi-marker')).toHaveCount(3);
+  await expect.poll(() => renderedPoiNames(page)).toHaveLength(3);
   await expect(
     explore.getByRole('group', { name: 'Catégories' }).getByRole('button', { name: /Musées/ }),
   ).toContainText('3');
@@ -74,7 +110,7 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
     .getByTestId('step-card')
     .filter({ hasText: 'Musée des Arts décoratifs' });
   await expect(card).toContainText('Musée · 2 h sur place');
-  await expect(page.locator('.poi-marker')).toHaveCount(0);
+  await expect.poll(() => renderedPoiNames(page)).toEqual([]);
 
   await card.getByRole('button', { name: /Musée des Arts décoratifs Musée/ }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
@@ -110,4 +146,55 @@ test('la carte a bougé : relancer la recherche dans la nouvelle zone', async ({
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await explore.getByRole('button', { name: 'Rechercher dans cette zone' }).click();
   await expect(explore.getByRole('button', { name: 'Rechercher dans cette zone' })).toHaveCount(0);
+});
+
+test('choisir un lieu dans la liste le met en évidence sur la carte, avec son nom', async ({
+  page,
+}) => {
+  await tripCenteredOnLouvre(page);
+  const explore = await exploreMuseums(page);
+  await expect.poll(() => renderedPoiNames(page)).toHaveLength(3);
+
+  await explore
+    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+    .getByRole('button', { name: /Musée des Arts décoratifs/ })
+    .first()
+    .click();
+  await expect(page.locator('.poi-popup')).toHaveText('Musée des Arts décoratifs');
+  await expect
+    .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
+    .toEqual(['Musée des Arts décoratifs']);
+
+  // Second clic : désélection, l'infobulle disparaît.
+  await explore
+    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+    .getByRole('button', { name: /Musée des Arts décoratifs/ })
+    .first()
+    .click();
+  await expect(page.locator('.poi-popup')).toHaveCount(0);
+});
+
+test('cliquer un lieu sur la carte le sélectionne dans la liste', async ({ page }) => {
+  await tripCenteredOnLouvre(page);
+  const explore = await exploreMuseums(page);
+  await expect.poll(() => renderedPoiNames(page)).toHaveLength(3);
+
+  // Musée des Arts décoratifs (e2e/mock-services.mjs).
+  await clickMapAt(page, [2.333, 48.863]);
+  await expect(page.locator('.poi-popup')).toHaveText('Musée des Arts décoratifs');
+  await expect(
+    explore
+      .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+      .getByRole('button', { expanded: true }),
+  ).toBeVisible();
+});
+
+test('les marqueurs d’étapes suivent la carte sans animer leur position', async ({ page }) => {
+  await tripCenteredOnLouvre(page);
+  // MapLibre place un marqueur par `transform` : une transition sur cette propriété le ferait
+  // traîner derrière la carte pendant un déplacement.
+  const transitioned = await page
+    .locator('.map-marker', { hasText: '1' })
+    .evaluate((el) => getComputedStyle(el).transitionProperty);
+  expect(transitioned).not.toMatch(/\b(transform|all)\b/);
 });
