@@ -57,12 +57,25 @@ export async function loginViaUi(page: Page, email: string, password = PASSWORD)
   await page.getByRole('button', { name: 'Se connecter' }).click();
 }
 
+/** Bouton du menu du profil (en-tête) ; son nom porte l'e-mail du compte connecté. */
+export function accountButton(page: Page, email?: string) {
+  return page.getByRole('button', {
+    name: email ? `Menu du compte (${email})` : /^Menu du compte/,
+  });
+}
+
+/** Ouvre le menu du profil et choisit une entrée (« Paramètres », « Se déconnecter »…). */
+export async function chooseInAccountMenu(page: Page, item: string) {
+  await accountButton(page).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: item }).click();
+}
+
 /** Nouvel utilisateur inscrit, dans son propre contexte. */
 export async function newUser(browser: Browser, label: string) {
   const context = await anonymousContext(browser);
   const page = await context.newPage();
   const email = uniqueEmail(label);
   await signupViaUi(page, email);
-  await expect(page.getByTestId('user-email')).toHaveText(email);
+  await expect(accountButton(page, email)).toBeVisible();
   return { context, page, email };
 }

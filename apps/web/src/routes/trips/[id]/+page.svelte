@@ -67,6 +67,7 @@
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { positionAt, positionShift } from '#lib/steps/moves.ts';
   import { createSerialQueue } from '#lib/serial.ts';
+  import { pageHeader } from '#lib/page-header.svelte.ts';
   import { createHistory, inverseOps } from '#lib/schedule/history.ts';
   import { isGpxFile, readGpxFile } from '#lib/gpx/import.ts';
   import { PLAN_STYLE_URL } from '#lib/map/styles.ts';
@@ -780,6 +781,14 @@
   function editStay(item: StayItem) {
     if (canEdit) editingStayId = item.stay.id;
   }
+
+  // Titre et actions sur la ligne de l'en-tête de l'application, le temps de la page.
+  $effect(() => {
+    pageHeader.content = tripTitle;
+    return () => {
+      pageHeader.content = null;
+    };
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -821,6 +830,53 @@
   {/if}
 {/snippet}
 
+<!-- Titre et actions du voyage, sur la ligne de l'en-tête de l'application (layout). -->
+{#snippet tripTitle()}
+  {#if snapshot && trip}
+    <div class="title-row">
+      <a class="back" href={resolve('/')} aria-label="Retour aux voyages">←</a>
+      <div class="title">
+        <h1>{trip.name}</h1>
+        <p>
+          {formatPeriod(trip.startDate, trip.endDate)} · {plural(snapshot.days.length, 'jour')}
+          {#if snapshot.role === 'viewer'}
+            <span class="chip readonly">Lecture seule</span>
+          {/if}
+        </p>
+      </div>
+      <div class="tools">
+        <LayoutSwitch value={layout} onChange={changeLayout} />
+        {#if canEdit}
+          <button
+            type="button"
+            class="btn btn-ghost icon-btn"
+            aria-label="Annuler"
+            title="Annuler (Ctrl+Z)"
+            disabled={!canUndo}
+            onclick={undo}><Undo2 size={16} /></button
+          >
+          <button
+            type="button"
+            class="btn btn-ghost icon-btn"
+            aria-label="Rétablir"
+            title="Rétablir (Ctrl+Y)"
+            disabled={!canRedo}
+            onclick={redo}><Redo2 size={16} /></button
+          >
+          <button type="button" class="btn btn-soft" onclick={() => (editing = true)}>
+            Modifier
+          </button>
+        {/if}
+        {#if isOwner}
+          <button type="button" class="btn btn-primary" onclick={() => (sharing = true)}>
+            Partager
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
 {#if status === 'loading'}
   <p class="state">Chargement du voyage…</p>
 {:else if status === 'not_found'}
@@ -836,47 +892,6 @@
 {:else if snapshot && trip}
   <div class="trip">
     <header class="trip-header">
-      <div class="title-row">
-        <a class="back" href={resolve('/')} aria-label="Retour aux voyages">←</a>
-        <div class="title">
-          <h1>{trip.name}</h1>
-          <p>
-            {formatPeriod(trip.startDate, trip.endDate)} · {plural(snapshot.days.length, 'jour')}
-            {#if snapshot.role === 'viewer'}
-              <span class="chip readonly">Lecture seule</span>
-            {/if}
-          </p>
-        </div>
-        <div class="tools">
-          <LayoutSwitch value={layout} onChange={changeLayout} />
-          {#if canEdit}
-            <button
-              type="button"
-              class="btn btn-ghost icon-btn"
-              aria-label="Annuler"
-              title="Annuler (Ctrl+Z)"
-              disabled={!canUndo}
-              onclick={undo}><Undo2 size={16} /></button
-            >
-            <button
-              type="button"
-              class="btn btn-ghost icon-btn"
-              aria-label="Rétablir"
-              title="Rétablir (Ctrl+Y)"
-              disabled={!canRedo}
-              onclick={redo}><Redo2 size={16} /></button
-            >
-            <button type="button" class="btn btn-soft" onclick={() => (editing = true)}>
-              Modifier
-            </button>
-          {/if}
-          {#if isOwner}
-            <button type="button" class="btn btn-primary" onclick={() => (sharing = true)}>
-              Partager
-            </button>
-          {/if}
-        </div>
-      </div>
       <DayTabs
         days={snapshot.days}
         selected={selectedDay}
@@ -1372,19 +1387,23 @@
     height: 100%;
   }
 
+  /* Sous la ligne de l'en-tête de l'application, où se trouvent le titre et les actions. */
   .trip-header {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    padding: var(--space-4) var(--space-6);
+    padding: var(--space-3) var(--space-6);
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
 
   .title-row {
     display: flex;
+    flex: 1;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2) var(--space-3);
+    min-width: 0;
   }
 
   .back {
@@ -1400,13 +1419,16 @@
   }
 
   .title {
-    flex: 1;
+    flex: 1 1 180px;
     min-width: 0;
   }
 
   h1 {
-    font-size: 24px;
+    overflow: hidden;
+    font-size: 22px;
     font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .title p {
@@ -1441,7 +1463,20 @@
 
   .tools {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
+  }
+
+  /* Petit écran : logo, retour, titre et profil sur la première ligne, actions dessous. */
+  @media (max-width: 640px) {
+    .title-row {
+      display: contents;
+    }
+
+    .tools {
+      order: 1;
+      flex-basis: 100%;
+    }
   }
 
   .notice {

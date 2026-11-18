@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import html from '../app.html?raw';
-import { applyTheme, readTheme, saveTheme, THEME_KEY, THEMES } from './theme';
+import { applyTheme, readTheme, saveTheme, THEME_EVENT, THEME_KEY, THEMES } from './theme';
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -52,6 +52,15 @@ describe('thème', () => {
     saveTheme('auto', storage);
     expect(storage.getItem(THEME_KEY)).toBeNull();
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+
+  it('annonce le changement de thème (sélecteur du compte et menu du profil)', () => {
+    const seen: string[] = [];
+    const listener = (e: Event) => seen.push((e as CustomEvent<string>).detail);
+    window.addEventListener(THEME_EVENT, listener);
+    saveTheme('carnet', memoryStorage());
+    window.removeEventListener(THEME_EVENT, listener);
+    expect(seen).toEqual(['carnet']);
   });
 
   it('applique le choix même si le stockage est bloqué', () => {

@@ -2,7 +2,9 @@ import { expect, test, type Browser } from '@playwright/test';
 import {
   ADMIN_EMAIL,
   PASSWORD,
+  accountButton,
   anonymousContext,
+  chooseInAccountMenu,
   loginViaUi,
   newUser,
   signupViaUi,
@@ -15,13 +17,13 @@ async function adminPage(browser: Browser) {
   await page.goto('/connexion');
   await signupViaUi(page, ADMIN_EMAIL);
   const taken = page.getByText('Un compte existe déjà avec cet e-mail.');
-  const header = page.getByTestId('user-email');
+  const header = accountButton(page, ADMIN_EMAIL);
   await expect(taken.or(header)).toBeVisible();
   if (await taken.isVisible()) {
     await page.getByRole('tab', { name: 'Se connecter' }).click();
     await loginViaUi(page, ADMIN_EMAIL);
   }
-  await expect(header).toHaveText(ADMIN_EMAIL);
+  await expect(header).toBeVisible();
   return { context, page };
 }
 
@@ -38,24 +40,22 @@ test('sans session, une page renvoie vers la connexion puis y revient', async ({
 
 test('inscription avec captcha, déconnexion, puis connexion', async ({ browser }) => {
   const { context, page, email } = await newUser(browser, 'inscrit');
-  await page.getByTestId('user-email').click();
-  await page.getByRole('button', { name: 'Se déconnecter' }).click();
+  await chooseInAccountMenu(page, 'Se déconnecter');
   await expect(page).toHaveURL(/\/connexion$/);
-  await expect(page.getByTestId('user-email')).toHaveCount(0);
+  await expect(accountButton(page)).toHaveCount(0);
 
   // Mauvais mot de passe : message, pas de session.
   await loginViaUi(page, email, 'pas-le-bon-mot');
   await expect(page.getByRole('alert')).toContainText('E-mail ou mot de passe incorrect');
   await loginViaUi(page, email);
-  await expect(page.getByTestId('user-email')).toHaveText(email);
+  await expect(accountButton(page, email)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Mes voyages' })).toBeVisible();
   await context.close();
 });
 
 test('3 mots de passe faux : adresse bloquée, puis réactivée par l’admin', async ({ browser }) => {
   const { context: userContext, page: userPage, email } = await newUser(browser, 'banni');
-  await userPage.getByTestId('user-email').click();
-  await userPage.getByRole('button', { name: 'Se déconnecter' }).click();
+  await chooseInAccountMenu(userPage, 'Se déconnecter');
   await expect(userPage).toHaveURL(/\/connexion$/);
   for (let i = 0; i < 3; i++) {
     await loginViaUi(userPage, email, `faux-${i}`);
@@ -65,14 +65,14 @@ test('3 mots de passe faux : adresse bloquée, puis réactivée par l’admin', 
   await expect(userPage.getByRole('alert')).toContainText('bloquée');
 
   const admin = await adminPage(browser);
-  await admin.page.getByRole('link', { name: 'Administration' }).click();
+  await chooseInAccountMenu(admin.page, 'Administration');
   const row = admin.page.getByRole('row').filter({ hasText: email });
   await expect(row).toContainText('3');
   await row.getByRole('button', { name: /réactiver/i }).click();
   await expect(admin.page.getByRole('row').filter({ hasText: email })).toHaveCount(0);
 
   await loginViaUi(userPage, email);
-  await expect(userPage.getByTestId('user-email')).toHaveText(email);
+  await expect(accountButton(userPage, email)).toBeVisible();
   await userContext.close();
   await admin.context.close();
 });
@@ -102,13 +102,13 @@ test('mot de passe oublié : lien de réinitialisation généré par l’admin',
   await loginViaUi(page, email, PASSWORD);
   await expect(page.getByRole('alert')).toContainText('incorrect');
   await loginViaUi(page, email, 'tout-nouveau-mot');
-  await expect(page.getByTestId('user-email')).toHaveText(email);
+  await expect(accountButton(page, email)).toBeVisible();
   await context.close();
 });
 
 test('changer de mot de passe depuis la page du compte', async ({ browser }) => {
   const { context, page, email } = await newUser(browser, 'change');
-  await page.getByTestId('user-email').click();
+  await chooseInAccountMenu(page, 'Paramètres');
   await page.getByLabel('Mot de passe actuel', { exact: true }).fill(PASSWORD);
   await page.getByLabel('Nouveau mot de passe', { exact: true }).fill('encore-un-autre');
   await page
@@ -119,6 +119,6 @@ test('changer de mot de passe depuis la page du compte', async ({ browser }) => 
   await page.getByRole('button', { name: 'Se déconnecter' }).click();
   await expect(page).toHaveURL(/\/connexion$/);
   await loginViaUi(page, email, 'encore-un-autre');
-  await expect(page.getByTestId('user-email')).toHaveText(email);
+  await expect(accountButton(page, email)).toBeVisible();
   await context.close();
 });

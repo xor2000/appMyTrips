@@ -1,13 +1,11 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import PasswordForm from '#lib/components/auth/PasswordForm.svelte';
   import LayoutPicker from '#lib/components/LayoutPicker.svelte';
   import ThemePicker from '#lib/components/ThemePicker.svelte';
   import { readLayout, saveLayout, type LayoutId } from '#lib/layout.ts';
-  import { changePassword, logout } from '#lib/api.ts';
+  import { changePassword } from '#lib/api.ts';
   import { session } from '#lib/auth/session.svelte.ts';
-  import { clearOfflineData } from '#lib/offline/instance.ts';
+  import { signOut } from '#lib/auth/signout.ts';
 
   let error = $state<string | null>(null);
   let layout = $state<LayoutId>(readLayout());
@@ -17,14 +15,10 @@
     saveLayout(id);
   }
 
-  async function signOut() {
+  async function leave() {
     error = null;
     try {
-      await logout();
-      // Les copies hors ligne appartiennent au compte : elles sont effacées de l'appareil.
-      await clearOfflineData().catch(() => undefined);
-      session.me = null;
-      await goto(resolve('/connexion'), { replaceState: true });
+      await signOut();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -67,7 +61,7 @@
       <p class="form-error" role="alert">{error}</p>
     {/if}
     <div>
-      <button type="button" class="btn btn-soft" onclick={signOut}>Se déconnecter</button>
+      <button type="button" class="btn btn-soft" onclick={leave}>Se déconnecter</button>
     </div>
   </section>
 </div>

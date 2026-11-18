@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEV_EMAIL, accountButton } from './auth-helpers';
 
 test('la page d’accueil affiche MyTrips', async ({ page }) => {
   await page.goto('/');
@@ -8,7 +9,8 @@ test('la page d’accueil affiche MyTrips', async ({ page }) => {
 
 test('l’e-mail de l’utilisateur connecté est affiché via /api/me', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByTestId('user-email')).toHaveText('dev@example.test');
+  await accountButton(page, DEV_EMAIL).click();
+  await expect(page.getByRole('menu')).toContainText(DEV_EMAIL);
 });
 
 test('une route inconnue du front renvoie la SPA (fallback)', async ({ page }) => {

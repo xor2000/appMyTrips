@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { THEME_KEY } from '#lib/theme.ts';
+import { saveTheme, THEME_KEY } from '#lib/theme.ts';
 import ThemePicker from './ThemePicker.svelte';
 
 // Stockage en mémoire : le localStorage global de Node n'est pas celui de jsdom.
@@ -35,6 +36,15 @@ describe('ThemePicker', () => {
     await fireEvent.click(screen.getByRole('radio', { name: /Carnet clair/ }));
     expect(document.documentElement.getAttribute('data-theme')).toBe('carnet');
     expect(store.get(THEME_KEY)).toBe('carnet');
+  });
+
+  it('suit un thème choisi ailleurs (menu du profil)', async () => {
+    render(ThemePicker);
+    saveTheme('carnet');
+    await tick();
+    expect((screen.getByRole('radio', { name: /Carnet clair/ }) as HTMLInputElement).checked).toBe(
+      true,
+    );
   });
 
   it('reprend le thème déjà mémorisé', () => {

@@ -1,7 +1,14 @@
 <script lang="ts">
-  import { readTheme, saveTheme, THEMES, type ThemeId } from '#lib/theme.ts';
+  import { readTheme, saveTheme, THEME_EVENT, THEMES, type ThemeId } from '#lib/theme.ts';
 
   let current = $state<ThemeId>(readTheme());
+
+  // Thème choisi ailleurs (menu du profil) pendant que la page est ouverte.
+  $effect(() => {
+    const follow = (e: Event) => (current = (e as CustomEvent<ThemeId>).detail);
+    window.addEventListener(THEME_EVENT, follow);
+    return () => window.removeEventListener(THEME_EVENT, follow);
+  });
 
   function choose(id: ThemeId) {
     current = id;
