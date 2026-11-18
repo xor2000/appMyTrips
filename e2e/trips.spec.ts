@@ -65,6 +65,74 @@ test('la carte charge son web worker sans erreur', async ({ page }) => {
   expect(errors.filter((e) => /worker|MIME type/i.test(e))).toEqual([]);
 });
 
+test('la carte n’affiche pas d’avertissement pour les icônes absentes ni les propriétés manquantes', async ({
+  page,
+}) => {
+  // Reproduit les deux défauts du style Liberty d'OpenFreeMap : panneau de route filtré sur une
+  // propriété absente (`ref_length`) et icône de lieu absente du sprite.
+  await page.route('https://tiles.openfreemap.org/styles/**', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {
+          test: {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: [
+                {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                      [2, 45],
+                      [14, 49],
+                    ],
+                  },
+                },
+                {
+                  type: 'Feature',
+                  properties: { class: 'sports_centre' },
+                  geometry: { type: 'Point', coordinates: [8, 47] },
+                },
+              ],
+            },
+          },
+        },
+        layers: [
+          { id: 'fond', type: 'background', paint: { 'background-color': '#dfe9e4' } },
+          {
+            id: 'bouclier',
+            type: 'line',
+            source: 'test',
+            filter: ['<=', ['get', 'ref_length'], 6],
+          },
+          {
+            id: 'lieu',
+            type: 'symbol',
+            source: 'test',
+            filter: ['==', ['geometry-type'], 'Point'],
+            layout: { 'icon-image': ['get', 'class'] },
+          },
+        ],
+      },
+    }),
+  );
+  const warnings: string[] = [];
+  const collect = (text: string) => {
+    if (/Expected value to be of type|could not be loaded/.test(text)) warnings.push(text);
+  };
+  page.on('console', (msg) => collect(msg.text()));
+  page.on('worker', (worker) => worker.on('console', (msg) => collect(msg.text())));
+
+  await createTrip(page, uniqueName('Avertissements'));
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  // Les filtres sont évalués dans le web worker, après le chargement asynchrone du style.
+  await page.waitForTimeout(2000);
+  expect([...new Set(warnings)]).toEqual([]);
+});
+
 test('modifier la période ajoute les jours', async ({ page }) => {
   const name = uniqueName('Période');
   await createTrip(page, name);

@@ -81,6 +81,13 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - **Verrou optimiste** : toute écriture sur un voyage ou ses objets passe par `writeWithVersion`
   (`apps/api/src/routes/trips.ts`) : version incrémentée et requêtes conditionnées dans un seul
   `db.batch`.
+- **Marqueurs HTML de MapLibre** : MapLibre les place par un `transform` en ligne. Jamais de
+  `transition` ni de `transform` en CSS sur l'élément du marqueur (il traîne derrière la carte) ;
+  mettre en évidence avec la propriété `scale`. Pour des points nombreux, préférer une couche
+  WebGL (source GeoJSON, `setFeatureState`), comme les lieux de la découverte (`lib/map/pois.ts`).
+- **`map.isStyleLoaded()`** reste faux tant que des tuiles chargent : une mise à jour de source
+  ou de couche conditionnée par lui doit être reportée (`whenStyleReady` de `TripMap.svelte`,
+  à l'événement `idle`), sinon elle est perdue.
 - **MapLibre 6** : son worker doit être déclaré explicitement
   (`import('maplibre-gl/dist/maplibre-gl-worker.mjs?url')` puis `setWorkerUrl`), sinon il est
   cherché à côté du chunk et le Worker Cloudflare renvoie le fallback HTML. L'e2e « la carte charge

@@ -271,6 +271,9 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - **Plan** : OpenFreeMap, style Liberty (`https://tiles.openfreemap.org/styles/liberty`), sans clé et fourni sans garantie.
   - **Topo** : OpenTopoMap (tuiles raster).
   - Les URL sont centralisées dans `apps/web/src/lib/map/styles.ts`.
+  - **Défauts du style Liberty neutralisés** (même fichier, branchés dans `TripMap.svelte`) :
+    - `guardMissingNumbers` (option `transformStyle` de la carte, reprise par chaque `setStyle`) : une comparaison numérique sur une propriété souvent absente (`["<=", ["get", "ref_length"], 6]` des panneaux de route, `rank`, `admin_level`) reçoit `["has", …]` devant elle. MapLibre consignait sinon un avertissement par tuile avant de retomber sur `false`. Seules les comparaisons à la racine du filtre ou dans des `all` sont protégées : sous `!` ou `any`, le résultat changerait ;
+    - `missingImageResolver` (`setMissingStyleImageResolver`) : une icône absente du sprite d'OpenFreeMap (`sports_centre`, `gate`, `bollard`…) est remplacée par une image transparente de 1 × 1 px, sans avertissement.
   - Le worker de MapLibre est émis par Vite et déclaré avec `setWorkerUrl`.
 
 - **Géocodage** : Photon (Komoot), appelé par le Worker (`/api/geocode`), en français, User-Agent identifié sans donnée personnelle. URL configurable par la variable `PHOTON_URL` (défaut `https://photon.komoot.io`). Le type d'étape est deviné depuis les tags OSM (`core.stepTypeFromOsm`).
@@ -279,7 +282,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 - **Découverte de lieux** (`/api/poi`, logique pure dans `packages/core/src/poi`) :
   - **9 catégories** (`POI_CATEGORIES`) avec leurs tags OSM, leurs catégories Geoapify et leur type d'étape ;
   - **Overpass** en premier : instances de `OVERPASS_URLS` (défaut `overpass-api.de`, puis `overpass.private.coffee`), requête QL `nwr[...]["name"](bbox); out center tags;`, POST avec User-Agent identifié ;
-  - **Geoapify** (API Places v2, 500 lieux au plus par appel) en **secours** si toutes les instances échouent : HTTP en erreur (dont 429), réseau, délai de 8 s dépassé, ou réponse tronquée (`remark` contenant « error »). Seulement si le secret `GEOAPIFY_API_KEY` est défini ; chaque secours est tracé dans les journaux du Worker ;
+  - **Geoapify** (API Places v2, 500 lieux au plus par appel) en **secours** si toutes les instances échouent : HTTP en erreur (dont 429), réseau, délai de 4 s dépassé par instance (8 s pour Geoapify, dernier recours), ou réponse tronquée (`remark` contenant « error »). Seulement si le secret `GEOAPIFY_API_KEY` est défini ; chaque secours est tracé dans les journaux du Worker ;
   - **cache D1** par case de zoom 13 et catégorie, 7 jours ; seules les cases manquantes sont demandées, en une requête sur la zone qui les couvre ;
   - **classement** : lieux avec article Wikipédia d'abord, puis distance au centre ; 200 lieux au plus par catégorie ; lieux sans nom ignorés ; liens non http(s) écartés ;
   - **Wikipédia** : résumé et vignette par l'API REST (`/page/summary`), chargés à la sélection d'un lieu. Avec un identifiant Wikidata, article français sinon anglais. La langue d'un tag `wikipedia` est strictement validée (elle devient un sous-domaine).
@@ -289,6 +292,7 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
   - **mots-clés** (`coverQuery`) : nom du voyage sans les mots génériques (« voyage », « test », « vacances », « week-end »…), les nombres ni les années ; à défaut, le premier lieu des étapes ;
   - **photo enregistrée** sur le voyage (`PATCH` avec `cover`) : images seulement de `upload.wikimedia.org` ou `thumb.wikimedia.org` (https), page de crédit sur `commons.wikimedia.org`, ou origine de `COMMONS_URL` ; sinon `400 invalid_cover` (une adresse quelconque permettrait à l'éditeur d'un voyage partagé de suivre ses lecteurs) ;
   - **crédit** affiché sous chaque photo (auteur, licence, lien vers la page du fichier).
+- **Lieux découverts sur la carte** (`lib/map/pois.ts`, `TripMap.svelte`) : dessinés par MapLibre (source GeoJSON `pois`, couche `circle` colorée par type d'étape), et non en marqueurs HTML, pour suivre la carte sans décalage. Le lieu survolé ou sélectionné porte l'état `active` (`setFeatureState`, `promoteId: 'id'`) : pastille plus grande et opaque. Choisir un lieu dans la liste ou cliquer sa pastille (marge de 8 px, le plus proche l'emporte) le sélectionne : infobulle `maplibregl.Popup` avec son nom (`textContent`), carte déplacée vers lui s'il est hors de la vue. Les e2e lisent les lieux dessinés par `window.__mapPoisForTests()` et cliquent un point par `window.__mapProjectForTests()`.
 - **Ajout d'un lieu découvert** : étape pré-remplie (nom, type, point, adresse, horaires d'ouverture, `osm_ref`) ; site, téléphone et cuisine dans les notes. Un lieu dont l'`osm_ref` est déjà dans le voyage est marqué « Déjà ajouté ».
 
 - **Routage** (`apps/api/src/routing/providers.ts`, `POST /api/route` et création des trajets) :
@@ -363,7 +367,8 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (r
   - les instances publiques d'Overpass étaient **saturées** lors du contrôle manuel du 16/11/2026 (`overpass-api.de` : « at capacity », `overpass.private.coffee` : plus de 25 s) ; sans clé Geoapify, la découverte répond alors 503. Fournisseurs réels **non vérifiés** de bout en bout ;
   - la correspondance des catégories Geoapify n'a pas été vérifiée sur l'API réelle (pas de clé) ;
   - Geoapify renvoie 500 lieux au plus par appel : une zone dense peut être mise en cache incomplète ;
-  - le cache n'est jamais purgé (une ligne expirée n'est remplacée que si sa case est redemandée).
+  - le cache n'est jamais purgé (une ligne expirée n'est remplacée que si sa case est redemandée) ;
+  - les pastilles des lieux, dessinées par la carte, ne s'atteignent pas au clavier : la liste « Lieux trouvés » reste le chemin accessible ; leurs couleurs sont lues à l'affichage, comme celles des tracés (un changement de thème ne les met à jour qu'à la recherche suivante).
 - **E2E `smoke` du service worker** : instable en exécution parallèle complète, y compris sur `main` (relance nécessaire, précache d'environ 2,2 Mo) ; passe en isolé. Piste : allonger son délai ou le sortir du lot parallèle.
 - **Ranger une étape dans un dossier** ne se fait qu'au glisser-déposer (pas d'équivalent clavier ; monter/descendre et changer de jour ont le leur).
 - **Suppression** : confirmée, mais sans annulation avant le lot 5.

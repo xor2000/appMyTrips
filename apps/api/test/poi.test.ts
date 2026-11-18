@@ -176,6 +176,55 @@ describe('GET /api/poi', () => {
     expect(geo.searchParams.get('categories')).toContain('entertainment.museum');
   });
 
+  it('abandonne une instance Overpass muette au bout de 4 s, mais laisse 8 s à Geoapify', async () => {
+    const a = area();
+    const started = Date.now();
+    let overpassGaveUpAfter = -1;
+    /** Réponse différée de `ms`, abandonnée si le signal du fetch se déclenche avant. */
+    const delayed = (init: RequestInit, ms: number, body: string) =>
+      new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(json(body)), ms);
+        init.signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(init.signal!.reason);
+        });
+      });
+    const fetcher = fakeFetch((url, init) => {
+      if (url.includes('overpass')) {
+        init.signal?.addEventListener('abort', () => {
+          overpassGaveUpAfter = Date.now() - started;
+        });
+        return delayed(init, 60_000, overpassBody([]));
+      }
+      // Geoapify répond en 5 s : au-delà du délai d'Overpass, mais dans le sien.
+      return delayed(
+        init,
+        5000,
+        JSON.stringify({
+          features: [
+            {
+              properties: {
+                name: 'Musée lent',
+                lat: a.center.lat,
+                lon: a.center.lng,
+                place_id: 'g-lent',
+                categories: ['entertainment.museum'],
+              },
+            },
+          ],
+        }),
+      );
+    });
+    const res = await poiCaller(fetcher, {
+      OVERPASS_URLS: 'http://overpass.test/api/interpreter',
+      GEOAPIFY_API_KEY: 'cle-de-test',
+    })(ALICE, 'GET', `/api/poi?bbox=${bboxParam(a)}&zoom=15&categories=museum`);
+    expect(res.status).toBe(200);
+    expect(res.body.pois).toMatchObject([{ name: 'Musée lent', source: 'geoapify' }]);
+    expect(overpassGaveUpAfter).toBeGreaterThanOrEqual(3500);
+    expect(overpassGaveUpAfter).toBeLessThan(6000);
+  });
+
   it('GEOAPIFY_URL avec un chemin (relais) : le chemin est conservé', async () => {
     const a = area();
     const fetcher = fakeFetch((url) =>

@@ -5,11 +5,24 @@
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
   import Search from 'lucide-svelte/icons/search';
-  import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
+  import type { Map as MapLibreMap, Marker, Popup } from 'maplibre-gl';
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
-  import { styleFor, type MapStyleId } from '#lib/map/styles.ts';
+  import {
+    closestPoiId,
+    POI_HIT_TOLERANCE_PX,
+    POI_LAYER,
+    POI_SOURCE,
+    poiFeatureCollection,
+    poiLayer,
+  } from '#lib/map/pois.ts';
+  import {
+    guardMissingNumbers,
+    missingImageResolver,
+    styleFor,
+    type MapStyleId,
+  } from '#lib/map/styles.ts';
 
   interface Props {
     points?: MapPoint[];
@@ -69,8 +82,14 @@
   // Cache des marqueurs MapLibre, volontairement non réactif (mis à jour par les effets).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
+  let PopupClass: typeof Popup | undefined;
+  /** Infobulle du lieu de la découverte sélectionné. */
+  let poiPopup: Popup | undefined;
+  /** Lieux portant l'état `active` (survolé ou sélectionné) dans la source des lieux. */
+  let activePois: string[] = [];
+  /** Synchronisations reportées à la fin du chargement des tuiles (voir `whenStyleReady`). */
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const poiMarkers = new Map<string, { marker: Marker; el: HTMLElement }>();
+  const pendingSyncs = new Set<string>();
   let lastFit = '';
 
   onMount(() => {
@@ -86,15 +105,19 @@
       if (disposed) return;
       lib.setWorkerUrl(worker.default);
       MarkerClass = lib.Marker;
+      PopupClass = lib.Popup;
       LngLatBoundsClass = lib.LngLatBounds;
       const m = new lib.Map({
         container,
         style: styleFor(styleId),
+        // Appliquée aussi aux setStyle suivants (changement de fond).
+        transformStyle: guardMissingNumbers,
         // Vue d'ensemble de l'Europe tant que le voyage n'a pas d'étapes.
         center: [8, 47],
         zoom: 4,
         attributionControl: false,
       });
+      m.setMissingStyleImageResolver(missingImageResolver(m));
       m.addControl(new lib.NavigationControl({ showCompass: false }), 'bottom-right');
       m.addControl(
         new lib.AttributionControl({
@@ -121,8 +144,49 @@
       };
       m.on('load', emitView);
       m.on('moveend', emitView);
-      // Un changement de fond (setStyle) efface les sources : on remet les tracés.
-      m.on('style.load', () => syncLines(m));
+      // Un changement de fond (setStyle) efface les sources : on remet les tracés et les lieux.
+      m.on('style.load', () => {
+        syncLines(m);
+        syncPois(m);
+      });
+      // Lieux de la découverte : survol, et clic au plus près (marge de quelques pixels).
+      m.on('mousemove', POI_LAYER, (e) => {
+        m.getCanvas().style.cursor = 'pointer';
+        const id = e.features?.[0]?.properties?.id;
+        if (typeof id === 'string') onHoverPoi(id);
+      });
+      m.on('mouseleave', POI_LAYER, () => {
+        m.getCanvas().style.cursor = '';
+        onHoverPoi(null);
+      });
+      m.on('click', (e) => {
+        if (!m.getLayer(POI_LAYER)) return;
+        const { x, y } = e.point;
+        const t = POI_HIT_TOLERANCE_PX;
+        const hits = m
+          .queryRenderedFeatures(
+            [
+              [x - t, y - t],
+              [x + t, y + t],
+            ],
+            { layers: [POI_LAYER] },
+          )
+          .flatMap((f) =>
+            f.geometry.type === 'Point'
+              ? [
+                  {
+                    id: String(f.properties?.id),
+                    lng: f.geometry.coordinates[0]!,
+                    lat: f.geometry.coordinates[1]!,
+                  },
+                ]
+              : [],
+          );
+        const id = closestPoiId(hits, e.point, (ll) => m.project(ll));
+        const poi = id ? pois.find((p) => p.id === id) : undefined;
+        if (poi) onPickPoi(poi);
+      });
+      exposeForTests(m);
       // Le panneau gauche est redimensionnable : la carte suit la taille de son conteneur.
       observer = new ResizeObserver(() => m.resize());
       observer.observe(container);
@@ -132,7 +196,11 @@
     return () => {
       disposed = true;
       observer?.disconnect();
+      poiPopup?.remove();
       map?.remove();
+      const testWindow = window as unknown as Record<string, unknown>;
+      delete testWindow.__mapPoisForTests;
+      delete testWindow.__mapProjectForTests;
     };
   });
 
@@ -210,9 +278,30 @@
     return style.getPropertyValue(name).trim() || style.getPropertyValue('--muted').trim();
   }
 
+  /**
+   * Lance `run` tout de suite si le style est prêt, sinon une seule fois à la fin du chargement.
+   * `isStyleLoaded()` reste faux tant que des tuiles chargent : sans ce report, une mise à jour
+   * arrivée pendant un déplacement de la carte était perdue jusqu'au changement suivant.
+   */
+  function whenStyleReady(m: MapLibreMap, key: string, run: () => void) {
+    if (m.isStyleLoaded()) {
+      run();
+      return;
+    }
+    if (pendingSyncs.has(key)) return;
+    pendingSyncs.add(key);
+    m.once('idle', () => {
+      pendingSyncs.delete(key);
+      run();
+    });
+  }
+
   /** Met à jour (ou crée) la source et les couches des tracés de trajets. */
   function syncLines(m: MapLibreMap) {
-    if (!m.isStyleLoaded()) return;
+    whenStyleReady(m, 'lines', () => applyLines(m));
+  }
+
+  function applyLines(m: MapLibreMap) {
     const data: Parameters<import('maplibre-gl').GeoJSONSource['setData']>[0] = {
       type: 'FeatureCollection',
       features: lines.map((l) => ({
@@ -263,44 +352,106 @@
     if (m) syncLines(m);
   });
 
-  // Synchronise les marqueurs des lieux de la découverte.
+  /** Met à jour (ou crée) la source et la couche des lieux de la découverte. */
+  function syncPois(m: MapLibreMap) {
+    whenStyleReady(m, 'pois', () => applyPois(m));
+  }
+
+  function applyPois(m: MapLibreMap) {
+    const data = poiFeatureCollection(pois, (p) => cssColor(STEP_TYPE_INFO[p.stepType].color));
+    const source = m.getSource(POI_SOURCE) as import('maplibre-gl').GeoJSONSource | undefined;
+    if (source) source.setData(data);
+    else {
+      // `promoteId` : l'identifiant du lieu sert d'identifiant à l'état `active`.
+      m.addSource(POI_SOURCE, { type: 'geojson', data, promoteId: 'id' });
+      m.addLayer(poiLayer(cssColor('--marker-ring')));
+    }
+    // Nouvelles données ou nouveau fond : on repart d'aucun état, puis on repose les bons.
+    m.removeFeatureState({ source: POI_SOURCE });
+    activePois = [];
+    applyActivePois(m);
+  }
+
+  /** Pose l'état `active` sur le lieu sélectionné et le lieu survolé, et seulement eux. */
+  function applyActivePois(m: MapLibreMap) {
+    if (!m.getSource(POI_SOURCE)) return;
+    const known = new Set(pois.map((p) => p.id));
+    const wanted = [selectedPoi, hoveredPoi].filter(
+      (id): id is string => id !== null && known.has(id),
+    );
+    for (const id of activePois) {
+      if (!wanted.includes(id)) m.setFeatureState({ source: POI_SOURCE, id }, { active: false });
+    }
+    for (const id of wanted) m.setFeatureState({ source: POI_SOURCE, id }, { active: true });
+    activePois = wanted;
+  }
+
+  // Lieux de la découverte.
   $effect(() => {
     const m = map;
-    if (!m || !MarkerClass) return;
-    const wanted = new Map(pois.map((p) => [p.id, p]));
-    for (const [id, { marker }] of poiMarkers) {
-      if (!wanted.has(id)) {
-        marker.remove();
-        poiMarkers.delete(id);
-      }
-    }
-    for (const p of pois) {
-      if (poiMarkers.has(p.id)) continue;
-      const el = document.createElement('button');
-      el.type = 'button';
-      el.className = 'poi-marker';
-      el.title = p.name;
-      el.setAttribute('aria-label', `Lieu proposé : ${p.name}`);
-      el.style.setProperty('--c', `var(${STEP_TYPE_INFO[p.stepType].color})`);
-      el.addEventListener('mouseenter', () => onHoverPoi(p.id));
-      el.addEventListener('mouseleave', () => onHoverPoi(null));
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        onPickPoi(p);
-      });
-      poiMarkers.set(p.id, {
-        el,
-        marker: new MarkerClass({ element: el }).setLngLat([p.lng, p.lat]).addTo(m),
-      });
-    }
+    void pois;
+    if (m) syncPois(m);
   });
 
   // Lieu de la découverte sélectionné ou survolé.
   $effect(() => {
-    for (const [id, { el }] of poiMarkers) {
-      el.classList.toggle('active', id === selectedPoi || id === hoveredPoi);
-    }
+    const m = map;
+    void selectedPoi;
+    void hoveredPoi;
+    if (m) applyActivePois(m);
   });
+
+  // Infobulle du lieu sélectionné ; la carte se déplace vers lui s'il est hors de la vue.
+  $effect(() => {
+    const m = map;
+    const poi = pois.find((p) => p.id === selectedPoi);
+    poiPopup?.remove();
+    poiPopup = undefined;
+    if (!m || !PopupClass || !poi) return;
+    const content = document.createElement('div');
+    // textContent : le nom vient d'OpenStreetMap, jamais injecté en HTML.
+    content.textContent = poi.name;
+    poiPopup = new PopupClass({
+      className: 'poi-popup',
+      closeButton: false,
+      closeOnClick: false,
+      offset: 14,
+      maxWidth: '240px',
+    })
+      .setLngLat([poi.lng, poi.lat])
+      .setDOMContent(content)
+      .addTo(m);
+    if (!m.getBounds().contains([poi.lng, poi.lat])) m.easeTo({ center: [poi.lng, poi.lat] });
+  });
+
+  /**
+   * Accès de test (e2e) : les lieux étant dessinés en WebGL, Playwright ne peut pas les trouver
+   * dans le DOM. Sans effet pour l'utilisateur.
+   */
+  function exposeForTests(m: MapLibreMap) {
+    const testWindow = window as unknown as {
+      __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
+      __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
+    };
+    testWindow.__mapPoisForTests = () => {
+      if (!m.getLayer(POI_LAYER)) return [];
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity
+      const seen = new Map<string, { id: string; name: string; active: boolean }>();
+      for (const f of m.queryRenderedFeatures({ layers: [POI_LAYER] })) {
+        const id = String(f.properties?.id);
+        seen.set(id, {
+          id,
+          name: String(f.properties?.name),
+          active: m.getFeatureState({ source: POI_SOURCE, id }).active === true,
+        });
+      }
+      return [...seen.values()];
+    };
+    testWindow.__mapProjectForTests = (lngLat) => {
+      const p = m.project(lngLat);
+      return { x: p.x, y: p.y };
+    };
+  }
 
   // Mise en évidence du point survolé.
   $effect(() => {
@@ -517,11 +668,15 @@
     font: 700 12px var(--font-display);
     box-shadow: var(--shadow-marker);
     cursor: pointer;
-    transition: transform 0.12s;
+    /* MapLibre place le marqueur par `transform` (style en ligne) : jamais de transition ni de
+       `transform` ici, sinon le marqueur traîne derrière la carte. La mise en évidence passe par
+       la propriété `scale`, qui se combine avec la position. */
+    transform-origin: 50% 100%;
+    transition: scale 0.12s;
   }
 
   :global(.map-marker.highlighted) {
-    transform: scale(1.25);
+    scale: 1.25;
     z-index: 2;
   }
 
@@ -537,22 +692,17 @@
     color: var(--c);
   }
 
-  /* Lieux proposés : petites pastilles atténuées, sous les étapes du voyage. */
-  :global(.poi-marker) {
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    border: 2px solid var(--surface);
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--c) 55%, var(--surface));
+  /* Infobulle du lieu de la découverte sélectionné (lieux dessinés en WebGL, voir lib/map/pois.ts). */
+  :global(.poi-popup .maplibregl-popup-content) {
+    padding: 6px 10px;
+    border-radius: var(--btn-radius);
+    background: var(--surface);
+    color: var(--fg);
     box-shadow: var(--shadow-marker);
-    cursor: pointer;
-    transition: transform 0.12s;
+    font: 600 13px var(--font-body);
   }
 
-  :global(.poi-marker.active) {
-    background: var(--c);
-    transform: scale(1.5);
-    z-index: 1;
+  :global(.poi-popup .maplibregl-popup-tip) {
+    display: none;
   }
 </style>
