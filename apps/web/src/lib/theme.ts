@@ -17,6 +17,12 @@ export type ThemeId = (typeof THEMES)[number]['id'];
 
 export const THEME_KEY = 'mytrips.theme';
 
+/**
+ * Événement émis sur `window` à chaque choix de thème (détail : l'identifiant). Le thème se
+ * choisit à deux endroits (menu du profil, page « Mon compte ») qui restent ainsi d'accord.
+ */
+export const THEME_EVENT = 'mytrips:theme';
+
 type ThemeStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function defaultStorage(): ThemeStorage | null {
@@ -56,4 +62,5 @@ export function saveTheme(id: ThemeId, storage: ThemeStorage | null = defaultSto
   } catch {
     // Stockage indisponible : le thème vaut pour cette visite seulement.
   }
+  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: id }));
 }

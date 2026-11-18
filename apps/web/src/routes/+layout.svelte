@@ -13,6 +13,7 @@
   import { fetchSession, setUnauthorizedHandler } from '#lib/api.ts';
   import { isPublicPath, loginUrl } from '#lib/auth/next.ts';
   import { session } from '#lib/auth/session.svelte.ts';
+  import { pageHeader } from '#lib/page-header.svelte.ts';
 
   let { children }: { children: Snippet } = $props();
 
@@ -51,7 +52,7 @@
 </script>
 
 <div class="app">
-  <AppHeader me={session.me} />
+  <AppHeader me={session.me} content={pageHeader.content} />
   <main>
     {@render children()}
   </main>
