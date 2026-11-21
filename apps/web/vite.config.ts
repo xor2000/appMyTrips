@@ -78,6 +78,17 @@ export default defineConfig({
               },
             },
             {
+              // Imagerie satellite Esri (fond « Satellite »).
+              urlPattern:
+                /^https:\/\/server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'satellite-tiles',
+                expiration: { maxEntries: 5000, maxAgeSeconds: 60 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
               // Vignettes Wikipédia (découverte de lieux) et photos de couverture des voyages
               // (Commons sert ses vignettes depuis upload. ou thumb.wikimedia.org).
               urlPattern: /^https:\/\/(upload|thumb)\.wikimedia\.org\//,

@@ -18,9 +18,9 @@
     poiLayer,
   } from '#lib/map/pois.ts';
   import {
-    guardMissingNumbers,
     missingImageResolver,
     styleFor,
+    transformFor,
     type MapStyleId,
   } from '#lib/map/styles.ts';
 
@@ -110,8 +110,7 @@
       const m = new lib.Map({
         container,
         style: styleFor(styleId),
-        // Appliquée aussi aux setStyle suivants (changement de fond).
-        transformStyle: guardMissingNumbers,
+        transformStyle: transformFor(styleId),
         // Vue d'ensemble de l'Europe tant que le voyage n'a pas d'étapes.
         center: [8, 47],
         zoom: 4,
@@ -480,7 +479,9 @@
   function selectStyle(id: MapStyleId) {
     if (id === styleId) return;
     styleId = id;
-    map?.setStyle(styleFor(id));
+    // Sans diff : plan et satellite partagent le style Liberty, MapLibre appliquerait un diff
+    // sans émettre `style.load`, et les tracés et lieux ajoutés par l'appli seraient perdus.
+    map?.setStyle(styleFor(id), { diff: false, transformStyle: transformFor(id) });
   }
 
   function addHere() {
@@ -505,6 +506,13 @@
       </button>
       <button type="button" aria-pressed={styleId === 'topo'} onclick={() => selectStyle('topo')}>
         Topo
+      </button>
+      <button
+        type="button"
+        aria-pressed={styleId === 'satellite'}
+        onclick={() => selectStyle('satellite')}
+      >
+        Satellite
       </button>
     </div>
     {#if onToggleExplore || onOffline}
@@ -537,6 +545,8 @@
     position: relative;
     height: 100%;
     min-height: 0;
+    /* Largeur de la carte (et non de l'écran) pour placer la recherche (voir plus bas). */
+    container-type: inline-size;
   }
 
   .map {
@@ -622,6 +632,15 @@
     cursor: text;
     overflow: hidden;
     white-space: nowrap;
+  }
+
+  /* Carte étroite (mobile) : la pilule d'outils occupe le haut, la recherche passe dessous. */
+  @container (max-width: 520px) {
+    .search {
+      top: 62px;
+      right: 14px;
+      width: auto;
+    }
   }
 
   .search:hover {
