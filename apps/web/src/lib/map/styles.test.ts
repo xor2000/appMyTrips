@@ -1,6 +1,14 @@
 import type { StyleSpecification } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
-import { guardMissingNumbers, missingImageResolver } from './styles';
+import {
+  guardMissingNumbers,
+  missingImageResolver,
+  PLAN_STYLE_URL,
+  styleFor,
+  toHybrid,
+  transformFor,
+  TOPO_STYLE,
+} from './styles';
 
 function styleWith(...filters: unknown[]): StyleSpecification {
   return {
@@ -94,5 +102,143 @@ describe('missingImageResolver', () => {
     void resolve('gate');
     expect(map.images.get('gate')).toBe(first);
     expect(map.images.size).toBe(1);
+  });
+});
+
+/** Extrait du style Liberty d'OpenFreeMap : une couche de chaque famille. */
+function liberty(): StyleSpecification {
+  return {
+    version: 8,
+    sprite: 'https://tiles.openfreemap.org/sprites/ofm_f384/ofm',
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sources: {
+      ne2_shaded: { type: 'raster', url: 'https://tiles.openfreemap.org/natural_earth' },
+      openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+    },
+    layers: [
+      { id: 'background', type: 'background' },
+      { id: 'natural_earth', type: 'raster', source: 'ne2_shaded' },
+      { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' },
+      { id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building' },
+      { id: 'waterway_river', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway' },
+      {
+        id: 'road_motorway_casing',
+        type: 'line',
+        source: 'openmaptiles',
+        'source-layer': 'transportation',
+      },
+      {
+        id: 'road_motorway',
+        type: 'line',
+        source: 'openmaptiles',
+        'source-layer': 'transportation',
+        filter: ['<=', ['get', 'ref_length'], 6],
+        paint: { 'line-color': '#fc8', 'line-width': 2 },
+      },
+      {
+        id: 'tunnel_motorway',
+        type: 'line',
+        source: 'openmaptiles',
+        'source-layer': 'transportation',
+      },
+      {
+        id: 'road_major_rail_hatching',
+        type: 'line',
+        source: 'openmaptiles',
+        'source-layer': 'transportation',
+      },
+      { id: 'boundary_2', type: 'line', source: 'openmaptiles', 'source-layer': 'boundary' },
+      {
+        id: 'label_city',
+        type: 'symbol',
+        source: 'openmaptiles',
+        'source-layer': 'place',
+        layout: { 'text-field': '{name}' },
+        paint: { 'text-color': '#333', 'text-halo-color': '#fff' },
+      },
+      {
+        id: 'highway-shield-non-us',
+        type: 'symbol',
+        source: 'openmaptiles',
+        'source-layer': 'transportation_name',
+        layout: { 'text-field': '{ref}', 'icon-image': 'road_2' },
+      },
+    ],
+  } as StyleSpecification;
+}
+
+const ids = (style: StyleSpecification) => style.layers.map((layer) => layer.id);
+const layer = (style: StyleSpecification, id: string) =>
+  style.layers.find((l) => l.id === id) as { paint?: Record<string, unknown> } | undefined;
+
+describe('toHybrid (fond satellite)', () => {
+  it('met l’imagerie satellite d’Esri sous les routes, frontières et libellés du plan', () => {
+    const hybrid = toHybrid(liberty());
+    expect(ids(hybrid)).toEqual([
+      'satellite',
+      'road_motorway',
+      'boundary_2',
+      'label_city',
+      'highway-shield-non-us',
+    ]);
+    expect(hybrid.layers[0]).toMatchObject({ type: 'raster', source: 'satellite' });
+    const source = hybrid.sources.satellite as {
+      type: string;
+      tiles: string[];
+      attribution: string;
+    };
+    expect(source.type).toBe('raster');
+    expect(source.tiles).toEqual([
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ]);
+    expect(source.attribution).toContain('Esri');
+  });
+
+  it('garde la source vectorielle, le sprite et les polices, sans la source inutilisée', () => {
+    const hybrid = toHybrid(liberty());
+    expect(Object.keys(hybrid.sources).sort()).toEqual(['openmaptiles', 'satellite']);
+    expect(hybrid.sprite).toBe(liberty().sprite);
+    expect(hybrid.glyphs).toBe(liberty().glyphs);
+  });
+
+  it('écrit les libellés en blanc sur halo sombre, sauf le texte des panneaux de route', () => {
+    const hybrid = toHybrid(liberty());
+    expect(layer(hybrid, 'label_city')?.paint).toMatchObject({
+      'text-color': '#ffffff',
+      'text-halo-color': 'rgba(0, 0, 0, 0.75)',
+    });
+    expect(layer(hybrid, 'highway-shield-non-us')?.paint?.['text-color']).toBeUndefined();
+  });
+
+  it('rend les routes translucides pour laisser voir l’image', () => {
+    const paint = layer(toHybrid(liberty()), 'road_motorway')?.paint;
+    expect(paint).toMatchObject({ 'line-color': '#fc8', 'line-width': 2, 'line-opacity': 0.6 });
+  });
+
+  it('ne modifie pas le style reçu', () => {
+    const style = liberty();
+    const before = structuredClone(style);
+    toHybrid(style);
+    expect(style).toEqual(before);
+  });
+});
+
+describe('styleFor et transformFor', () => {
+  it('le satellite part du style Liberty, transformé en vue hybride protégée', () => {
+    expect(styleFor('satellite')).toBe(PLAN_STYLE_URL);
+    const hybrid = transformFor('satellite')(undefined, liberty());
+    expect(ids(hybrid)[0]).toBe('satellite');
+    expect((hybrid.layers[1] as { filter?: unknown }).filter).toEqual([
+      'all',
+      ['has', 'ref_length'],
+      ['<=', ['get', 'ref_length'], 6],
+    ]);
+  });
+
+  it('plan et topo gardent leur style, avec la seule protection des comparaisons', () => {
+    expect(styleFor('plan')).toBe(PLAN_STYLE_URL);
+    expect(styleFor('topo')).toBe(TOPO_STYLE);
+    expect(transformFor('plan')).toBe(guardMissingNumbers);
+    expect(transformFor('topo')).toBe(guardMissingNumbers);
   });
 });
