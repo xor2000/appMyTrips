@@ -46,4 +46,13 @@ describe('DayTabs', () => {
     await fireEvent.click(screen.getByRole('tab', { name: 'Tout le voyage' }));
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
+
+  it('la période du voyage s’affiche sous « Tout le voyage »', () => {
+    render(DayTabs, {
+      props: { days, selected: null, onSelect: vi.fn(), period: '10 – 12 juillet 2026' },
+    });
+    expect(screen.getByRole('tab', { name: /Tout le voyage/ }).textContent).toContain(
+      '10 – 12 juillet 2026',
+    );
+  });
 });

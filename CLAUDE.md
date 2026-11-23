@@ -33,6 +33,8 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 
 ## Conventions
 
+- **Cible : desktop et tablette uniquement.** Pas de travail d'adaptation pour téléphone : une
+  application mobile distincte viendra plus tard (réutilisant `packages/core`).
 - Interface, messages et commentaires en **français** ; identifiants de code en anglais.
 - TypeScript strict (`noUncheckedIndexedAccess`). Svelte 5 avec runes (`$props`, `$state`, `$derived`).
 - Tests : `*.test.ts` à côté du code (core, web) ou dans `apps/api/test/`. Noms de tests en français.
@@ -111,6 +113,11 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
     les bannissements et la limite de 5 inscriptions par IP et par heure ne gênent pas les autres tests ;
   - `getByLabel` fait une recherche partielle insensible à la casse : utiliser `{ exact: true }`
     pour des libellés courts (« Du » correspond aussi à « Nom du voyage »).
+    De même pour les boutons : toute fenêtre (`Modal`) a une croix « Fermer la fenêtre », donc
+    `getByRole('button', { name: 'Fermer', exact: true })` ;
+  - plus de page d'accueil : `page.goto('/')` redirige vers le dernier voyage consulté (ou l'écran
+    « Aucun voyage »). On change de voyage par la liste déroulante « Choisir un voyage » de
+    l'en-tête ; le nom du voyage reste un `<h1>` (réservé aux lecteurs d'écran) pour les attentes.
 - **Écritures sur un voyage (front)** : toujours passer par `apply()` de la page voyage (file
   `createSerialQueue`) et lire la version au moment de l'exécution (`() => updateStep(id, …, version(), …)`).
   Deux écritures rapprochées avec la même version donnent un faux conflit.

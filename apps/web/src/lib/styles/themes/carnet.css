@@ -41,6 +41,8 @@
   --shadow-window: 0 18px 40px -24px rgb(23 38 42 / 30%);
   --shadow-marker: 0 3px 8px -2px rgb(0 0 0 / 35%);
   --scrim: rgb(23 38 42 / 40%);
+  /* Ombre des fenêtres modales. */
+  --shadow-modal: 0 18px 50px rgb(23 38 42 / 18%);
 
   /* Cartes blanches à filet fin, sans ombre colorée. */
   --card-tint: 0%;

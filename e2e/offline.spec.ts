@@ -65,7 +65,7 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
   await expect(offline).toContainText(/tuiles · environ \d+ Mo/);
   await offline.getByRole('button', { name: 'Préparer' }).click();
   await expect(offline).toContainText('Disponible hors ligne', { timeout: 30_000 });
-  await offline.getByRole('button', { name: 'Fermer' }).click();
+  await offline.getByRole('button', { name: 'Fermer', exact: true }).click();
 
   // Sans réseau : l'application s'ouvre, le voyage s'affiche en lecture seule.
   await context.setOffline(true);
@@ -79,18 +79,19 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
     '08:00 → 10:00',
   );
   await expect(page.getByRole('button', { name: 'Ajouter un lieu' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Paramètres du voyage' })).toHaveCount(0);
 
-  // La liste des voyages aussi, avec le statut hors ligne.
+  // « / » rouvre ce voyage depuis la copie ; la liste de l'en-tête le propose, sans création.
   await page.goto('/');
-  const card = page.locator('article').filter({ hasText: name });
-  await expect(card).toContainText('Disponible hors ligne');
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Choisir un voyage' }).getByRole('option', { name }),
+  ).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Nouveau voyage' })).toHaveCount(0);
 
   // Retour du réseau : l'édition revient.
   await context.setOffline(false);
   await expect(page.getByRole('button', { name: 'Nouveau voyage' })).toBeVisible();
-  await card.getByRole('link', { name: /Ouvrir le carnet/ }).click();
   await page.getByRole('tab', { name: /J1/ }).click();
   await expect(page.getByRole('button', { name: 'Ajouter un lieu' })).toBeVisible();
 });

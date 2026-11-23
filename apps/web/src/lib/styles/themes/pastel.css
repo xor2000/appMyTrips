@@ -45,20 +45,13 @@
   /* Marqueurs de carte : liseré blanc dans les deux thèmes, comme sur la maquette. */
   --marker-ring: #ffffff;
 
-  /* Texte et pastilles posés sur une photo (accueil) : identiques dans tous les thèmes. */
-  --photo-ink: #ffffff;
-  --photo-scrim: rgb(8 22 26 / 72%);
-  --photo-chip: rgb(255 255 255 / 88%);
-  --photo-chip-ink: #14282b;
-  --photo-glass: rgb(255 255 255 / 16%);
-  --photo-glass-edge: rgb(255 255 255 / 30%);
-  --photo-shade: rgb(0 0 0 / 25%);
-
   --shadow-card: 0 2px 0 rgb(10 60 64 / 6%);
   --shadow-float: 0 4px 14px -6px rgb(10 60 64 / 30%);
   --shadow-window: 0 18px 40px -24px rgb(10 60 64 / 35%);
   --shadow-marker: 0 3px 8px -2px rgb(0 0 0 / 35%);
   --scrim: rgb(20 40 43 / 40%);
+  /* Ombre des fenêtres modales. */
+  --shadow-modal: 0 18px 50px rgb(10 60 64 / 18%);
 
   /* Forme des cartes d'étape : fond teinté, sans bordure, ombre colorée. */
   --card-tint: 11%;
@@ -77,7 +70,7 @@
   --leg-icon-ink: 0%;
   /* Onglets, boutons, dossiers. */
   --tab-radius: var(--radius-pill);
-  --btn-radius: var(--radius-pill);
+  --btn-radius: 10px;
   --group-edge-style: dashed;
   --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
   --group-radius: var(--radius-xl);
@@ -111,6 +104,8 @@
     --shadow-float: 0 4px 14px -6px rgb(0 0 0 / 70%);
     --shadow-window: 0 18px 40px -24px rgb(0 0 0 / 80%);
     --scrim: rgb(0 0 0 / 55%);
+    /* Ombre des fenêtres modales. */
+    --shadow-modal: 0 18px 50px rgb(0 0 0 / 60%);
     --leg-base: var(--surface);
     --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
     color-scheme: dark;
@@ -142,6 +137,8 @@
   --shadow-float: 0 4px 14px -6px rgb(0 0 0 / 70%);
   --shadow-window: 0 18px 40px -24px rgb(0 0 0 / 80%);
   --scrim: rgb(0 0 0 / 55%);
+  /* Ombre des fenêtres modales. */
+  --shadow-modal: 0 18px 50px rgb(0 0 0 / 60%);
   --leg-base: var(--surface);
   --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
   color-scheme: dark;

@@ -1,22 +1,26 @@
-/* Contrôles partagés : boutons et champs (design « Pastel ludique »). */
+/* Contrôles partagés : boutons et champs (boutons de la maquette de référence : Manrope gras,
+   coins de 10 px, bouton secondaire à filet). */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  min-height: 38px;
-  padding: 0 var(--space-4);
-  border: 0;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
   border-radius: var(--btn-radius);
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
   text-decoration: none;
   transition:
     background-color 0.15s,
-    transform 0.1s;
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.05s;
 }
 
 .btn:active {
@@ -47,18 +51,73 @@
 }
 
 .btn-ghost {
-  background: transparent;
-  color: var(--muted);
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--fg);
 }
 
 .btn-ghost:hover:not(:disabled) {
   background: var(--surface-2);
-  color: var(--fg);
 }
 
 .btn-danger {
   background: var(--bad);
   color: #fff;
+}
+
+/* Action destructive secondaire (« Supprimer le voyage ») : texte rouge sur fond clair. */
+.btn-danger-ghost {
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--line));
+  background: var(--surface);
+  color: var(--bad);
+}
+
+.btn-danger-ghost:hover:not(:disabled) {
+  background: var(--bad-soft);
+}
+
+/* Bouton icône carré de 36 px (en-tête, fenêtres). */
+.icon-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    transform 0.05s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Texte réservé aux lecteurs d'écran. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .field {

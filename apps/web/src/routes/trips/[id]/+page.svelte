@@ -26,6 +26,7 @@
     type TripSnapshot,
   } from '@mytrips/core';
   import { untrack } from 'svelte';
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import {
@@ -39,6 +40,7 @@
     deleteLeg,
     createInvitation,
     deleteMember,
+    deleteTrip,
     deleteStay,
     deleteStep,
     explorePois,
@@ -74,13 +76,15 @@
   import { connection } from '#lib/offline/connection.svelte.ts';
   import { TILE_CACHE, offlineStore } from '#lib/offline/instance.ts';
   import { isNetworkError, loadWithFallback } from '#lib/offline/load.ts';
-  import { summaryFromSnapshot } from '#lib/home.ts';
+  import { forgetLastTrip, saveLastTrip, summaryFromSnapshot } from '#lib/home.ts';
+  import { removeTrip, upsertTrip } from '#lib/trips/tripList.svelte.ts';
   import { buildDayViews } from '#lib/trips/dayViews.ts';
   import { glyphUrls, prefetchAll, resolveTileTemplate, tileUrl } from '#lib/offline/prefetch.ts';
   import type { PreparedTrip } from '#lib/offline/store.ts';
   import OfflineBanner from '#lib/components/offline/OfflineBanner.svelte';
   import OfflineDialog from '#lib/components/offline/OfflineDialog.svelte';
   import Redo2 from 'lucide-svelte/icons/redo-2';
+  import Share2 from 'lucide-svelte/icons/share-2';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import DayTabs from '#lib/components/DayTabs.svelte';
@@ -121,6 +125,8 @@
   }
   let editing = $state(false);
   let sharing = $state(false);
+  /** Suppression du voyage en attente de confirmation (depuis ses paramètres). */
+  let deletingTrip = $state(false);
   /** Modification de période en attente de confirmation (jours non vides à supprimer). */
   let pendingPeriod = $state<{ values: TripFormValues; dates: string[] } | null>(null);
   /** Fenêtre d'ajout ouverte : lieu du jour, idée, dossier ou séjour. */
@@ -282,8 +288,12 @@
       status = 'ready';
       if (selectedDay && !snapshot.days.some((d) => d.id === selectedDay)) selectedDay = null;
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) status = 'not_found';
-      else {
+      if (e instanceof ApiError && e.status === 404) {
+        status = 'not_found';
+        // Supprimé ou plus partagé : ni dans la liste de l'en-tête, ni rouvert par « / ».
+        removeTrip(id);
+        forgetLastTrip(id);
+      } else {
         status = 'error';
         loadError = e instanceof Error ? e.message : String(e);
       }
@@ -293,6 +303,9 @@
   $effect(() => {
     if (!id) return;
     // La page est réutilisée d'un voyage à l'autre : l'historique ne vaut que pour ce voyage.
+    // « / » rouvrira ce voyage (il n'y a plus de page d'accueil) ; dès l'ouverture, pour ne pas
+    // dépendre de la fin du chargement. Un voyage introuvable est oublié (voir load).
+    saveLastTrip(id);
     untrack(() => {
       history.clear();
       syncHistory();
@@ -361,6 +374,15 @@
       }
       throw e;
     }
+  }
+
+  async function confirmDeleteTrip() {
+    await deleteTrip(id);
+    removeTrip(id);
+    forgetLastTrip(id);
+    deletingTrip = false;
+    // « / » ouvre un autre voyage, ou propose d'en créer un.
+    await goto(resolve('/'), { replaceState: true });
   }
 
   /** Crée un lien d'invitation et renvoie son URL complète. */
@@ -782,12 +804,22 @@
     if (canEdit) editingStayId = item.stay.id;
   }
 
-  // Titre et actions sur la ligne de l'en-tête de l'application, le temps de la page.
+  // Jours et actions sur la ligne de l'en-tête de l'application, le temps de la page ; la roue
+  // crantée de l'en-tête ouvre les paramètres du voyage pour qui peut le modifier.
   $effect(() => {
-    pageHeader.content = tripTitle;
+    pageHeader.content = headerContent;
+    pageHeader.settings = canEdit ? () => (editing = true) : null;
     return () => {
       pageHeader.content = null;
+      pageHeader.settings = null;
     };
+  });
+
+  // Liste déroulante de l'en-tête à jour (nom, dates) : depuis chaque nouvel état du voyage.
+  $effect(() => {
+    if (!snapshot) return;
+    const summary = summaryFromSnapshot(snapshot);
+    untrack(() => upsertTrip(summary));
   });
 </script>
 
@@ -830,49 +862,52 @@
   {/if}
 {/snippet}
 
-<!-- Titre et actions du voyage, sur la ligne de l'en-tête de l'application (layout). -->
-{#snippet tripTitle()}
+<!-- Jours et actions du voyage, sur la ligne de l'en-tête de l'application (layout), après le
+     choix du voyage. -->
+{#snippet headerContent()}
   {#if snapshot && trip}
-    <div class="title-row">
-      <a class="back" href={resolve('/')} aria-label="Retour aux voyages">←</a>
-      <div class="title">
-        <h1>{trip.name}</h1>
-        <p>
-          {formatPeriod(trip.startDate, trip.endDate)} · {plural(snapshot.days.length, 'jour')}
-          {#if snapshot.role === 'viewer'}
-            <span class="chip readonly">Lecture seule</span>
-          {/if}
-        </p>
-      </div>
-      <div class="tools">
-        <LayoutSwitch value={layout} onChange={changeLayout} />
-        {#if canEdit}
-          <button
-            type="button"
-            class="btn btn-ghost icon-btn"
-            aria-label="Annuler"
-            title="Annuler (Ctrl+Z)"
-            disabled={!canUndo}
-            onclick={undo}><Undo2 size={16} /></button
-          >
-          <button
-            type="button"
-            class="btn btn-ghost icon-btn"
-            aria-label="Rétablir"
-            title="Rétablir (Ctrl+Y)"
-            disabled={!canRedo}
-            onclick={redo}><Redo2 size={16} /></button
-          >
-          <button type="button" class="btn btn-soft" onclick={() => (editing = true)}>
-            Modifier
-          </button>
-        {/if}
-        {#if isOwner}
-          <button type="button" class="btn btn-primary" onclick={() => (sharing = true)}>
-            Partager
-          </button>
-        {/if}
-      </div>
+    <div class="days">
+      <DayTabs
+        days={snapshot.days}
+        selected={selectedDay}
+        onSelect={(d) => (selectedDay = d)}
+        onDropStep={canEdit ? dropOnDay : undefined}
+        {alerts}
+        period={formatPeriod(trip.startDate, trip.endDate)}
+      />
+    </div>
+    {#if snapshot.role === 'viewer'}
+      <span class="chip readonly">Lecture seule</span>
+    {/if}
+    <div class="tools">
+      <LayoutSwitch value={layout} onChange={changeLayout} />
+      {#if canEdit}
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Annuler"
+          title="Annuler (Ctrl+Z)"
+          disabled={!canUndo}
+          onclick={undo}><Undo2 size={18} /></button
+        >
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Rétablir"
+          title="Rétablir (Ctrl+Y)"
+          disabled={!canRedo}
+          onclick={redo}><Redo2 size={18} /></button
+        >
+      {/if}
+      {#if isOwner}
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Partager"
+          title="Partager"
+          onclick={() => (sharing = true)}><Share2 size={18} /></button
+        >
+      {/if}
     </div>
   {/if}
 {/snippet}
@@ -891,21 +926,18 @@
   </div>
 {:else if snapshot && trip}
   <div class="trip">
-    <header class="trip-header">
-      <DayTabs
-        days={snapshot.days}
-        selected={selectedDay}
-        onSelect={(d) => (selectedDay = d)}
-        onDropStep={canEdit ? dropOnDay : undefined}
-        {alerts}
-      />
-      {#if !online}
-        <OfflineBanner {savedAt} />
-      {/if}
-      {#if notice}
-        <p class="notice" role="status">{notice}</p>
-      {/if}
-    </header>
+    <!-- Le nom du voyage est affiché par la liste déroulante de l'en-tête. -->
+    <h1 class="visually-hidden">{trip.name}</h1>
+    {#if !online || notice}
+      <div class="trip-banners">
+        {#if !online}
+          <OfflineBanner {savedAt} />
+        {/if}
+        {#if notice}
+          <p class="notice" role="status">{notice}</p>
+        {/if}
+      </div>
+    {/if}
 
     {#snippet explorePanel()}
       <div class="block">
@@ -1224,6 +1256,22 @@
       places={steps.filter((s) => s.kind === 'step' && s.dayId).map((s) => s.name)}
       onSubmit={(values) => saveTrip(values)}
       onClose={() => (editing = false)}
+      onDelete={isOwner
+        ? () => {
+            editing = false;
+            deletingTrip = true;
+          }
+        : undefined}
+    />
+  {/if}
+
+  {#if deletingTrip}
+    <ConfirmDialog
+      title="Supprimer le voyage ?"
+      message={`« ${trip.name} » et tous ses jours seront supprimés. Cette action est définitive.`}
+      confirmLabel="Supprimer définitivement"
+      onConfirm={confirmDeleteTrip}
+      onCancel={() => (deletingTrip = false)}
     />
   {/if}
 
@@ -1387,60 +1435,25 @@
     height: 100%;
   }
 
-  /* Sous la ligne de l'en-tête de l'application, où se trouvent le titre et les actions. */
-  .trip-header {
+  /* Bandeaux (hors ligne, conflit) sous l'en-tête de l'application. */
+  .trip-banners {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-6);
+    gap: var(--space-2);
+    padding: var(--space-2) 14px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
 
-  .title-row {
+  /* Jours sur la ligne de l'en-tête : ils prennent la place restante et défilent. */
+  .days {
     display: flex;
     flex: 1;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2) var(--space-3);
     min-width: 0;
-  }
-
-  .back {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-pill);
-    background: var(--surface-2);
-    color: var(--fg);
-    text-decoration: none;
-    font-size: 18px;
-  }
-
-  .title {
-    flex: 1 1 180px;
-    min-width: 0;
-  }
-
-  h1 {
-    overflow: hidden;
-    font-size: 22px;
-    font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .title p {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin: 0;
-    color: var(--muted);
-    font-size: 13px;
   }
 
   .readonly {
+    flex: none;
     background: var(--warn-soft);
     color: var(--warn);
   }
@@ -1457,23 +1470,18 @@
     cursor: pointer;
   }
 
-  .icon-btn {
-    padding: var(--space-2);
-  }
-
   .tools {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    /* Sur la ligne du profil quand les jours passent dessous (tablette). */
+    margin-left: auto;
   }
 
-  /* Petit écran : logo, retour, titre et profil sur la première ligne, actions dessous. */
-  @media (max-width: 640px) {
-    .title-row {
-      display: contents;
-    }
-
-    .tools {
+  /* Tablette : les jours passent sur une seconde ligne de l'en-tête, sur toute la largeur. */
+  @media (max-width: 1024px) {
+    .days {
       order: 1;
       flex-basis: 100%;
     }

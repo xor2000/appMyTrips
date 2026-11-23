@@ -29,8 +29,13 @@
   }
 </script>
 
+<!-- Bouton icône de l'en-tête, affiché seulement quand le navigateur propose l'installation. -->
 {#if deferred}
-  <button type="button" class="btn btn-soft" onclick={install}>
-    <Download size={16} />Installer l’application
-  </button>
+  <button
+    type="button"
+    class="icon-btn"
+    aria-label="Installer l’application"
+    title="Installer l’application"
+    onclick={install}><Download size={18} /></button
+  >
 {/if}

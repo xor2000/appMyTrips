@@ -49,7 +49,8 @@ test('inscription avec captcha, déconnexion, puis connexion', async ({ browser 
   await expect(page.getByRole('alert')).toContainText('E-mail ou mot de passe incorrect');
   await loginViaUi(page, email);
   await expect(accountButton(page, email)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Mes voyages' })).toBeVisible();
+  // Sans voyage, « / » invite à créer le premier (plus de page d'accueil).
+  await expect(page.getByRole('heading', { name: 'Aucun voyage pour l’instant' })).toBeVisible();
   await context.close();
 });
 
