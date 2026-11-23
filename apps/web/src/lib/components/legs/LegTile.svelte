@@ -52,7 +52,6 @@
       class="pill"
       class:highlighted
       style={`--c: var(${LEG_MODE_INFO[leg.mode].color})`}
-      disabled={!canEdit}
       onclick={() => onEdit(leg)}
     >
       <span class="icon"><Icon size={14} /></span>

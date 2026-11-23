@@ -69,7 +69,9 @@ test('forcer la durée affiche « forcé », puis recalculer revient au routeur'
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
   await expect(tile).toContainText('routeur');
 
+  // Le clic sur le trajet ouvre sa popup sur la carte ; « Modifier » ouvre l'éditeur.
   await tile.getByRole('button', { name: /Voiture/ }).click();
+  await page.getByTestId('leg-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier le trajet' });
   await editor.getByLabel('Durée (min)').fill('45');
   await editor.getByRole('button', { name: 'Enregistrer' }).click();
@@ -77,6 +79,7 @@ test('forcer la durée affiche « forcé », puis recalculer revient au routeur'
   await expect(tile).toContainText('forcé');
 
   await tile.getByRole('button', { name: /Voiture/ }).click();
+  await page.getByTestId('leg-popup').getByRole('button', { name: 'Modifier' }).click();
   await editor.getByRole('button', { name: 'Recalculer' }).click();
   await expect(tile).toContainText('25 min');
   await expect(tile).toContainText('routeur');
@@ -88,7 +91,9 @@ test('réordonner les étapes retire l’ancien trajet ; un trajet forcé est pr
   await tripWithTwoSteps(page);
   const tile = timeline(page).getByTestId('leg-tile');
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
+  // Le clic sur le trajet ouvre sa popup sur la carte ; « Modifier » ouvre l'éditeur.
   await tile.getByRole('button', { name: /Voiture/ }).click();
+  await page.getByTestId('leg-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier le trajet' });
   await editor.getByLabel('Durée (min)').fill('45');
   await editor.getByRole('button', { name: 'Enregistrer' }).click();

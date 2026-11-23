@@ -9,9 +9,9 @@
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
-  import type { StepPopupInfo } from '#lib/map/stepPopup.ts';
+  import type { FocusTarget, MapPopupContent, PopupTarget } from '#lib/map/popups.ts';
   import BasemapPicker from './BasemapPicker.svelte';
-  import StepPopup from './StepPopup.svelte';
+  import MapPopup from './MapPopup.svelte';
   import {
     closestPoiId,
     POI_HIT_TOLERANCE_PX,
@@ -55,18 +55,17 @@
     /** Tracés des trajets du jour, colorés par mode ; `highlighted` met en évidence leur clé. */
     lines?: LegLine[];
     /**
-     * Contenu de la popup d'un marqueur (étape ou idée), comme sur la maquette de référence ;
-     * null : pas de popup (séjour).
+     * Contenu de la popup d'un marqueur d'étape ou d'idée, d'un tracé de trajet ou d'un lieu de
+     * la découverte, comme sur la maquette de référence ; null : pas de popup (séjour).
      */
-    stepPopup?: (point: MapPoint) => StepPopupInfo | null;
-    /** Boutons « Modifier » et « Supprimer » de la popup. */
-    canEdit?: boolean;
-    onEditStep?: (stepId: string) => void;
-    onDeleteStep?: (stepId: string) => void;
-    /** Demande de centrage (zoom 15 au moins) et d'ouverture de la popup ; `seq` change à chaque demande. */
-    focus?: { key: string; seq: number } | null;
-    /** La popup d'étape s'est fermée. */
-    onPopupClose?: () => void;
+    popupFor?: (target: PopupTarget) => MapPopupContent | null;
+    /**
+     * Demande venue de la colonne : cadrage (zoom 15 au moins sur un lieu, tracé entier pour un
+     * trajet) et popup. `seq` change à chaque demande.
+     */
+    focus?: { target: FocusTarget; seq: number } | null;
+    /** La popup s'est fermée (croix, clic sur la carte, action). */
+    onPopupClose?: (kind: PopupTarget['kind']) => void;
   }
 
   let {
@@ -87,10 +86,7 @@
     onOffline,
     onSearch,
     lines = [],
-    stepPopup = () => null,
-    canEdit = false,
-    onEditStep = () => {},
-    onDeleteStep = () => {},
+    popupFor = () => null,
     focus = null,
     onPopupClose = () => {},
   }: Props = $props();
@@ -105,10 +101,8 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
   let PopupClass: typeof Popup | undefined;
-  /** Infobulle du lieu de la découverte sélectionné. */
-  let poiPopup: Popup | undefined;
-  /** Popup d'étape ouverte (composant Svelte monté dans une popup MapLibre). */
-  let stepPopupRef: { key: string; popup: Popup } | undefined;
+  /** Popup ouverte (composant Svelte monté dans une popup MapLibre) et ce qu'elle montre. */
+  let popupRef: { kind: PopupTarget['kind']; key: string; popup: Popup } | undefined;
   /** Lieux portant l'état `active` (survolé ou sélectionné) dans la source des lieux. */
   let activePois: string[] = [];
   /** Synchronisations reportées à la fin du chargement des tuiles (voir `whenStyleReady`). */
@@ -172,6 +166,20 @@
         syncLines(m);
         syncPois(m);
       });
+      // Tracés de trajets : curseur et popup au clic (les tracés GPX, clé sans « > », n'en ont pas).
+      for (const layer of ['legs', 'legs-dashed']) {
+        m.on('mousemove', layer, (e) => {
+          const key = e.features?.[0]?.properties?.key;
+          if (typeof key === 'string' && key.includes('>')) m.getCanvas().style.cursor = 'pointer';
+        });
+        m.on('mouseleave', layer, () => (m.getCanvas().style.cursor = ''));
+        m.on('click', layer, (e) => {
+          const key = e.features?.[0]?.properties?.key;
+          if (typeof key === 'string' && key.includes('>')) {
+            openPopup({ kind: 'leg', key }, [e.lngLat.lng, e.lngLat.lat]);
+          }
+        });
+      }
       // Lieux de la découverte : survol, et clic au plus près (marge de quelques pixels).
       m.on('mousemove', POI_LAYER, (e) => {
         m.getCanvas().style.cursor = 'pointer';
@@ -207,7 +215,10 @@
           );
         const id = closestPoiId(hits, e.point, (ll) => m.project(ll));
         const poi = id ? pois.find((p) => p.id === id) : undefined;
-        if (poi) onPickPoi(poi);
+        if (poi) {
+          openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat]);
+          onPickPoi(poi);
+        }
       });
       exposeForTests(m);
       // Le panneau gauche est redimensionnable : la carte suit la taille de son conteneur.
@@ -219,8 +230,7 @@
     return () => {
       disposed = true;
       observer?.disconnect();
-      poiPopup?.remove();
-      closeStepPopup(false);
+      closePopup(false);
       map?.remove();
       const testWindow = window as unknown as Record<string, unknown>;
       delete testWindow.__mapPoisForTests;
@@ -240,7 +250,7 @@
         markers.delete(key);
       }
     }
-    if (stepPopupRef && !wanted.has(stepPopupRef.key)) closeStepPopup();
+    if (popupRef?.kind === 'step' && !wanted.has(popupRef.key)) closePopup();
     for (const p of points) {
       let entry = markers.get(p.key);
       if (!entry) {
@@ -253,7 +263,7 @@
           ev.stopPropagation();
           // Point à jour (nom, position) : `p` est celui de la création du marqueur.
           const current = points.find((x) => x.key === p.key) ?? p;
-          openStepPopup(current);
+          openPopup({ kind: 'step', point: current }, [current.lng, current.lat]);
           onPick(current);
         });
         entry = {
@@ -277,66 +287,106 @@
   });
 
   /**
-   * Ferme la popup d'étape. `notify` : prévenir la page (sélection effacée) ; pas quand une autre
-   * popup la remplace, sinon la sélection du nouveau lieu serait effacée aussitôt.
+   * Ferme la popup. `notify` : prévenir la page (sélection effacée) ; pas quand une autre popup la
+   * remplace, sinon la sélection du nouvel élément serait effacée aussitôt.
    */
-  function closeStepPopup(notify = true) {
-    const ref = stepPopupRef;
+  function closePopup(notify = true) {
+    const ref = popupRef;
     if (!ref) return;
-    if (!notify) stepPopupRef = undefined;
+    if (!notify) popupRef = undefined;
     ref.popup.remove();
   }
 
-  /** Popup d'un marqueur, comme la référence : « type · jour », nom, notes, Modifier, Supprimer. */
-  function openStepPopup(p: MapPoint) {
+  /** Décalage de la popup selon ce qu'elle désigne (marqueur en épingle, pastille, tracé). */
+  const POPUP_OFFSET = { step: 36, poi: 14, leg: 8 } as const;
+
+  function targetKey(target: PopupTarget) {
+    return target.kind === 'step'
+      ? target.point.key
+      : target.kind === 'leg'
+        ? target.key
+        : target.poi.id;
+  }
+
+  /** Popup comme la référence : catégorie, nom, notes, infos et actions (voir `lib/map/popups.ts`). */
+  function openPopup(target: PopupTarget, lngLat: [number, number]) {
     const m = map;
-    const info = stepPopup(p);
-    if (!m || !PopupClass || !info) {
-      closeStepPopup();
+    const content = popupFor(target);
+    if (!m || !PopupClass || !content) {
+      closePopup();
       return;
     }
-    closeStepPopup(false);
-    const target = document.createElement('div');
-    const component = mount(StepPopup, {
-      target,
+    closePopup(false);
+    const element = document.createElement('div');
+    const component = mount(MapPopup, {
+      target: element,
       props: {
-        info,
-        canEdit,
-        onEdit: (id: string) => {
-          closeStepPopup();
-          onEditStep(id);
-        },
-        onDelete: (id: string) => {
-          closeStepPopup();
-          onDeleteStep(id);
+        content: {
+          ...content,
+          // Une action ferme la popup avant d'agir (éditeur, confirmation, ajout).
+          actions: content.actions.map((a) => ({
+            ...a,
+            run: () => {
+              closePopup();
+              a.run();
+            },
+          })),
         },
       },
     });
-    const popup = new PopupClass({ className: 'step-map-popup', offset: 36, maxWidth: '290px' })
-      .setLngLat([p.lng, p.lat])
-      .setDOMContent(target)
+    const popup = new PopupClass({
+      className: 'map-popup',
+      offset: POPUP_OFFSET[target.kind],
+      maxWidth: '290px',
+    })
+      .setLngLat(lngLat)
+      .setDOMContent(element)
       .addTo(m);
-    // Fermeture par la croix, un clic sur la carte, une autre popup ou closeStepPopup.
+    // Fermeture par la croix, un clic sur la carte, une autre popup ou closePopup.
     popup.on('close', () => {
       void unmount(component);
-      if (stepPopupRef?.popup !== popup) return;
-      stepPopupRef = undefined;
-      onPopupClose();
+      if (popupRef?.popup !== popup) return;
+      popupRef = undefined;
+      onPopupClose(target.kind);
     });
-    stepPopupRef = { key: p.key, popup };
+    popupRef = { kind: target.kind, key: targetKey(target), popup };
   }
 
-  // Lieu choisi dans la colonne : centrage, zoom 15 au moins (comme la référence) et popup.
+  // Élément choisi dans la colonne : cadrage comme la référence (`focusPoi`, `focusRoute`) et popup.
   $effect(() => {
     const f = focus;
     const m = map;
     if (!f || !m) return;
     untrack(() => {
-      const p = points.find((x) => x.key === f.key);
-      if (!p) return;
-      m.flyTo({ center: [p.lng, p.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
-      openStepPopup(p);
+      const t = f.target;
+      if (t.kind === 'step') {
+        const p = points.find((x) => x.key === t.key);
+        if (!p) return;
+        m.flyTo({ center: [p.lng, p.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
+        openPopup({ kind: 'step', point: p }, [p.lng, p.lat]);
+      } else if (t.kind === 'poi') {
+        const poi = pois.find((x) => x.id === t.id);
+        if (!poi) return;
+        m.flyTo({ center: [poi.lng, poi.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
+        openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat]);
+      } else {
+        const line = lines.find((l) => l.key === t.key);
+        if (!line || line.coordinates.length === 0 || !LngLatBoundsClass) return;
+        const bounds = new LngLatBoundsClass();
+        for (const c of line.coordinates) bounds.extend(c);
+        m.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
+        // Popup au milieu du tracé, comme la popup d'une polyligne Leaflet.
+        const middle = line.coordinates[Math.floor(line.coordinates.length / 2)]!;
+        openPopup({ kind: 'leg', key: t.key }, middle);
+      }
     });
+  });
+
+  // Popup d'un trajet ou d'un lieu qui n'existe plus (supprimé, autre jour, découverte fermée).
+  $effect(() => {
+    const ref = popupRef;
+    if (ref?.kind === 'leg' && !lines.some((l) => l.key === ref.key)) closePopup();
+    if (ref?.kind === 'poi' && !pois.some((p) => p.id === ref.key)) closePopup();
   });
 
   /** Icône lucide « lightbulb » (marqueurs créés hors des composants Svelte). */
@@ -491,29 +541,6 @@
     void selectedPoi;
     void hoveredPoi;
     if (m) applyActivePois(m);
-  });
-
-  // Infobulle du lieu sélectionné ; la carte se déplace vers lui s'il est hors de la vue.
-  $effect(() => {
-    const m = map;
-    const poi = pois.find((p) => p.id === selectedPoi);
-    poiPopup?.remove();
-    poiPopup = undefined;
-    if (!m || !PopupClass || !poi) return;
-    const content = document.createElement('div');
-    // textContent : le nom vient d'OpenStreetMap, jamais injecté en HTML.
-    content.textContent = poi.name;
-    poiPopup = new PopupClass({
-      className: 'poi-popup',
-      closeButton: false,
-      closeOnClick: false,
-      offset: 14,
-      maxWidth: '240px',
-    })
-      .setLngLat([poi.lng, poi.lat])
-      .setDOMContent(content)
-      .addTo(m);
-    if (!m.getBounds().contains([poi.lng, poi.lat])) m.easeTo({ center: [poi.lng, poi.lat] });
   });
 
   /**
@@ -787,22 +814,8 @@
     color: var(--c);
   }
 
-  /* Infobulle du lieu de la découverte sélectionné (lieux dessinés en WebGL, voir lib/map/pois.ts). */
-  :global(.poi-popup .maplibregl-popup-content) {
-    padding: 6px 10px;
-    border-radius: var(--btn-radius);
-    background: var(--surface);
-    color: var(--fg);
-    box-shadow: var(--shadow-marker);
-    font: 600 13px var(--font-body);
-  }
-
-  :global(.poi-popup .maplibregl-popup-tip) {
-    display: none;
-  }
-
-  /* Popup d'étape, comme la référence : coins de 14 px, ombre douce, croix discrète. */
-  :global(.step-map-popup .maplibregl-popup-content) {
+  /* Popups de la carte, comme la référence : coins de 14 px, ombre douce, croix discrète. */
+  :global(.map-popup .maplibregl-popup-content) {
     padding: 12px 14px;
     border-radius: 14px;
     background: var(--surface);
@@ -810,18 +823,18 @@
     font-family: var(--font-body);
   }
 
-  :global(.step-map-popup .maplibregl-popup-close-button) {
+  :global(.map-popup .maplibregl-popup-close-button) {
     top: 4px;
     right: 6px;
     color: var(--muted);
     font-size: 18px;
   }
 
-  :global(.step-map-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
+  :global(.map-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
     border-top-color: var(--surface);
   }
 
-  :global(.step-map-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
+  :global(.map-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
     border-bottom-color: var(--surface);
   }
 </style>

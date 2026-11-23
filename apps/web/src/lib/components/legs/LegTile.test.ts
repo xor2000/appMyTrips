@@ -45,6 +45,15 @@ describe('LegTile', () => {
     expect(props.onEdit).toHaveBeenCalledWith(leg);
   });
 
+  it('lecture seule : le trajet reste cliquable (popup d’infos sur la carte)', async () => {
+    const leg = makeLeg();
+    const props = setup({ leg, canEdit: false });
+    const tile = screen.getByRole('button', { name: /Voiture/ });
+    expect((tile as HTMLButtonElement).disabled).toBe(false);
+    await fireEvent.click(tile);
+    expect(props.onEdit).toHaveBeenCalledWith(leg);
+  });
+
   it('valeur forcée et lignes de transport', () => {
     setup({
       leg: makeLeg({ mode: 'train', durationSource: 'manual', summary: 'TER 17611 → Bus 3' }),
