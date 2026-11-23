@@ -162,7 +162,8 @@ describe('randonnée GPX', () => {
       },
       v(next),
     );
-    // Sans clé ORS : estimation en ligne droite depuis la sortie du tracé.
+    // OSRM injoignable en test (vitest.config.ts) : estimation en ligne droite depuis la sortie
+    // du tracé.
     const leg = route.body.legs[0];
     expect(leg.distanceSource).toBe('estimate');
     expect(leg.distanceM).toBeLessThan(3000);

@@ -1,4 +1,4 @@
-// Services externes factices pour les e2e (Photon, Overpass, OpenRouteService, Transitous,
+// Services externes factices pour les e2e (Photon, Overpass, OSRM, Transitous,
 // Wikimedia Commons) :
 // réponses déterministes, sans
 // dépendre des services réels. Ils sont appelés par le Worker, pas par le navigateur.
@@ -151,18 +151,17 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   res.setHeader('content-type', 'application/json');
   if (url.pathname === '/health') return res.end('{"ok":true}');
-  // OpenRouteService : itinéraire fixe de 12,3 km en 25 min, tracé en trois points.
-  const ors = /^\/ors\/v2\/directions\/([a-z-]+)\/geojson$/.exec(url.pathname);
-  if (ors && req.method === 'POST') {
-    const { coordinates } = JSON.parse((await readBody(req)) || '{}');
-    const [[lng1, lat1], [lng2, lat2]] = coordinates;
+  // OSRM (routing.openstreetmap.de) : itinéraire fixe de 12,3 km en 25 min, tracé en trois points.
+  const osrm = /^\/osrm\/routed-(car|bike|foot)\/route\/v1\/driving\/([^/]+)$/.exec(url.pathname);
+  if (osrm && req.method === 'GET') {
+    const [[lng1, lat1], [lng2, lat2]] = osrm[2].split(';').map((p) => p.split(',').map(Number));
     return res.end(
       JSON.stringify({
-        type: 'FeatureCollection',
-        features: [
+        code: 'Ok',
+        routes: [
           {
-            type: 'Feature',
-            properties: { summary: { distance: 12_345, duration: 1_500 } },
+            distance: 12_345,
+            duration: 1_500,
             geometry: {
               type: 'LineString',
               coordinates: [
@@ -173,6 +172,7 @@ createServer(async (req, res) => {
             },
           },
         ],
+        waypoints: [],
       }),
     );
   }

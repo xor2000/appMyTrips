@@ -121,9 +121,9 @@
       m.addControl(
         new lib.AttributionControl({
           compact: true,
-          // Mentions exigées par les services de routage (politiques d'usage d'ORS et Transitous).
+          // Mentions exigées par les services de routage (politiques d'usage de FOSSGIS et Transitous).
           customAttribution: [
-            'Itinéraires © <a href="https://openrouteservice.org/" target="_blank" rel="noopener">openrouteservice.org</a> (HeiGIT)',
+            'Itinéraires : <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS</a> (OSRM), <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">signaler une erreur</a>',
             'Transports en commun : <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous</a>',
           ],
         }),

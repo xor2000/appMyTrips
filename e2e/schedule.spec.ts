@@ -42,7 +42,7 @@ async function tripWithPlaces(page: Page, places: [string, string][]) {
   }
 }
 
-/** Crée un trajet en voiture (25 min, ORS factice) sur chaque tuile vide, une à une. */
+/** Crée un trajet en voiture (25 min, OSRM factice) sur chaque tuile vide, une à une. */
 async function carEverywhere(page: Page, count: number) {
   for (let i = 0; i < count; i++) {
     await timeline(page)

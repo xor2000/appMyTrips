@@ -8,10 +8,11 @@ export interface Bindings {
   ADMIN_EMAILS?: string;
   /** URL du service Photon (géocodage) ; défaut https://photon.komoot.io. */
   PHOTON_URL?: string;
-  /** Clé OpenRouteService (secret) ; sans elle, voiture, vélo et marche sont estimés. */
-  ORS_API_KEY?: string;
-  /** URL de base d'OpenRouteService ; défaut https://api.heigit.org/openrouteservice. */
-  ORS_URL?: string;
+  /**
+   * URL de base d'OSRM (voiture, vélo, marche), avec un serveur par profil (`routed-car`,
+   * `routed-bike`, `routed-foot`) ; défaut https://routing.openstreetmap.de (FOSSGIS, sans clé).
+   */
+  OSRM_URL?: string;
   /** URL de base de Transitous ; défaut https://api.transitous.org. */
   TRANSITOUS_URL?: string;
   /** URL de contact du projet, ajoutée au User-Agent du routage (politique de Transitous). */

@@ -19,15 +19,16 @@ function fakeFetch(route: Route) {
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
-const ORS_BASE = 'https://api.heigit.org/openrouteservice';
+const OSRM_BASE = 'https://routing.openstreetmap.de';
 
-function orsResponse(distance = 72_000, duration = 4_500) {
+/** Réponse OSRM (`overview=full`, `geometries=geojson`) d'un itinéraire. */
+function osrmResponse(distance = 72_000, duration = 4_500) {
   return {
-    type: 'FeatureCollection',
-    features: [
+    code: 'Ok',
+    routes: [
       {
-        type: 'Feature',
-        properties: { summary: { distance, duration } },
+        distance,
+        duration,
         geometry: {
           type: 'LineString',
           coordinates: [
@@ -38,6 +39,7 @@ function orsResponse(distance = 72_000, duration = 4_500) {
         },
       },
     ],
+    waypoints: [],
   };
 }
 
@@ -71,8 +73,8 @@ const TER_ITINERARY = {
 /** Appelant aux bindings de routage fixés (indépendant de `.dev.vars`). */
 const routeCaller = (fetcher: typeof fetch, bindings: Record<string, string | undefined> = {}) =>
   makeCaller(fetcher, {
-    ORS_API_KEY: 'cle-ors-test',
-    ORS_URL: undefined,
+    // vitest.config.ts pointe OSRM vers une adresse injoignable : ici, l'URL par défaut.
+    OSRM_URL: undefined,
     TRANSITOUS_URL: undefined,
     CONTACT_URL: undefined,
     ...bindings,
@@ -96,43 +98,43 @@ const v = (snapshot: { trip: { version: number } }) => ({
 
 describe('trajets : création', () => {
   it.each([
-    ['car', 'driving-car'],
-    ['bike', 'cycling-regular'],
-    ['walk', 'foot-walking'],
-  ])(
-    '%s : itinéraire OpenRouteService (profil %s), distance, durée et tracé',
-    async (mode, profile) => {
-      const t = await tripWithSteps();
-      const fetcher = fakeFetch(() => json(orsResponse()));
-      const res = await routeCaller(fetcher)(
-        ALICE,
-        'POST',
-        `/api/trips/${t.tripId}/legs`,
-        { fromKey: t.a, toKey: t.b, mode },
-        v(t.trip),
-      );
-      expect(res.status).toBe(201);
-      expect(res.body.legs).toHaveLength(1);
-      expect(res.body.legs[0]).toMatchObject({
-        fromKey: t.a,
-        toKey: t.b,
-        mode,
-        distanceM: 72_000,
-        durationMin: 75,
-        distanceSource: 'router',
-        durationSource: 'router',
-      });
-      expect(res.body.legs[0].geometry).toEqual(expect.any(String));
-      const [url, init] = fetcher.mock.calls[0]!;
-      expect(url).toBe(`${ORS_BASE}/v2/directions/${profile}/geojson`);
-      expect(new Headers(init.headers).get('authorization')).toBe('cle-ors-test');
-      const body = JSON.parse(String(init.body));
-      const a = t.trip.steps.find((s: { id: string }) => s.id === t.a);
-      expect(body.coordinates[0]).toEqual([a.lng, a.lat]);
-    },
-  );
+    ['car', 'routed-car'],
+    ['bike', 'routed-bike'],
+    ['walk', 'routed-foot'],
+  ])('%s : itinéraire OSRM (serveur %s), distance, durée et tracé', async (mode, profile) => {
+    const t = await tripWithSteps();
+    const fetcher = fakeFetch(() => json(osrmResponse()));
+    const res = await routeCaller(fetcher)(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode },
+      v(t.trip),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.legs).toHaveLength(1);
+    expect(res.body.legs[0]).toMatchObject({
+      fromKey: t.a,
+      toKey: t.b,
+      mode,
+      distanceM: 72_000,
+      durationMin: 75,
+      distanceSource: 'router',
+      durationSource: 'router',
+    });
+    expect(res.body.legs[0].geometry).toEqual(expect.any(String));
+    const [url, init] = fetcher.mock.calls[0]!;
+    const a = t.trip.steps.find((s: { id: string }) => s.id === t.a);
+    const b = t.trip.steps.find((s: { id: string }) => s.id === t.b);
+    expect(url).toBe(
+      `${OSRM_BASE}/${profile}/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}` +
+        '?overview=full&geometries=geojson',
+    );
+    expect(init.method ?? 'GET').toBe('GET');
+    expect(new Headers(init.headers).get('user-agent')).toMatch(/^MyTrips\//);
+  });
 
-  it.each([403, 429, 500])('ORS en erreur (%i) : estimation locale signalée', async (status) => {
+  it.each([429, 500, 503])('OSRM en erreur (%i) : estimation locale signalée', async (status) => {
     const t = await tripWithSteps();
     const fetcher = fakeFetch(() => json({ error: 'refus' }, status));
     const res = await routeCaller(fetcher)(
@@ -149,23 +151,71 @@ describe('trajets : création', () => {
     });
   });
 
-  it('sans clé ORS : estimation locale, sans appel réseau', async () => {
+  it('OSRM injoignable : estimation locale signalée', async () => {
     const t = await tripWithSteps();
-    const fetcher = fakeFetch(() => json(orsResponse()));
-    const res = await routeCaller(fetcher, { ORS_API_KEY: undefined })(
+    const fetcher = fakeFetch(() => {
+      throw new TypeError('réseau indisponible');
+    });
+    const res = await routeCaller(fetcher)(
       ALICE,
       'POST',
       `/api/trips/${t.tripId}/legs`,
       { fromKey: t.a, toKey: t.b, mode: 'car' },
       v(t.trip),
     );
+    expect(res.status).toBe(201);
     expect(res.body.legs[0].durationSource).toBe('estimate');
-    expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it('aucune route (ORS 404) : 422 no_route, sauf durée saisie', async () => {
+  it('URL de base avec chemin (relais) : le chemin est gardé', async () => {
     const t = await tripWithSteps();
-    const fetcher = fakeFetch(() => json({ error: { code: 2010 } }, 404));
+    const fetcher = fakeFetch(() => json(osrmResponse()));
+    await routeCaller(fetcher, { OSRM_URL: 'https://relais.example/osrm/' })(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'walk' },
+      v(t.trip),
+    );
+    expect(fetcher.mock.calls[0]![0]).toMatch(
+      /^https:\/\/relais\.example\/osrm\/routed-foot\/route\/v1\/driving\//,
+    );
+  });
+
+  it.each([
+    ['NoRoute', 400, { code: 'NoRoute', message: 'Impossible route between points' }],
+    ['NoSegment', 400, { code: 'NoSegment', message: 'Could not find a matching segment' }],
+    ['Ok sans itinéraire', 200, { code: 'Ok', routes: [] }],
+  ])('aucune route (OSRM %s) : 422 no_route', async (_label, status, body) => {
+    const t = await tripWithSteps();
+    const res = await routeCaller(fakeFetch(() => json(body, status)))(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'bike' },
+      v(t.trip),
+    );
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('no_route');
+  });
+
+  it('autre refus d’OSRM (400 InvalidQuery) : estimation locale signalée', async () => {
+    const t = await tripWithSteps();
+    const fetcher = fakeFetch(() => json({ code: 'InvalidQuery', message: 'Query invalid' }, 400));
+    const res = await routeCaller(fetcher)(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'car' },
+      v(t.trip),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.legs[0].durationSource).toBe('estimate');
+  });
+
+  it('aucune route (OSRM NoRoute) : 422 no_route, sauf durée saisie', async () => {
+    const t = await tripWithSteps();
+    const fetcher = fakeFetch(() => json({ code: 'NoRoute', message: 'Impossible route' }, 400));
     const caller = routeCaller(fetcher);
     const res = await caller(
       ALICE,
@@ -309,7 +359,7 @@ describe('trajets : création', () => {
 
   it('refuse une paire qui n’est pas consécutive (400 invalid_leg)', async () => {
     const t = await tripWithSteps();
-    const res = await routeCaller(fakeFetch(() => json(orsResponse())))(
+    const res = await routeCaller(fakeFetch(() => json(osrmResponse())))(
       ALICE,
       'POST',
       `/api/trips/${t.tripId}/legs`,
@@ -322,7 +372,7 @@ describe('trajets : création', () => {
 
   it('remplace le trajet existant de la même paire', async () => {
     const t = await tripWithSteps();
-    const caller = routeCaller(fakeFetch(() => json(orsResponse())));
+    const caller = routeCaller(fakeFetch(() => json(osrmResponse())));
     const first = await caller(
       ALICE,
       'POST',
@@ -343,7 +393,7 @@ describe('trajets : création', () => {
 
   it('droits et version : If-Match obligatoire, viewer refusé, conflit de version', async () => {
     const t = await tripWithSteps();
-    const caller = routeCaller(fakeFetch(() => json(orsResponse())));
+    const caller = routeCaller(fakeFetch(() => json(osrmResponse())));
     const leg = { fromKey: t.a, toKey: t.b, mode: 'plane' };
     expect((await caller(ALICE, 'POST', `/api/trips/${t.tripId}/legs`, leg)).status).toBe(428);
     await addMember(t.tripId, BOB, 'viewer');
@@ -360,7 +410,7 @@ describe('trajets : création', () => {
 describe('trajets : modification et suppression', () => {
   async function tripWithLeg() {
     const t = await tripWithSteps();
-    const fetcher = fakeFetch(() => json(orsResponse()));
+    const fetcher = fakeFetch(() => json(osrmResponse()));
     const caller = routeCaller(fetcher);
     const res = await caller(
       ALICE,
@@ -587,7 +637,7 @@ describe('POST /api/route', () => {
   it('calcule un itinéraire et le sert ensuite depuis le cache', async () => {
     const from = place();
     const to = place();
-    const fetcher = fakeFetch(() => json(orsResponse(10_000, 900)));
+    const fetcher = fakeFetch(() => json(osrmResponse(10_000, 900)));
     const caller = routeCaller(fetcher);
     const first = await caller(ALICE, 'POST', '/api/route', { mode: 'car', from, to });
     expect(first.status).toBe(200);
@@ -604,7 +654,7 @@ describe('POST /api/route', () => {
   it('cache expiré (plus de 30 jours) : nouveau calcul', async () => {
     const from = place();
     const to = place();
-    const fetcher = fakeFetch(() => json(orsResponse(10_000, 900)));
+    const fetcher = fakeFetch(() => json(osrmResponse(10_000, 900)));
     const caller = routeCaller(fetcher);
     await caller(ALICE, 'POST', '/api/route', { mode: 'walk', from, to });
     const old = new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString();
@@ -615,16 +665,16 @@ describe('POST /api/route', () => {
     expect(fetcher.mock.calls).toHaveLength(2);
   });
 
-  it('une estimation n’est pas mise en cache (une clé ajoutée plus tard sera utilisée)', async () => {
+  it('une estimation n’est pas mise en cache (OSRM revenu, il est utilisé)', async () => {
     const from = place();
     const to = place();
-    const fetcher = fakeFetch(() => json(orsResponse()));
-    await routeCaller(fetcher, { ORS_API_KEY: undefined })(ALICE, 'POST', '/api/route', {
-      mode: 'car',
-      from,
-      to,
-    });
-    const res = await routeCaller(fetcher)(ALICE, 'POST', '/api/route', { mode: 'car', from, to });
+    let up = false;
+    const fetcher = fakeFetch(() => (up ? json(osrmResponse()) : json({}, 503)));
+    const caller = routeCaller(fetcher);
+    const down = await caller(ALICE, 'POST', '/api/route', { mode: 'car', from, to });
+    expect(down.body.route.source).toBe('estimate');
+    up = true;
+    const res = await caller(ALICE, 'POST', '/api/route', { mode: 'car', from, to });
     expect(res.body.route.source).toBe('router');
   });
 

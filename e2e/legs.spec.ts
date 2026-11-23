@@ -57,6 +57,10 @@ test('entre deux étapes, la tuile « + trajet » crée un trajet en voiture, tr
   await expect(tile).toContainText('25 min · 12 km');
   await expect(tile).toContainText('routeur');
   await expect(page.getByTestId('trip-map')).toHaveAttribute('data-leg-lines', '1');
+  // Mention exigée par la politique d'usage du serveur OSRM de FOSSGIS.
+  const attribution = page.getByTestId('trip-map').locator('.maplibregl-ctrl-attrib-inner');
+  await expect(attribution).toContainText('OSRM');
+  await expect(attribution).not.toContainText('openrouteservice');
 });
 
 test('forcer la durée affiche « forcé », puis recalculer revient au routeur', async ({ page }) => {
