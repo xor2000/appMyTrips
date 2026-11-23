@@ -58,6 +58,7 @@
   } from '#lib/api.ts';
   import { dayHoursLabel, dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
+  import { stepPopupInfo } from '#lib/map/stepPopup.ts';
   import { poiStepInput, sameView } from '#lib/poi/explore.ts';
   import {
     dayHikeLines,
@@ -139,6 +140,10 @@
   /** Étape (ou dossier vide) en attente de confirmation de suppression. */
   let deletingStep = $state<Step | null>(null);
   let highlighted = $state<string | null>(null);
+  /** Lieu choisi dans la colonne ou sur la carte (popup ouverte) : reste mis en évidence. */
+  let selectedKey = $state<string | null>(null);
+  /** Demande de centrage et de popup pour la carte (`seq` change à chaque clic). */
+  let mapFocus = $state<{ key: string; seq: number } | null>(null);
   let mapView = $state<MapView | null>(null);
   const mapCenter = $derived(mapView ? bboxCenter(mapView.bbox) : null);
   /** Découverte de lieux : panneau gauche et marqueurs dédiés. */
@@ -552,6 +557,30 @@
     const name = steps.find((s) => s.id === stepId)?.name ?? 'étape';
     await runCommand(`Modifier ${name}`, [{ kind: 'step', id: stepId, patch }]);
     editingStepId = null;
+  }
+
+  /**
+   * Clic sur un lieu de la colonne, comme sur la maquette de référence : sélection, zoom sur le
+   * lieu et popup (« Modifier » y ouvre l'éditeur). Sans lieu sur la carte, ou en plein écran
+   * (carte masquée), l'éditeur s'ouvre directement.
+   */
+  function openStep(step: Step) {
+    if (layout === 'board' || !points.some((p) => p.stepId === step.id)) {
+      editingStepId = step.id;
+      return;
+    }
+    selectedKey = step.id;
+    mapFocus = { key: step.id, seq: (mapFocus?.seq ?? 0) + 1 };
+  }
+
+  function popupFor(point: MapPoint) {
+    const step = point.stepId ? steps.find((x) => x.id === point.stepId) : undefined;
+    return step ? stepPopupInfo(step, days) : null;
+  }
+
+  function askDeleteById(stepId: string) {
+    const step = steps.find((x) => x.id === stepId);
+    if (step) askDelete(step);
   }
 
   function askDelete(step: Step) {
@@ -1058,9 +1087,9 @@
         <IdeasPanel
           {ideas}
           {canEdit}
-          {highlighted}
+          highlighted={highlighted ?? selectedKey}
           onAdd={() => (adding = { kind: 'idea', type: null })}
-          onEdit={(s) => (editingStepId = s.id)}
+          onEdit={openStep}
           onMove={move}
           onDelete={askDelete}
           onHover={(k) => (highlighted = k)}
@@ -1072,10 +1101,16 @@
     {#snippet tripMap()}
       <TripMap
         {points}
-        {highlighted}
+        highlighted={highlighted ?? selectedKey}
         fitKey={selectedDay ?? 'all'}
         onHover={(k) => (highlighted = k)}
         onPick={pickPoint}
+        stepPopup={popupFor}
+        {canEdit}
+        onEditStep={(stepId) => (editingStepId = stepId)}
+        onDeleteStep={askDeleteById}
+        focus={mapFocus}
+        onPopupClose={() => (selectedKey = null)}
         onAddHere={canEdit ? addHere : undefined}
         onViewChange={(v) => (mapView = v)}
         pois={exploring ? pois : []}
@@ -1115,8 +1150,8 @@
                         {items}
                         {labels}
                         {canEdit}
-                        {highlighted}
-                        onEdit={(s) => (editingStepId = s.id)}
+                        highlighted={highlighted ?? selectedKey}
+                        onEdit={openStep}
                         onEditStay={editStay}
                         onMove={move}
                         onDelete={askDelete}

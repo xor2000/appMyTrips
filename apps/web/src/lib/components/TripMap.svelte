@@ -1,6 +1,6 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { onMount } from 'svelte';
+  import { mount, onMount, unmount, untrack } from 'svelte';
   import { STEP_TYPE_INFO, type Poi } from '@mytrips/core';
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
@@ -9,7 +9,9 @@
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
+  import type { StepPopupInfo } from '#lib/map/stepPopup.ts';
   import BasemapPicker from './BasemapPicker.svelte';
+  import StepPopup from './StepPopup.svelte';
   import {
     closestPoiId,
     POI_HIT_TOLERANCE_PX,
@@ -52,6 +54,19 @@
     onSearch?: () => void;
     /** Tracés des trajets du jour, colorés par mode ; `highlighted` met en évidence leur clé. */
     lines?: LegLine[];
+    /**
+     * Contenu de la popup d'un marqueur (étape ou idée), comme sur la maquette de référence ;
+     * null : pas de popup (séjour).
+     */
+    stepPopup?: (point: MapPoint) => StepPopupInfo | null;
+    /** Boutons « Modifier » et « Supprimer » de la popup. */
+    canEdit?: boolean;
+    onEditStep?: (stepId: string) => void;
+    onDeleteStep?: (stepId: string) => void;
+    /** Demande de centrage (zoom 15 au moins) et d'ouverture de la popup ; `seq` change à chaque demande. */
+    focus?: { key: string; seq: number } | null;
+    /** La popup d'étape s'est fermée. */
+    onPopupClose?: () => void;
   }
 
   let {
@@ -72,6 +87,12 @@
     onOffline,
     onSearch,
     lines = [],
+    stepPopup = () => null,
+    canEdit = false,
+    onEditStep = () => {},
+    onDeleteStep = () => {},
+    focus = null,
+    onPopupClose = () => {},
   }: Props = $props();
 
   let container: HTMLDivElement;
@@ -86,6 +107,8 @@
   let PopupClass: typeof Popup | undefined;
   /** Infobulle du lieu de la découverte sélectionné. */
   let poiPopup: Popup | undefined;
+  /** Popup d'étape ouverte (composant Svelte monté dans une popup MapLibre). */
+  let stepPopupRef: { key: string; popup: Popup } | undefined;
   /** Lieux portant l'état `active` (survolé ou sélectionné) dans la source des lieux. */
   let activePois: string[] = [];
   /** Synchronisations reportées à la fin du chargement des tuiles (voir `whenStyleReady`). */
@@ -197,10 +220,12 @@
       disposed = true;
       observer?.disconnect();
       poiPopup?.remove();
+      closeStepPopup(false);
       map?.remove();
       const testWindow = window as unknown as Record<string, unknown>;
       delete testWindow.__mapPoisForTests;
       delete testWindow.__mapProjectForTests;
+      delete testWindow.__mapZoomForTests;
     };
   });
 
@@ -215,6 +240,7 @@
         markers.delete(key);
       }
     }
+    if (stepPopupRef && !wanted.has(stepPopupRef.key)) closeStepPopup();
     for (const p of points) {
       let entry = markers.get(p.key);
       if (!entry) {
@@ -225,7 +251,10 @@
         el.addEventListener('mouseleave', () => onHover(null));
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          onPick(p);
+          // Point à jour (nom, position) : `p` est celui de la création du marqueur.
+          const current = points.find((x) => x.key === p.key) ?? p;
+          openStepPopup(current);
+          onPick(current);
         });
         entry = {
           el,
@@ -245,6 +274,69 @@
       entry.el.classList.toggle('faded', p.faded);
       entry.el.classList.toggle('idea', p.idea);
     }
+  });
+
+  /**
+   * Ferme la popup d'étape. `notify` : prévenir la page (sélection effacée) ; pas quand une autre
+   * popup la remplace, sinon la sélection du nouveau lieu serait effacée aussitôt.
+   */
+  function closeStepPopup(notify = true) {
+    const ref = stepPopupRef;
+    if (!ref) return;
+    if (!notify) stepPopupRef = undefined;
+    ref.popup.remove();
+  }
+
+  /** Popup d'un marqueur, comme la référence : « type · jour », nom, notes, Modifier, Supprimer. */
+  function openStepPopup(p: MapPoint) {
+    const m = map;
+    const info = stepPopup(p);
+    if (!m || !PopupClass || !info) {
+      closeStepPopup();
+      return;
+    }
+    closeStepPopup(false);
+    const target = document.createElement('div');
+    const component = mount(StepPopup, {
+      target,
+      props: {
+        info,
+        canEdit,
+        onEdit: (id: string) => {
+          closeStepPopup();
+          onEditStep(id);
+        },
+        onDelete: (id: string) => {
+          closeStepPopup();
+          onDeleteStep(id);
+        },
+      },
+    });
+    const popup = new PopupClass({ className: 'step-map-popup', offset: 36, maxWidth: '290px' })
+      .setLngLat([p.lng, p.lat])
+      .setDOMContent(target)
+      .addTo(m);
+    // Fermeture par la croix, un clic sur la carte, une autre popup ou closeStepPopup.
+    popup.on('close', () => {
+      void unmount(component);
+      if (stepPopupRef?.popup !== popup) return;
+      stepPopupRef = undefined;
+      onPopupClose();
+    });
+    stepPopupRef = { key: p.key, popup };
+  }
+
+  // Lieu choisi dans la colonne : centrage, zoom 15 au moins (comme la référence) et popup.
+  $effect(() => {
+    const f = focus;
+    const m = map;
+    if (!f || !m) return;
+    untrack(() => {
+      const p = points.find((x) => x.key === f.key);
+      if (!p) return;
+      m.flyTo({ center: [p.lng, p.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
+      openStepPopup(p);
+    });
   });
 
   /** Icône lucide « lightbulb » (marqueurs créés hors des composants Svelte). */
@@ -432,6 +524,7 @@
     const testWindow = window as unknown as {
       __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
       __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
+      __mapZoomForTests?: () => number;
     };
     testWindow.__mapPoisForTests = () => {
       if (!m.getLayer(POI_LAYER)) return [];
@@ -451,6 +544,7 @@
       const p = m.project(lngLat);
       return { x: p.x, y: p.y };
     };
+    testWindow.__mapZoomForTests = () => m.getZoom();
   }
 
   // Mise en évidence du point survolé.
@@ -705,5 +799,29 @@
 
   :global(.poi-popup .maplibregl-popup-tip) {
     display: none;
+  }
+
+  /* Popup d'étape, comme la référence : coins de 14 px, ombre douce, croix discrète. */
+  :global(.step-map-popup .maplibregl-popup-content) {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow-window);
+    font-family: var(--font-body);
+  }
+
+  :global(.step-map-popup .maplibregl-popup-close-button) {
+    top: 4px;
+    right: 6px;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  :global(.step-map-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
+    border-top-color: var(--surface);
+  }
+
+  :global(.step-map-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
+    border-bottom-color: var(--surface);
   }
 </style>
