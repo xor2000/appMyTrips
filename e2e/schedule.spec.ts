@@ -83,6 +83,7 @@ test('une heure fixe en conflit : « Réorganiser », appliquer, puis Ctrl+Z', a
   await card(page, 'Musée d’Orsay')
     .getByRole('button', { name: /Musée d’Orsay Musée/ })
     .click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await editor.getByLabel('Heure fixe').check();
   await editor.getByLabel('Heure', { exact: true }).fill('10:00');
@@ -114,6 +115,7 @@ test('journée trop longue : bandeau de dépassement', async ({ page }) => {
   await card(page, 'Musée du Louvre')
     .getByRole('button', { name: /Musée du Louvre Musée/ })
     .click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await editor.getByLabel('Durée sur place (min)').fill('900');
   await editor.getByRole('button', { name: 'Enregistrer' }).click();

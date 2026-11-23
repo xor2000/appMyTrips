@@ -27,8 +27,9 @@ voiture, vélo et à pied (tracé et distance).
 
 ## Décisions et pourquoi
 
-- **Remplacement complet** (pas d'ORS en secours) : « remplace » dans la demande, et ORS n'avait
-  jamais eu de clé en production (voiture, vélo et marche étaient toujours estimés).
+- **Remplacement complet** (pas d'ORS en secours) : « remplace » dans la demande ; OSRM ne
+  demande ni clé ni compte. (Ce paragraphe disait d'abord que la clé ORS n'avait jamais été
+  créée : c'était faux, le secret `ORS_API_KEY` existait en production.)
 - **Codes « aucune route »** : `NoRoute` et `NoSegment` (réponse 400), et une réponse `Ok` sans
   itinéraire, donnent `422 no_route` comme l'ancien 404 d'ORS. Tout autre échec (429, 5xx,
   `InvalidQuery`, réseau, délai) garde l'estimation locale.
@@ -66,6 +67,6 @@ voiture, vélo et à pied (tracé et distance).
 
 ## Reste à faire
 
-- Supprimer le secret de production devenu inutile : `wrangler secret delete ORS_API_KEY` (s'il
-  existe).
+- Fait après le déploiement : le secret de production `ORS_API_KEY`, devenu inutile, a été
+  supprimé (`wrangler secret delete ORS_API_KEY`).
 - Les trajets déjà estimés ne sont pas recalculés d'eux-mêmes : « Recalculer » sur la tuile.

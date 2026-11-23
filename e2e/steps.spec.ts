@@ -136,6 +136,7 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
     .getByTestId('day-timeline')
     .getByRole('button', { name: /Musée d’Orsay Musée/ })
     .click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await editor.getByLabel('Jour').selectOption({ label: 'Idées (pas encore placé)' });
   await editor.getByRole('button', { name: 'Enregistrer' }).click();
@@ -170,6 +171,7 @@ test('type « Parking » : choisi dans l’éditeur, avec son libellé', async (
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
   await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await editor.getByLabel('Type').selectOption({ label: 'Parking' });
   await editor.getByRole('button', { name: 'Enregistrer' }).click();
@@ -197,6 +199,7 @@ test('modifier la durée et fixer une heure', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
   await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await editor.getByLabel('Durée sur place (min)').fill('150');
   await editor.getByLabel('Heure fixe').check();

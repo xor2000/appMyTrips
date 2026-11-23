@@ -24,6 +24,22 @@ export const TOPO_STYLE: StyleSpecification = {
   layers: [{ id: 'topo', type: 'raster', source: 'topo' }],
 };
 
+/** Plan OSM France (tuiles raster du style « osmfr » d'OpenStreetMap France), libellés en français. */
+export const OSMFR_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    osmfr: {
+      type: 'raster',
+      tiles: ['a', 'b', 'c'].map((s) => `https://${s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png`),
+      tileSize: 256,
+      maxzoom: 20,
+      attribution:
+        'Carte : © <a href="https://www.openstreetmap.fr" target="_blank" rel="noopener">OSM France</a> · Données : © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a>',
+    },
+  },
+  layers: [{ id: 'osmfr', type: 'raster', source: 'osmfr' }],
+};
+
 /** Imagerie satellite Esri World Imagery (tuiles raster sans clé, attribution obligatoire). */
 const SATELLITE_SOURCE: RasterSourceSpecification = {
   type: 'raster',
@@ -36,11 +52,13 @@ const SATELLITE_SOURCE: RasterSourceSpecification = {
     'Imagerie : © <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics et la communauté des utilisateurs SIG',
 };
 
-export type MapStyleId = 'plan' | 'topo' | 'satellite';
+export type MapStyleId = 'plan' | 'osmfr' | 'topo' | 'satellite';
 
 /** Le satellite part du style Liberty (libellés et routes), transformé par `transformFor`. */
 export function styleFor(id: MapStyleId): string | StyleSpecification {
-  return id === 'topo' ? TOPO_STYLE : PLAN_STYLE_URL;
+  if (id === 'topo') return TOPO_STYLE;
+  if (id === 'osmfr') return OSMFR_STYLE;
+  return PLAN_STYLE_URL;
 }
 
 /** Transformation de style à passer à la carte (création et chaque `setStyle`). */

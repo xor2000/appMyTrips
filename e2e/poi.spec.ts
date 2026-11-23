@@ -113,6 +113,7 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
   await expect.poll(() => renderedPoiNames(page)).toEqual([]);
 
   await card.getByRole('button', { name: /Musée des Arts décoratifs Musée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await expect(editor.getByLabel('Type')).toHaveValue('museum');
   await expect(editor.getByLabel('Horaires d’ouverture')).toHaveValue('Tu-Su 11:00-18:00');

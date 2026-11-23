@@ -74,6 +74,7 @@ test('cocher le dénivelé : la durée et les horaires du jour se mettent à jou
   await expect(card).toContainText('3 h 30');
 
   await card.getByRole('button', { name: /Tournette \(test\) Randonnée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
   await expect(editor.getByRole('img', { name: /Profil altimétrique/ })).toBeVisible();
   await editor.getByLabel('Inclure le dénivelé (+1 h / 600 m)').check();

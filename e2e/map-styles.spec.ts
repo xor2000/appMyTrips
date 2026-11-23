@@ -19,6 +19,11 @@ test('fond de carte : liste qui s’ouvre en bas à droite, satellite chargé, r
       : route.abort(),
   );
   await context.route('https://*.tile.opentopomap.org/**', (route) => route.abort());
+  let osmfrTiles = 0;
+  await context.route('https://*.tile.openstreetmap.fr/**', (route) => {
+    osmfrTiles += 1;
+    return route.abort();
+  });
   let satelliteTiles = 0;
   await context.route('https://server.arcgisonline.com/**', (route) => {
     satelliteTiles += 1;
@@ -53,7 +58,8 @@ test('fond de carte : liste qui s’ouvre en bas à droite, satellite chargé, r
     await expect(menu).toBeVisible();
     // La liste s'ouvre au-dessus du bouton.
     expect(((await menu.boundingBox())?.y ?? 0) + 1).toBeLessThan(pickerBox!.y);
-    await menu.getByRole('menuitemradio', { name: label }).click();
+    // exact : « Plan » correspond sinon aussi à « Plan OSM France ».
+    await menu.getByRole('menuitemradio', { name: label, exact: true }).click();
     await expect(menu).toHaveCount(0);
   };
   const checked = async () => {
@@ -73,6 +79,12 @@ test('fond de carte : liste qui s’ouvre en bas à droite, satellite chargé, r
   expect(await checked()).toBe('Satellite');
   // Le style hybride a bien été appliqué : la carte demande les tuiles d'imagerie.
   await expect.poll(() => satelliteTiles).toBeGreaterThan(0);
+
+  // Plan OSM France : tuiles raster d'OpenStreetMap France.
+  expect(osmfrTiles).toBe(0);
+  await choose('Plan OSM France');
+  expect(await checked()).toBe('Plan OSM France');
+  await expect.poll(() => osmfrTiles).toBeGreaterThan(0);
 
   await choose('Plan');
   expect(await checked()).toBe('Plan');
