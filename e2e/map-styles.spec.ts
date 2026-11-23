@@ -9,7 +9,10 @@ const EMPTY_STYLE = {
 
 const uniqueName = (label: string) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
-test('fond satellite : imagerie Esri chargée, retour au plan', async ({ page, context }) => {
+test('fond de carte : liste qui s’ouvre en bas à droite, satellite chargé, retour au plan', async ({
+  page,
+  context,
+}) => {
   await context.route('https://tiles.openfreemap.org/**', (route) =>
     route.request().url().includes('/styles/')
       ? route.fulfill({ json: EMPTY_STYLE })
@@ -32,19 +35,45 @@ test('fond satellite : imagerie Esri chargée, retour au plan', async ({ page, c
   await dialog.getByRole('button', { name: 'Créer le voyage' }).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 
-  const styles = page.getByRole('group', { name: 'Fond de carte' });
-  const plan = styles.getByRole('button', { name: 'Plan' });
-  const satellite = styles.getByRole('button', { name: 'Satellite' });
-  await expect(plan).toHaveAttribute('aria-pressed', 'true');
+  // Comme la maquette de référence : un bouton « Fond de carte » en bas à droite de la carte,
+  // qui ouvre la liste des fonds au-dessus de lui.
+  const map = page.getByTestId('trip-map');
+  const picker = map.getByRole('button', { name: 'Fond de carte' });
+  await expect(picker).toBeVisible();
+  await expect(map.getByRole('group', { name: 'Fond de carte' })).toHaveCount(0);
+  const mapBox = await map.boundingBox();
+  const pickerBox = await picker.boundingBox();
+  expect(mapBox && pickerBox).toBeTruthy();
+  expect(mapBox!.x + mapBox!.width - (pickerBox!.x + pickerBox!.width)).toBeLessThan(40);
+  expect(pickerBox!.y).toBeGreaterThan(mapBox!.y + mapBox!.height / 2);
+
+  const choose = async (label: string) => {
+    await picker.click();
+    const menu = page.getByRole('menu', { name: 'Choix du fond de carte' });
+    await expect(menu).toBeVisible();
+    // La liste s'ouvre au-dessus du bouton.
+    expect(((await menu.boundingBox())?.y ?? 0) + 1).toBeLessThan(pickerBox!.y);
+    await menu.getByRole('menuitemradio', { name: label }).click();
+    await expect(menu).toHaveCount(0);
+  };
+  const checked = async () => {
+    await picker.click();
+    const name = await page
+      .getByRole('menuitemradio', { checked: true })
+      .textContent()
+      .then((t) => t?.trim());
+    await page.keyboard.press('Escape');
+    return name;
+  };
+
+  expect(await checked()).toBe('Plan');
   expect(satelliteTiles).toBe(0);
 
-  await satellite.click();
-  await expect(satellite).toHaveAttribute('aria-pressed', 'true');
-  await expect(plan).toHaveAttribute('aria-pressed', 'false');
+  await choose('Satellite');
+  expect(await checked()).toBe('Satellite');
   // Le style hybride a bien été appliqué : la carte demande les tuiles d'imagerie.
   await expect.poll(() => satelliteTiles).toBeGreaterThan(0);
 
-  await plan.click();
-  await expect(plan).toHaveAttribute('aria-pressed', 'true');
-  await expect(satellite).toHaveAttribute('aria-pressed', 'false');
+  await choose('Plan');
+  expect(await checked()).toBe('Plan');
 });

@@ -9,6 +9,7 @@
   import type { MapView } from '#lib/api.ts';
   import type { LegLine } from '#lib/legs/legs.ts';
   import type { MapPoint } from '#lib/map/points.ts';
+  import BasemapPicker from './BasemapPicker.svelte';
   import {
     closestPoiId,
     POI_HIT_TOLERANCE_PX,
@@ -498,40 +499,28 @@
       <Search size={15} />Rechercher un lieu, une adresse…
     </button>
   {/if}
-  <!-- Outils regroupés dans une seule pilule, comme sur la maquette. -->
-  <div class="tools">
-    <div class="styles" role="group" aria-label="Fond de carte">
-      <button type="button" aria-pressed={styleId === 'plan'} onclick={() => selectStyle('plan')}>
-        Plan
-      </button>
-      <button type="button" aria-pressed={styleId === 'topo'} onclick={() => selectStyle('topo')}>
-        Topo
-      </button>
-      <button
-        type="button"
-        aria-pressed={styleId === 'satellite'}
-        onclick={() => selectStyle('satellite')}
-      >
-        Satellite
-      </button>
+  {#if onToggleExplore || onOffline}
+    <!-- Outils regroupés dans une seule pilule, comme sur la maquette. -->
+    <div class="tools">
+      {#if onToggleExplore}
+        <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
+          <Compass size={15} />Explorer
+        </button>
+      {/if}
+      {#if onOffline}
+        <button
+          type="button"
+          class="tool icon"
+          aria-label="Préparer hors ligne"
+          title="Préparer hors ligne"
+          onclick={onOffline}><CloudDownload size={15} /></button
+        >
+      {/if}
     </div>
-    {#if onToggleExplore || onOffline}
-      <span class="sep" aria-hidden="true"></span>
-    {/if}
-    {#if onToggleExplore}
-      <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
-        <Compass size={15} />Explorer
-      </button>
-    {/if}
-    {#if onOffline}
-      <button
-        type="button"
-        class="tool icon"
-        aria-label="Préparer hors ligne"
-        title="Préparer hors ligne"
-        onclick={onOffline}><CloudDownload size={15} /></button
-      >
-    {/if}
+  {/if}
+  <!-- Fond de carte en bas à droite, au-dessus du zoom, comme sur la maquette de référence. -->
+  <div class="basemap">
+    <BasemapPicker value={styleId} onSelect={selectStyle} />
   </div>
   {#if menu}
     <div class="menu" style={`left: ${menu.x}px; top: ${menu.y}px`}>
@@ -568,12 +557,14 @@
     box-shadow: var(--shadow-float);
   }
 
-  .styles {
-    display: flex;
-    gap: var(--space-1);
+  /* Au-dessus du zoom de MapLibre (en bas à droite, 29 px par bouton). */
+  .basemap {
+    position: absolute;
+    right: 10px;
+    bottom: 84px;
+    z-index: 2;
   }
 
-  .styles button,
   .tool {
     display: inline-flex;
     align-items: center;
@@ -588,12 +579,10 @@
     cursor: pointer;
   }
 
-  .styles button:hover,
   .tool:hover {
     color: var(--fg);
   }
 
-  .styles button[aria-pressed='true'],
   .tool[aria-pressed='true'] {
     background: var(--accent-soft);
     color: var(--accent-strong);
@@ -603,13 +592,6 @@
     width: 28px;
     justify-content: center;
     padding: 0;
-  }
-
-  .sep {
-    align-self: stretch;
-    width: 1px;
-    margin: 3px 2px;
-    background: var(--line);
   }
 
   .search {
