@@ -10,6 +10,9 @@ export default defineConfig({
         bindings: {
           AUTH_SECRET: 'secret-de-test',
           ADMIN_EMAILS: 'admin@example.test',
+          // Aucun test ne doit appeler le vrai OSRM : adresse injoignable (connexion refusée),
+          // donc estimation locale ; les tests du routage fixent leur propre URL et leur fetch.
+          OSRM_URL: 'http://127.0.0.1:9',
           // Migrations D1 appliquées par test/apply-migrations.ts avant chaque fichier de test.
           TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, 'migrations')),
         },

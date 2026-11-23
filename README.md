@@ -55,8 +55,8 @@ secours. Variables de `apps/api/.dev.vars` (toutes facultatives) :
 
 Les trajets sont calculés par l'API :
 
-- voiture, vélo, marche : OpenRouteService, avec `ORS_API_KEY` (clé gratuite sur
-  https://openrouteservice.org, utilisée sur `api.heigit.org`). Sans clé, la durée est estimée ;
+- voiture, vélo, marche : OSRM, serveurs publics de FOSSGIS (https://routing.openstreetmap.de),
+  sans clé (une requête par seconde au plus). En cas d'erreur, la durée est estimée ;
 - bus, train : Transitous, sans clé. Sa politique d'usage impose un projet open source publié,
   un usage non commercial et un contact dans le User-Agent : `CONTACT_URL` (URL du projet) ;
 - avion, ferry : calcul local.
@@ -137,12 +137,6 @@ Un seul Worker (`mytrips`) sert le front et l'API sur la même origine.
 
    ```bash
    pnpm --filter @mytrips/api exec wrangler secret put GEOAPIFY_API_KEY
-   ```
-
-   Recommandé aussi : la clé OpenRouteService (sinon voiture, vélo et marche sont estimés) :
-
-   ```bash
-   pnpm --filter @mytrips/api exec wrangler secret put ORS_API_KEY
    ```
 
    Pour Transitous (bus, train), le dépôt est public et `CONTACT_URL` (URL du dépôt) est défini

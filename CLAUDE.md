@@ -132,7 +132,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   Après un glisser-déposer, attendre que le résultat soit affiché avant l'action suivante.
 - **URL de base des services externes** : construire les URL par concaténation
   (`${base}/api/v5/plan`), jamais `new URL('/chemin', base)`, qui efface le chemin de la base (relais,
-  services factices des e2e sous `/ors`, `/transitous`…).
+  services factices des e2e sous `/osrm`, `/transitous`…).
+- **Routage en test** : `vitest.config.ts` fixe `OSRM_URL` sur une adresse injoignable : un test qui
+  crée un trajet sans fetch factice obtient une estimation, jamais un appel au vrai OSRM. Les tests du
+  routage passent `OSRM_URL: undefined` et leur propre fetch (`routeCaller` de `test/legs.test.ts`).
 - **Trajets** (`apps/api/src/routes/legs.ts`) : toute écriture qui change l'ordre ou les jours des
   étapes doit finir par `pruneStaleLegs` (fait par `snapshot()` dans `routes/steps.ts` et par le
   PATCH du voyage). Le front n'affiche que les trajets des paires requises (`dayPairs`).

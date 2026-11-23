@@ -9,17 +9,24 @@ import {
 } from '@mytrips/core';
 import type { Bindings } from '../env';
 
-const DEFAULT_ORS_URL = 'https://api.heigit.org/openrouteservice';
+const DEFAULT_OSRM_URL = 'https://routing.openstreetmap.de';
 const DEFAULT_TRANSITOUS_URL = 'https://api.transitous.org';
 const TIMEOUT_MS = 10_000;
 /** Au-delà, le tracé est allégé (un point sur n) : il ne sert qu'à l'affichage. */
 const MAX_POINTS = 600;
 
-const ORS_PROFILES: Partial<Record<LegMode, string>> = {
-  car: 'driving-car',
-  bike: 'cycling-regular',
-  walk: 'foot-walking',
+/**
+ * Serveurs OSRM de FOSSGIS : un serveur par profil (le profil écrit dans le chemin de l'API,
+ * `driving`, est ignoré par ces serveurs).
+ */
+const OSRM_PROFILES: Partial<Record<LegMode, string>> = {
+  car: 'routed-car',
+  bike: 'routed-bike',
+  walk: 'routed-foot',
 };
+
+/** Codes OSRM qui veulent dire « aucun itinéraire » (point non routable, île…). */
+const OSRM_NO_ROUTE = new Set(['NoRoute', 'NoSegment']);
 
 /** Aucun itinéraire n'existe (pas de route, pas de transport en commun). */
 export class NoRouteError extends Error {}
@@ -48,46 +55,40 @@ function pathLengthM(points: readonly LatLng[]) {
   return total;
 }
 
-async function orsRoute(
+async function osrmRoute(
   env: Bindings,
   fetchImpl: typeof fetch,
-  profile: string,
+  server: string,
   from: LatLng,
   to: LatLng,
 ): Promise<RouteResult> {
-  const base = (env.ORS_URL ?? DEFAULT_ORS_URL).replace(/\/+$/, '');
-  const res = await fetchImpl(`${base}/v2/directions/${profile}/geojson`, {
-    method: 'POST',
-    headers: {
-      authorization: env.ORS_API_KEY ?? '',
-      'content-type': 'application/json',
-      accept: 'application/json, application/geo+json',
-      'user-agent': routingUserAgent(env),
+  // Concaténation (et non new URL(chemin, base)) : une base avec chemin, ex. un relais, est gardée.
+  const base = (env.OSRM_URL ?? DEFAULT_OSRM_URL).replace(/\/+$/, '');
+  const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+  const res = await fetchImpl(
+    `${base}/${server}/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+    {
+      headers: { accept: 'application/json', 'user-agent': routingUserAgent(env) },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     },
-    body: JSON.stringify({
-      coordinates: [
-        [from.lng, from.lat],
-        [to.lng, to.lat],
-      ],
-    }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  // ORS répond 404 quand aucun itinéraire n'existe (point non routable, île…).
-  if (res.status === 404) throw new NoRouteError();
-  if (!res.ok) throw new Error(`ORS ${res.status}`);
-  const body = (await res.json()) as {
-    features?: {
-      properties?: { summary?: { distance?: number; duration?: number } };
+  );
+  const body = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    routes?: {
+      distance?: number;
+      duration?: number;
       geometry?: { coordinates?: [number, number][] };
     }[];
   };
-  const feature = body.features?.[0];
-  const summary = feature?.properties?.summary;
-  if (!feature || typeof summary?.duration !== 'number') throw new NoRouteError();
-  const points = (feature.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lat, lng }));
+  // OSRM répond 400 avec `code: NoRoute` ou `NoSegment` quand aucun itinéraire n'existe.
+  if (body.code && OSRM_NO_ROUTE.has(body.code)) throw new NoRouteError();
+  if (!res.ok || body.code !== 'Ok') throw new Error(`OSRM ${res.status} ${body.code ?? ''}`);
+  const route = body.routes?.[0];
+  if (!route || typeof route.duration !== 'number') throw new NoRouteError();
+  const points = (route.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lat, lng }));
   return {
-    distanceM: Math.round(summary.distance ?? pathLengthM(points)),
-    durationMin: Math.max(1, Math.round(summary.duration / 60)),
+    distanceM: Math.round(route.distance ?? pathLengthM(points)),
+    durationMin: Math.max(1, Math.round(route.duration / 60)),
     geometry: encodePolyline(thin(points)),
     summary: null,
     source: 'router',
@@ -155,7 +156,7 @@ async function transitousRoute(
 
 /**
  * Itinéraire d'un mode :
- * - voiture, vélo, marche : OpenRouteService ; sans clé ou en erreur, estimation locale ;
+ * - voiture, vélo, marche : OSRM (serveurs de FOSSGIS) ; en erreur, estimation locale ;
  * - bus, train : Transitous ; en erreur, estimation locale ;
  * - avion, ferry : calcul local.
  * Lève NoRouteError quand le fournisseur répond qu'aucun itinéraire n'existe.
@@ -168,12 +169,9 @@ export async function computeRoute(
   to: LatLng,
   departAt?: string,
 ): Promise<RouteResult> {
-  const profile = ORS_PROFILES[mode];
+  const server = OSRM_PROFILES[mode];
   try {
-    if (profile) {
-      if (!env.ORS_API_KEY) return localRoute(mode, from, to);
-      return await orsRoute(env, fetchImpl, profile, from, to);
-    }
+    if (server) return await osrmRoute(env, fetchImpl, server, from, to);
     if (mode === 'bus' || mode === 'train') {
       return await transitousRoute(env, fetchImpl, from, to, departAt);
     }

@@ -306,14 +306,15 @@ Une proposition s'applique par un **lot atomique** (`POST /api/trips/:id/batch`)
 - **Ajout d'un lieu découvert** : étape pré-remplie (nom, type, point, adresse, horaires d'ouverture, `osm_ref`) ; site, téléphone et cuisine dans les notes. Un lieu dont l'`osm_ref` est déjà dans le voyage est marqué « Déjà ajouté ».
 
 - **Routage** (`apps/api/src/routing/providers.ts`, `POST /api/route` et création des trajets) :
-  - **voiture, vélo, marche** : OpenRouteService (`https://api.heigit.org/openrouteservice`, l'ancien domaine `api.openrouteservice.org` est fermé), profils `driving-car`, `cycling-regular`, `foot-walking`, clé `ORS_API_KEY` dans l'en-tête `Authorization`. Sans clé, ou en erreur (401, 403, 429, 5xx, réseau, délai de 10 s) : **estimation locale** (grand cercle × 1,3 à la vitesse du mode, en ligne droite), marquée « estimé ». Un 404 d'ORS signifie qu'aucune route n'existe : `422 no_route` ;
+  - **voiture, vélo, marche** : OSRM, serveurs publics de FOSSGIS (`https://routing.openstreetmap.de`, sans clé), un serveur par profil : `routed-car`, `routed-bike`, `routed-foot` (`GET /<serveur>/route/v1/driving/<lng>,<lat>;<lng>,<lat>?overview=full&geometries=geojson` ; le profil `driving` du chemin est ignoré par ces serveurs). En erreur (429, 5xx, autre code OSRM que `Ok`, réseau, délai de 10 s) : **estimation locale** (grand cercle × 1,3 à la vitesse du mode, en ligne droite), marquée « estimé ». Les codes `NoRoute` et `NoSegment` (réponse 400), ou une réponse `Ok` sans itinéraire, signifient qu'aucune route n'existe : `422 no_route`. Politique d'usage FOSSGIS : une requête par seconde au plus, pas d'usage lourd, User-Agent valide, mention et lien « fix the map » ;
   - **bus, train** : Transitous (MOTIS 2, `GET /api/v5/plan`, polylignes en précision 6). Itinéraire le plus court, puis le moins de correspondances ; lignes résumées (`displayName`, ex. « TER 17611 »). Aucun itinéraire : `422 no_route` ; erreur du service : estimation locale ;
   - **avion** : grand cercle, distance ÷ 750 km/h + 30 min, tracé en arc ; **ferry** : grand cercle à 30 km/h ;
   - User-Agent `MyTrips/0.1 (+<CONTACT_URL>)` : la politique de Transitous exige un moyen de contact, un projet open source publié et un usage non commercial ;
-  - les URL de base (`ORS_URL`, `TRANSITOUS_URL`, comme `PHOTON_URL` et `GEOAPIFY_URL`) peuvent contenir un chemin (relais, services factices des e2e) ;
-  - mentions « openrouteservice.org (HeiGIT) » et « Transitous » (lien vers `transitous.org/sources`) dans l'attribution de la carte.
+  - les URL de base (`OSRM_URL`, `TRANSITOUS_URL`, comme `PHOTON_URL` et `GEOAPIFY_URL`) peuvent contenir un chemin (relais, services factices des e2e) ;
+  - mentions « FOSSGIS (OSRM) » (avec le lien « signaler une erreur » vers `openstreetmap.org/fixthemap`) et « Transitous » (lien vers `transitous.org/sources`) dans l'attribution de la carte ;
+  - tests d'API : `vitest.config.ts` fixe `OSRM_URL` sur une adresse injoignable, aucun test n'appelle le vrai service.
 
-Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (recommandé, sinon voiture, vélo et marche sont estimés), `GEOAPIFY_API_KEY` (facultatif, secours de la découverte). Variables : `ADMIN_EMAILS` (administrateurs), `CONTACT_URL` (URL du projet publié, pour Transitous).
+Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `GEOAPIFY_API_KEY` (facultatif, secours de la découverte). Variables : `ADMIN_EMAILS` (administrateurs), `CONTACT_URL` (URL du projet publié, pour Transitous).
 
 ## 7. Contraintes non fonctionnelles
 
@@ -339,7 +340,8 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (r
 - **Overpass factice pour les e2e** (plutôt qu'une interception Playwright prévue dans le plan) : Overpass est appelé par le Worker, comme Photon.
 - **Nettoyage des trajets caducs juste après l'écriture** (le plan prévoyait la même transaction) : il faudrait sinon recalculer la timeline de l'état futur avant d'écrire. Conditionné à la version, il ne supprime rien si une autre écriture est passée entre-temps (elle fait alors son propre nettoyage) ; le front n'affiche de toute façon que les trajets des paires requises.
 - **Calcul des trajets côté Worker** : le front n'envoie que la paire et le mode ; le Worker retrouve les points, l'heure de départ estimée et le fuseau.
-- **Estimation locale sans clé ORS ou en erreur** (le plan prévoyait un message d'erreur) : choix de l'utilisateur, la tuile affiche « estimé ».
+- **Estimation locale quand le routeur est en erreur** (le plan prévoyait un message d'erreur) : choix de l'utilisateur, la tuile affiche « estimé ».
+- **OSRM de FOSSGIS plutôt qu'OpenRouteService** (23/11/2026, demande de l'utilisateur) : sans clé ni compte ; ORS demandait une clé, jamais créée, et voiture, vélo et marche restaient estimés.
 - **Éditeur de trajet en fenêtre** (le plan prévoyait un panneau latéral) : même composant `Modal` que les autres éditeurs.
 - **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
@@ -370,7 +372,7 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `ORS_API_KEY` (r
 - **Migrations en production** : chaque nouvelle migration doit être appliquée (`pnpm --filter @mytrips/api db:migrate:remote`) **avant** de déployer le code qui l'utilise.
 - **Trajets** :
   - **Transitous** : conditions de sa politique d'usage remplies le 16/11/2026 : dépôt public sous licence MIT, `CONTACT_URL` (URL du dépôt) dans les `vars` de `wrangler.jsonc`, lien vers ses sources dans l'attribution de la carte ;
-  - **ORS non vérifié avec une vraie clé** (aucune clé) : sans elle, voiture, vélo et marche sont estimés ;
+  - **OSRM de FOSSGIS** : service gratuit sans garantie de disponibilité, limité à une requête par seconde (le cache `route_cache` de 30 jours limite les appels ; pas de file d'attente côté Worker) ;
   - un dossier replié masque les tuiles de trajet de ses étapes ;
   - la proposition « Reprendre » ne vit que pendant la session (non stockée) ;
   - les couleurs des tracés sont lues au moment du dessin : un changement de thème ne les met à jour qu'au prochain changement des trajets.
