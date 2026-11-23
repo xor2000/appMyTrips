@@ -15,6 +15,7 @@
 
   const OPTIONS: { id: MapStyleId; label: string }[] = [
     { id: 'plan', label: 'Plan' },
+    { id: 'osmfr', label: 'Plan OSM France' },
     { id: 'topo', label: 'Topo' },
     { id: 'satellite', label: 'Satellite' },
   ];

@@ -78,6 +78,16 @@ export default defineConfig({
               },
             },
             {
+              // Tuiles raster d'OpenStreetMap France (fond « Plan OSM France »).
+              urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.fr\/osmfr\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'osmfr-tiles',
+                expiration: { maxEntries: 5000, maxAgeSeconds: 60 * 24 * 3600 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
               // Imagerie satellite Esri (fond « Satellite »).
               urlPattern:
                 /^https:\/\/server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery\//,

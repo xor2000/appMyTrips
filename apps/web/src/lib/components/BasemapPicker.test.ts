@@ -19,13 +19,23 @@ describe('BasemapPicker', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('s’ouvre au clic : Plan, Topo et Satellite, le fond courant coché et focalisé', async () => {
+  it('s’ouvre au clic : Plan, Plan OSM France, Topo et Satellite, le fond courant coché et focalisé', async () => {
     await open('topo');
     expect(button().getAttribute('aria-expanded')).toBe('true');
     const items = screen.getAllByRole('menuitemradio');
-    expect(items.map((i) => i.textContent?.trim())).toEqual(['Plan', 'Topo', 'Satellite']);
-    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
-    expect(document.activeElement).toBe(items[1]);
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      'Plan',
+      'Plan OSM France',
+      'Topo',
+      'Satellite',
+    ]);
+    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'true',
+      'false',
+    ]);
+    expect(document.activeElement).toBe(items[2]);
   });
 
   it('choisir un fond : onSelect, menu fermé, focus rendu au bouton', async () => {
@@ -50,7 +60,7 @@ describe('BasemapPicker', () => {
     expect(document.activeElement).toBe(items[1]);
     await fireEvent.keyDown(menu, { key: 'ArrowUp' });
     await fireEvent.keyDown(menu, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(items[2]);
+    expect(document.activeElement).toBe(items[3]);
     await fireEvent.keyDown(menu, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(button());

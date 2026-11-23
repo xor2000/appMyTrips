@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   guardMissingNumbers,
   missingImageResolver,
+  OSMFR_STYLE,
   PLAN_STYLE_URL,
   styleFor,
   toHybrid,
@@ -240,5 +241,24 @@ describe('styleFor et transformFor', () => {
     expect(styleFor('topo')).toBe(TOPO_STYLE);
     expect(transformFor('plan')).toBe(guardMissingNumbers);
     expect(transformFor('topo')).toBe(guardMissingNumbers);
+  });
+
+  it('Plan OSM France : tuiles raster d’OpenStreetMap France, mentions OSM et OSM France', () => {
+    expect(styleFor('osmfr')).toBe(OSMFR_STYLE);
+    expect(transformFor('osmfr')).toBe(guardMissingNumbers);
+    const source = OSMFR_STYLE.sources.osmfr as {
+      type: string;
+      tiles: string[];
+      maxzoom: number;
+      attribution: string;
+    };
+    expect(source.type).toBe('raster');
+    expect(source.tiles).toEqual(
+      ['a', 'b', 'c'].map((s) => `https://${s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png`),
+    );
+    expect(source.maxzoom).toBe(20);
+    expect(source.attribution).toContain('openstreetmap.org/copyright');
+    expect(source.attribution).toContain('OSM France');
+    expect(OSMFR_STYLE.layers).toEqual([{ id: 'osmfr', type: 'raster', source: 'osmfr' }]);
   });
 });
