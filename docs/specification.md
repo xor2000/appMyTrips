@@ -341,7 +341,7 @@ Secrets : `AUTH_SECRET` (obligatoire : signature des captchas), `GEOAPIFY_API_KE
 - **Nettoyage des trajets caducs juste après l'écriture** (le plan prévoyait la même transaction) : il faudrait sinon recalculer la timeline de l'état futur avant d'écrire. Conditionné à la version, il ne supprime rien si une autre écriture est passée entre-temps (elle fait alors son propre nettoyage) ; le front n'affiche de toute façon que les trajets des paires requises.
 - **Calcul des trajets côté Worker** : le front n'envoie que la paire et le mode ; le Worker retrouve les points, l'heure de départ estimée et le fuseau.
 - **Estimation locale quand le routeur est en erreur** (le plan prévoyait un message d'erreur) : choix de l'utilisateur, la tuile affiche « estimé ».
-- **OSRM de FOSSGIS plutôt qu'OpenRouteService** (23/11/2026, demande de l'utilisateur) : sans clé ni compte ; ORS demandait une clé, jamais créée, et voiture, vélo et marche restaient estimés.
+- **OSRM de FOSSGIS plutôt qu'OpenRouteService** (23/11/2026, demande de l'utilisateur) : sans clé ni compte (ORS demandait une clé, définie en production comme secret `ORS_API_KEY`, supprimé le 23/11/2026 après le passage à OSRM).
 - **Éditeur de trajet en fenêtre** (le plan prévoyait un panneau latéral) : même composant `Modal` que les autres éditeurs.
 - **Site, téléphone et cuisine d'un lieu dans les notes** de l'étape : pas de colonne dédiée tant qu'aucun écran ne les exploite.
 - **Écritures sérialisées côté front** (`createSerialQueue`) : deux actions rapprochées (deux glisser-déposer) partiraient sinon avec la même version du voyage, et la seconde serait refusée en conflit.
