@@ -13,6 +13,7 @@
 
 <script lang="ts">
   import { coverQuery } from '@mytrips/core';
+  import Trash2 from 'lucide-svelte/icons/trash-2';
   import { untrack } from 'svelte';
   import CoverPicker from './CoverPicker.svelte';
   import Modal from './Modal.svelte';
@@ -28,9 +29,19 @@
     places?: string[];
     onSubmit: (values: TripFormValues) => Promise<void>;
     onClose: () => void;
+    /** Suppression du voyage (propriétaire) : bouton « Supprimer le voyage » en bas à gauche. */
+    onDelete?: () => void;
   }
 
-  let { initial, cover = null, searchCovers, places = [], onSubmit, onClose }: Props = $props();
+  let {
+    initial,
+    cover = null,
+    searchCovers,
+    places = [],
+    onSubmit,
+    onClose,
+    onDelete,
+  }: Props = $props();
 
   // Valeurs de départ du formulaire, lues une seule fois à l'ouverture.
   const start = untrack(() => initial);
@@ -124,6 +135,12 @@
   </form>
 
   {#snippet actions()}
+    {#if onDelete}
+      <button type="button" class="btn btn-danger-ghost" onclick={onDelete}>
+        <Trash2 size={16} />Supprimer le voyage
+      </button>
+      <span class="spacer"></span>
+    {/if}
     <button type="button" class="btn btn-ghost" onclick={onClose}>Annuler</button>
     <button type="submit" form="trip-form" class="btn btn-primary" disabled={busy}>
       {editing ? 'Enregistrer' : 'Créer le voyage'}
@@ -174,6 +191,10 @@
     aspect-ratio: 16 / 10;
     border-radius: var(--radius-sm);
     object-fit: cover;
+  }
+
+  .spacer {
+    flex: 1;
   }
 
   .muted {

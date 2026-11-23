@@ -12,9 +12,11 @@
     onDropStep?: (stepId: string, dayId: string) => void;
     /** Jours en conflit ou qui débordent (pastille d'alerte). */
     alerts?: Set<string>;
+    /** Période du voyage, affichée sous « Tout le voyage ». */
+    period?: string;
   }
 
-  let { days, selected, onSelect, onDropStep, alerts = new Set() }: Props = $props();
+  let { days, selected, onSelect, onDropStep, alerts = new Set(), period }: Props = $props();
 
   let over = $state<string | null>(null);
 
@@ -38,7 +40,8 @@
     role="tab"
     class="tab all"
     aria-selected={selected === null}
-    onclick={() => onSelect(null)}>Tout le voyage</button
+    onclick={() => onSelect(null)}
+    ><b>Tout le voyage</b>{#if period}<span>{period}</span>{/if}</button
   >
   {#each days as day, i (day.id)}
     <button
@@ -65,11 +68,13 @@
 </div>
 
 <style>
+  /* Sur la ligne de l'en-tête : défilement horizontal quand les jours ne tiennent pas. */
   .tabs {
     display: flex;
-    gap: var(--space-2);
+    gap: 6px;
+    min-width: 0;
     overflow-x: auto;
-    padding-bottom: 2px;
+    scrollbar-width: thin;
   }
 
   .tab {
@@ -78,7 +83,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0;
-    padding: var(--space-1) var(--space-3);
+    padding: 3px 10px;
     border: 0;
     border-radius: var(--tab-radius);
     background: var(--surface-2);
@@ -94,13 +99,6 @@
     color: var(--fg);
   }
 
-  .tab.all {
-    justify-content: center;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--fg);
-  }
-
   .alert {
     display: inline-block;
     width: 7px;
@@ -109,15 +107,6 @@
     border-radius: 50%;
     background: var(--bad);
     vertical-align: middle;
-  }
-
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .tab.over {

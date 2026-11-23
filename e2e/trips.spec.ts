@@ -31,24 +31,21 @@ async function createTrip(page: Page, name: string, start = '2026-07-10', end = 
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 }
 
-test('créer un voyage, le retrouver dans la liste et l’ouvrir', async ({ page }) => {
+test('créer un voyage, le retrouver dans la liste de l’en-tête', async ({ page }) => {
   const name = uniqueName('Alpes');
   await createTrip(page, name);
 
   // Page voyage : onglets des jours et carte.
   await expect(page.getByText('10 – 12 juillet 2026')).toBeVisible();
   const tabs = page.getByRole('tab');
-  await expect(tabs).toHaveText(['Tout le voyage', /J1/, /J2/, /J3/]);
+  await expect(tabs).toHaveText([/Tout le voyage/, /J1/, /J2/, /J3/]);
   await page.getByRole('tab', { name: /J2/ }).click();
   await expect(page.getByRole('tab', { name: /J2/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
 
-  // Retour à la liste.
-  await page.getByRole('link', { name: 'Retour aux voyages' }).click();
-  const card = page.getByRole('article').filter({ hasText: name });
-  await expect(card).toContainText('3 jours');
-  await card.getByRole('link', { name: /ouvrir le carnet/i }).click();
-  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  // Le voyage est choisi dans la liste déroulante de l'en-tête.
+  const select = page.getByRole('combobox', { name: 'Choisir un voyage' });
+  await expect(select.locator('option:checked')).toHaveText(name);
 });
 
 test('la carte charge son web worker sans erreur', async ({ page }) => {
@@ -136,11 +133,11 @@ test('la carte n’affiche pas d’avertissement pour les icônes absentes ni le
 test('modifier la période ajoute les jours', async ({ page }) => {
   const name = uniqueName('Période');
   await createTrip(page, name);
-  await page.getByRole('button', { name: 'Modifier' }).click();
+  await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier le voyage' });
   await dialog.getByLabel('Au', { exact: true }).fill('2026-07-13');
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(page.getByRole('tab')).toHaveText(['Tout le voyage', /J1/, /J2/, /J3/, /J4/]);
+  await expect(page.getByRole('tab')).toHaveText([/Tout le voyage/, /J1/, /J2/, /J3/, /J4/]);
   await expect(page.getByText('10 – 13 juillet 2026')).toBeVisible();
 });
 
@@ -156,7 +153,7 @@ test('partager en lecture seule : l’invité voit le voyage sans pouvoir le mod
   await dialog.getByRole('button', { name: 'Créer un lien' }).click();
   const link = await dialog.getByLabel('Lien d’invitation').inputValue();
   expect(link).toMatch(/\/invitation\/[\w-]+$/);
-  await dialog.getByRole('button', { name: 'Fermer' }).click();
+  await dialog.getByRole('button', { name: 'Fermer', exact: true }).click();
 
   // Bob, sans compte, ouvre le lien dans un autre contexte : connexion demandée, il s'inscrit,
   // revient sur l'invitation et l'accepte.
@@ -180,14 +177,11 @@ test('partager en lecture seule : l’invité voit le voyage sans pouvoir le mod
   await expect(page.getByRole('dialog', { name: /partager/i }).getByText(bobEmail)).toBeVisible();
 
   const bobPage = await bob.newPage();
+  // « / » rouvre le dernier voyage consulté : celui qui vient d'être rejoint.
   await bobPage.goto('/');
-  const card = bobPage.getByRole('article').filter({ hasText: name });
-  await expect(card).toContainText('Partagé · lecture');
-  await expect(card.getByRole('button', { name: /supprimer/i })).toHaveCount(0);
-  await card.getByRole('link', { name: /ouvrir le carnet/i }).click();
   await expect(bobPage.getByRole('heading', { level: 1, name })).toBeVisible();
   await expect(bobPage.getByText('Lecture seule')).toBeVisible();
-  await expect(bobPage.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
+  await expect(bobPage.getByRole('button', { name: 'Paramètres du voyage' })).toHaveCount(0);
   await expect(bobPage.getByRole('button', { name: 'Partager' })).toHaveCount(0);
   await bob.close();
 });
@@ -195,13 +189,19 @@ test('partager en lecture seule : l’invité voit le voyage sans pouvoir le mod
 test('supprimer un voyage après confirmation', async ({ page }) => {
   const name = uniqueName('À supprimer');
   await createTrip(page, name);
-  await page.getByRole('link', { name: 'Retour aux voyages' }).click();
-  const card = page.getByRole('article').filter({ hasText: name });
-  await card.getByRole('button', { name: /supprimer/i }).click();
+  const tripUrl = page.url();
+  await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
+  await page
+    .getByRole('dialog', { name: 'Modifier le voyage' })
+    .getByRole('button', { name: 'Supprimer le voyage' })
+    .click();
   const confirm = page.getByRole('alertdialog');
   await expect(confirm).toContainText(name);
   await confirm.getByRole('button', { name: 'Supprimer définitivement' }).click();
-  await expect(page.getByRole('article').filter({ hasText: name })).toHaveCount(0);
+  await expect(page).not.toHaveURL(tripUrl);
+  await expect(
+    page.getByRole('combobox', { name: 'Choisir un voyage' }).getByRole('option', { name }),
+  ).toHaveCount(0);
 });
 
 test('un voyage inconnu affiche un message clair', async ({ page }) => {

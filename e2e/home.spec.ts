@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newUser } from './auth-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -18,7 +19,7 @@ test.beforeEach(async ({ context }) => {
 
 const uniqueName = (label: string) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
-async function createTrip(page: Page, name: string, start: string, end: string) {
+async function createTrip(page: Page, name: string, start = '2031-06-01', end = '2031-06-03') {
   await page.goto('/');
   await page.getByRole('button', { name: 'Nouveau voyage' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nouveau voyage' });
@@ -29,35 +30,39 @@ async function createTrip(page: Page, name: string, start: string, end: string) 
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 }
 
-test('photo de couverture : proposée à l’accueil, puis changée depuis « Modifier »', async ({
-  page,
-}) => {
-  const name = uniqueName('Escapade Alpes');
-  await createTrip(page, name, '2031-06-01', '2031-06-03');
+test('plus de page d’accueil : « / » rouvre le dernier voyage consulté', async ({ page }) => {
+  const first = uniqueName('Dernier vu');
+  const second = uniqueName('Créé ensuite');
+  await createTrip(page, first);
+  const firstUrl = page.url();
+  await createTrip(page, second);
+  await page.getByRole('combobox', { name: 'Choisir un voyage' }).selectOption({ label: first });
+  await expect(page).toHaveURL(firstUrl);
 
-  // Accueil : le voyage reçoit la première photo trouvée sur Commons (services factices).
-  await page.getByRole('link', { name: 'Retour aux voyages' }).click();
-  const card = page.getByRole('article').filter({ hasText: name });
-  await expect(card.locator('img')).toHaveAttribute('src', /commons-img\/1\.jpg/);
-  await expect(card.getByRole('link', { name: /Photographe factice/ })).toBeVisible();
+  await page.goto('/');
+  await expect(page).toHaveURL(firstUrl);
+  await expect(page.getByRole('heading', { level: 1, name: first })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mes voyages' })).toHaveCount(0);
+});
 
-  // Changer la photo depuis la page du voyage.
-  await card.getByRole('link', { name: /ouvrir le carnet/i }).click();
-  await page.getByRole('button', { name: 'Modifier' }).click();
+test('sans voyage : invitation à créer le premier', async ({ browser }) => {
+  const { context, page } = await newUser(browser, 'sans-voyage');
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Aucun voyage pour l’instant' })).toBeVisible();
+  await page.getByRole('button', { name: 'Créer un voyage' }).click();
+  await expect(page.getByRole('dialog', { name: 'Nouveau voyage' })).toBeVisible();
+  await context.close();
+});
+
+test('photo de couverture changée depuis les paramètres du voyage', async ({ page }) => {
+  await createTrip(page, uniqueName('Escapade Alpes'));
+  await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier le voyage' });
   await dialog.getByRole('button', { name: 'Changer la photo' }).click();
   await dialog.getByRole('radio', { name: 'Photo 2 : Photographe factice' }).check();
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toHaveCount(0);
 
-  await page.getByRole('link', { name: 'Retour aux voyages' }).click();
-  await expect(card.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);
-});
-
-test('accueil : un voyage passé est rangé dans « Souvenirs »', async ({ page }) => {
-  const name = uniqueName('Souvenir');
-  await createTrip(page, name, '2025-03-01', '2025-03-02');
-  await page.getByRole('link', { name: 'Retour aux voyages' }).click();
-  const memories = page.getByRole('region', { name: 'Souvenirs' });
-  await expect(memories.getByRole('article').filter({ hasText: name })).toBeVisible();
+  await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
+  await expect(dialog.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);
 });

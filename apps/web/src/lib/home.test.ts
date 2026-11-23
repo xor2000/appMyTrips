@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { makeLeg, makeStep, makeTripSummary } from '#lib/test/fixtures.ts';
-import { groupTrips, normalizeTripSummary, summaryFromSnapshot } from './home';
+import {
+  LAST_TRIP_KEY,
+  forgetLastTrip,
+  groupTrips,
+  normalizeTripSummary,
+  pickStartTrip,
+  readLastTrip,
+  saveLastTrip,
+  summaryFromSnapshot,
+} from './home';
 
 const trip = (id: string, startDate: string, endDate: string) =>
   makeTripSummary({ id, name: id, startDate, endDate });
@@ -81,5 +90,71 @@ describe('summaryFromSnapshot', () => {
     expect(summary.stepCount).toBe(3);
     expect(summary.distanceM).toBe(1200);
     expect(summary.places).toEqual(['Vieux-Port', 'MuCEM', 'Chalet']);
+  });
+});
+
+describe('pickStartTrip', () => {
+  const today = '2026-11-17';
+  const trips = [
+    trip('passé ancien', '2026-03-01', '2026-03-05'),
+    trip('passé récent', '2026-07-10', '2026-07-12'),
+    trip('à venir', '2027-02-20', '2027-02-24'),
+  ];
+
+  it('ouvre le dernier voyage consulté s’il est encore dans la liste', () => {
+    expect(pickStartTrip(trips, 'passé ancien', today)?.name).toBe('passé ancien');
+  });
+
+  it('dernier voyage inconnu (supprimé, plus partagé) : le voyage en cours ou le prochain', () => {
+    expect(pickStartTrip(trips, 'disparu', today)?.name).toBe('à venir');
+    expect(pickStartTrip(trips, null, today)?.name).toBe('à venir');
+  });
+
+  it('que des souvenirs : le plus récent', () => {
+    expect(pickStartTrip(trips.slice(0, 2), null, today)?.name).toBe('passé récent');
+  });
+
+  it('aucun voyage : rien à ouvrir', () => {
+    expect(pickStartTrip([], 'passé ancien', today)).toBeNull();
+  });
+});
+
+describe('dernier voyage consulté', () => {
+  function memoryStorage() {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+  }
+
+  it('est mémorisé par appareil, puis oublié', () => {
+    const storage = memoryStorage();
+    expect(readLastTrip(storage)).toBeNull();
+    saveLastTrip('t1', storage);
+    expect(storage.getItem(LAST_TRIP_KEY)).toBe('t1');
+    expect(readLastTrip(storage)).toBe('t1');
+    forgetLastTrip('autre', storage);
+    expect(readLastTrip(storage)).toBe('t1');
+    forgetLastTrip('t1', storage);
+    expect(readLastTrip(storage)).toBeNull();
+  });
+
+  it('stockage bloqué : aucune erreur', () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error('bloqué');
+      },
+      setItem: () => {
+        throw new Error('bloqué');
+      },
+      removeItem: () => {
+        throw new Error('bloqué');
+      },
+    };
+    expect(readLastTrip(blocked)).toBeNull();
+    expect(() => saveLastTrip('t1', blocked)).not.toThrow();
+    expect(() => forgetLastTrip('t1', blocked)).not.toThrow();
   });
 });

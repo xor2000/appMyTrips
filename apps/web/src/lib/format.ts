@@ -29,15 +29,6 @@ export function formatPeriod(startDate: string, endDate: string): string {
   return `${s.day} – ${e.day} ${e.month} ${e.year}`;
 }
 
-/** Compte à rebours affiché sur la carte d'un voyage. */
-export function countdownLabel(startDate: string, endDate: string, today: string): string {
-  const untilStart = toDayNumber(startDate) - toDayNumber(today);
-  if (untilStart > 1) return `Dans ${untilStart} jours`;
-  if (untilStart === 1) return 'Demain';
-  if (toDayNumber(endDate) >= toDayNumber(today)) return 'En cours';
-  return 'Terminé';
-}
-
 /** Où en est un voyage à la date `today` : à venir, en cours (bornes comprises) ou passé. */
 export function tripPhase(
   startDate: string,
@@ -47,11 +38,6 @@ export function tripPhase(
   if (toDayNumber(today) < toDayNumber(startDate)) return 'upcoming';
   if (toDayNumber(today) <= toDayNumber(endDate)) return 'ongoing';
   return 'past';
-}
-
-/** Numéro du jour du voyage à la date `today` (1 = premier jour). */
-export function tripDayNumber(startDate: string, today: string): number {
-  return toDayNumber(today) - toDayNumber(startDate) + 1;
 }
 
 /** « ven. 10 juil. » (onglet d'un jour). */

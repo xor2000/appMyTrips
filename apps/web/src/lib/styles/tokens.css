@@ -3,8 +3,9 @@
  * forme des composants sont définies par les fichiers de `themes/` (un fichier par thème).
  */
 :root {
-  --font-display: 'Outfit Variable', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+  /* Manrope pour les titres et le texte (police de la maquette de référence). */
+  --font-display: 'Manrope Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Manrope Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   --radius-sm: 8px;

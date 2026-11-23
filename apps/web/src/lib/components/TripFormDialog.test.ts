@@ -90,4 +90,18 @@ describe('TripFormDialog', () => {
       cover: other,
     });
   });
+
+  it('paramètres : « Supprimer le voyage » seulement quand la suppression est permise', async () => {
+    const onDelete = vi.fn();
+    const initial = { name: 'Alpes', startDate: '2026-07-10', endDate: '2026-07-12' };
+    const { unmount } = render(TripFormDialog, {
+      props: { initial, onSubmit: vi.fn(), onClose: vi.fn(), onDelete },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Supprimer le voyage' }));
+    expect(onDelete).toHaveBeenCalled();
+    unmount();
+
+    render(TripFormDialog, { props: { initial, onSubmit: vi.fn(), onClose: vi.fn() } });
+    expect(screen.queryByRole('button', { name: 'Supprimer le voyage' })).toBeNull();
+  });
 });
