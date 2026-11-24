@@ -185,7 +185,8 @@ test('clic droit sur la carte : popup du lieu trouvé par Photon, ajout au jour'
   const popup = page.getByTestId('poi-popup');
   // Lieu renvoyé par le géocodage inverse factice (e2e/mock-services.mjs).
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Lieu sur la carte');
-  await expect(popup).toContainText('Autre · OpenStreetMap');
+  await expect(popup.locator('.cat')).toHaveText('Autre');
+  await expect(popup.locator('.source')).toHaveText('OpenStreetMap');
   await expect(popup).toContainText('Paris, France');
   await expect(popup.getByRole('button', { name: 'Ajouter aux idées' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ajouter ici' })).toHaveCount(0);

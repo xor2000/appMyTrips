@@ -42,8 +42,12 @@ export interface PopupAction {
  */
 export interface MapPopupContent {
   kind: 'step' | 'leg' | 'poi';
-  /** « Musée · J1 », « Voiture · J1 », « Musée · OpenStreetMap ». */
+  /** « Musée · J1 », « Voiture · J1 », « Musée ». */
   category: string;
+  /** Icône du type, à gauche du nom (lieux découverts et clic droit). */
+  icon?: StepType;
+  /** Source des données, en petit sous les notes (« OpenStreetMap »…). */
+  source?: string;
   /** Variable CSS de la couleur de la catégorie. */
   color: string;
   title: string;
@@ -120,7 +124,10 @@ interface AddPlaceHandlers {
   remove: () => void;
 }
 
-/** Popup d'un lieu à ajouter : « type · source », nom, adresse, Ajouter au jour et aux idées. */
+/**
+ * Popup d'un lieu à ajouter : type en couleur, icône et nom, adresse, source en petit, Ajouter au
+ * jour et aux idées.
+ */
 function addablePlaceContent(
   place: { stepType: StepType; name: string; address: string | null },
   source: string | null,
@@ -149,7 +156,9 @@ function addablePlaceContent(
   }
   return {
     kind: 'poi',
-    category: join(STEP_TYPE_INFO[place.stepType].label, source),
+    category: STEP_TYPE_INFO[place.stepType].label,
+    icon: place.stepType,
+    ...(source ? { source } : {}),
     color: STEP_TYPE_INFO[place.stepType].color,
     title: place.name,
     notes: place.address ?? '',
@@ -160,7 +169,7 @@ function addablePlaceContent(
 }
 
 /**
- * Lieu de la découverte : « type · source », nom, adresse. Pas encore dans le voyage : « Ajouter à
+ * Lieu de la découverte : type, icône et nom, adresse, source. Pas encore dans le voyage : « Ajouter à
  * J2 » (jour affiché) et « Ajouter aux idées » ; déjà ajouté : pastille cochée et « Supprimer ».
  */
 export function poiPopupContent(

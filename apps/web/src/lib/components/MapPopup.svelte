@@ -4,6 +4,7 @@
   import Plus from 'lucide-svelte/icons/plus';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import type { MapPopupContent } from '#lib/map/popups.ts';
+  import { STEP_ICONS } from '#lib/steps/icons.ts';
 
   interface Props {
     content: MapPopupContent;
@@ -12,18 +13,27 @@
   let { content }: Props = $props();
 
   const ICONS = { edit: Pencil, trash: Trash2, plus: Plus };
+  const TypeIcon = $derived(content.icon ? STEP_ICONS[content.icon] : null);
 </script>
 
-<!-- Popup de la carte, comme la maquette de référence : catégorie, nom, notes, infos, actions. -->
+<!-- Popup de la carte, comme la maquette de référence : catégorie, nom (avec l'icône du type pour
+     un lieu à ajouter), notes, source, infos, actions. -->
 <div
   class="map-popup-body"
   data-testid={`${content.kind}-popup`}
   style={`--pc: var(${content.color})`}
 >
   <div class="cat">{content.category}</div>
-  <h4>{content.title}</h4>
+  <h4>
+    {#if TypeIcon}
+      <span class="type-icon" aria-hidden="true"><TypeIcon size={13} strokeWidth={2.4} /></span>
+    {/if}{content.title}
+  </h4>
   {#if content.notes}
     <p class="notes">{content.notes}</p>
+  {/if}
+  {#if content.source}
+    <p class="source">{content.source}</p>
   {/if}
   {#if content.meta.length > 0 || content.chip}
     <div class="meta">
@@ -67,10 +77,25 @@
   }
 
   h4 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
     margin: 1px 0 0;
     color: var(--fg);
     font: 800 15px var(--font-display);
     letter-spacing: -0.01em;
+  }
+
+  .type-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--pc, var(--accent));
+    color: var(--marker-ring);
   }
 
   .notes {
@@ -78,6 +103,12 @@
     color: var(--muted);
     font-size: 12.5px;
     white-space: pre-wrap;
+  }
+
+  .source {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11px;
   }
 
   .meta {

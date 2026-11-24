@@ -1,7 +1,14 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { mount, onMount, unmount, untrack } from 'svelte';
-  import { STEP_TYPE_INFO, type Bbox, type Place, type Poi } from '@mytrips/core';
+  import {
+    STEP_TYPE_INFO,
+    STEP_TYPES,
+    type Bbox,
+    type Place,
+    type Poi,
+    type StepType,
+  } from '@mytrips/core';
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
   import Search from 'lucide-svelte/icons/search';
@@ -16,11 +23,15 @@
   import {
     closestPoiId,
     POI_HIT_TOLERANCE_PX,
+    POI_ICON_LAYER,
     POI_LAYER,
     POI_SOURCE,
     poiFeatureCollection,
+    poiIconId,
+    poiIconLayer,
     poiLayer,
   } from '#lib/map/pois.ts';
+  import { loadStepIconImage, POI_ICON_PIXEL_RATIO } from '#lib/map/poiIcons.ts';
   import {
     missingImageResolver,
     styleFor,
@@ -339,7 +350,7 @@
   }
 
   /** Décalage de la popup selon ce qu'elle désigne (marqueur en épingle, pastille, tracé). */
-  const POPUP_OFFSET = { step: 36, poi: 14, leg: 8, place: 8 } as const;
+  const POPUP_OFFSET = { step: 36, poi: 20, leg: 8, place: 8 } as const;
 
   function targetKey(target: PopupTarget) {
     if (target.kind === 'step') return target.point.key;
@@ -593,11 +604,46 @@
       // `promoteId` : l'identifiant du lieu sert d'identifiant à l'état `active`.
       m.addSource(POI_SOURCE, { type: 'geojson', data, promoteId: 'id' });
       m.addLayer(poiLayer(cssColor('--marker-ring')));
+      m.addLayer(poiIconLayer());
+      void addPoiIcons(m);
     }
     // Nouvelles données ou nouveau fond : on repart d'aucun état, puis on repose les bons.
     m.removeFeatureState({ source: POI_SOURCE });
     activePois = [];
     applyActivePois(m);
+  }
+
+  /** Images des icônes des types, chargées une fois par page (le changement de fond les efface). */
+  let poiIcons: Promise<Map<StepType, HTMLImageElement>> | undefined;
+
+  /**
+   * Ajoute au style les icônes des pastilles. Le résolveur d'images manquantes a pu poser une image
+   * vide sous le même nom pendant le chargement : elle est remplacée (MapLibre redessine alors les
+   * pastilles concernées). Une icône qui ne se charge pas laisse la pastille sans icône.
+   */
+  async function addPoiIcons(m: MapLibreMap) {
+    poiIcons ??= (async () => {
+      const color = cssColor('--marker-ring');
+      const entries = await Promise.all(
+        STEP_TYPES.map(async (t) => {
+          const image = await loadStepIconImage(t, color).catch(() => null);
+          return image ? ([[t, image]] as const) : [];
+        }),
+      );
+      return new Map(entries.flat());
+    })();
+    const images = await poiIcons;
+    try {
+      // Couche absente : fond changé entre-temps (le nouveau fond reprend les icônes).
+      if (!m.getLayer(POI_ICON_LAYER)) return;
+      for (const [type, image] of images) {
+        const id = poiIconId(type);
+        if (m.hasImage(id)) m.removeImage(id);
+        m.addImage(id, image, { pixelRatio: POI_ICON_PIXEL_RATIO });
+      }
+    } catch {
+      // Carte supprimée pendant le chargement (page quittée).
+    }
   }
 
   /** Pose l'état `active` sur le lieu sélectionné et le lieu survolé, et seulement eux. */
@@ -635,20 +681,34 @@
    */
   function exposeForTests(m: MapLibreMap) {
     const testWindow = window as unknown as {
-      __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
+      __mapPoisForTests?: () => {
+        id: string;
+        name: string;
+        active: boolean;
+        icon: string;
+        iconReady: boolean;
+      }[];
       __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
       __mapZoomForTests?: () => number;
     };
     testWindow.__mapPoisForTests = () => {
       if (!m.getLayer(POI_LAYER)) return [];
       // eslint-disable-next-line svelte/prefer-svelte-reactivity
-      const seen = new Map<string, { id: string; name: string; active: boolean }>();
+      const seen = new Map<
+        string,
+        { id: string; name: string; active: boolean; icon: string; iconReady: boolean }
+      >();
       for (const f of m.queryRenderedFeatures({ layers: [POI_LAYER] })) {
         const id = String(f.properties?.id);
+        const icon = String(f.properties?.icon);
         seen.set(id, {
           id,
           name: String(f.properties?.name),
           active: m.getFeatureState({ source: POI_SOURCE, id }).active === true,
+          icon,
+          // L'image vide du résolveur d'images manquantes fait 1 × 1 px.
+          iconReady:
+            m.getLayer(POI_ICON_LAYER) !== undefined && (m.getImage(icon)?.data.width ?? 0) > 1,
         });
       }
       return [...seen.values()];

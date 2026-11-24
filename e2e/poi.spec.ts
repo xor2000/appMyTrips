@@ -83,6 +83,14 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
   await expect(
     explore.getByRole('group', { name: 'Catégories' }).getByRole('button', { name: /Musées/ }),
   ).toContainText('3');
+  // Icône du type (musée) dessinée au centre de chaque pastille.
+  await expect
+    .poll(async () => (await renderedPois(page)).map((p) => [p.icon, p.iconReady]))
+    .toEqual([
+      ['poi-icon-museum', true],
+      ['poi-icon-museum', true],
+      ['poi-icon-museum', true],
+    ]);
 
   await explore.getByRole('button', { name: 'Ajouter Musée des Arts décoratifs à J2' }).click();
   await expect(list.getByRole('listitem', { name: 'Musée des Arts décoratifs' })).toContainText(
@@ -154,6 +162,9 @@ test('choisir un lieu dans la liste le met en évidence sur la carte, avec son n
     .getByRole('button', { name: /Musée des Arts décoratifs/ })
     .first()
     .click();
+  // La carte se déplace : « Rechercher dans cette zone » apparaît et décale la liste sous la souris
+  // restée immobile (le lieu passé dessous serait survolé). On l'éloigne de la liste.
+  await page.mouse.move(640, 5);
   const popup = page.getByTestId('poi-popup');
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée des Arts décoratifs');
   await expect
@@ -187,7 +198,10 @@ test('popup d’un lieu découvert : type, source, Ajouter, puis « Déjà ajout
     .first()
     .click();
   const popup = page.getByTestId('poi-popup');
-  await expect(popup).toContainText('Musée · OpenStreetMap');
+  // Catégorie seule en couleur, icône à gauche du nom, source en petit sous l'adresse.
+  await expect(popup.locator('.cat')).toHaveText('Musée');
+  await expect(popup.getByRole('heading', { level: 4 }).locator('.type-icon svg')).toBeVisible();
+  await expect(popup.locator('.source')).toHaveText('OpenStreetMap');
   await expect(popup.getByRole('button', { name: 'Ajouter aux idées' })).toBeVisible();
   await popup.getByRole('button', { name: 'Ajouter à J1' }).click();
   await expect(item).toContainText('Déjà ajouté');
@@ -293,7 +307,8 @@ test('fond OSM France : clic sur un lieu dessiné par le fond, popup et ajout au
   await clickMapAt(page, [2.333, 48.863]);
   const popup = page.getByTestId('poi-popup');
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée des Arts décoratifs');
-  await expect(popup).toContainText('Musée · OpenStreetMap');
+  await expect(popup.locator('.cat')).toHaveText('Musée');
+  await expect(popup.locator('.source')).toHaveText('OpenStreetMap');
   await expect(popup).toContainText('107 Rue de Rivoli, Paris');
   await expect(popup.getByRole('button', { name: 'Ajouter à J1' })).toBeVisible();
   expect(poiRequests).toHaveLength(1);

@@ -2,7 +2,14 @@ import type { Page } from '@playwright/test';
 
 /** Accès de test exposés par la carte (TripMap.svelte) : les lieux sont dessinés en WebGL. */
 export interface MapTestWindow {
-  __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
+  __mapPoisForTests?: () => {
+    id: string;
+    name: string;
+    active: boolean;
+    /** Image de l'icône du type, et si elle est chargée (pas l'image vide de secours). */
+    icon: string;
+    iconReady: boolean;
+  }[];
   __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
   __mapZoomForTests?: () => number;
 }

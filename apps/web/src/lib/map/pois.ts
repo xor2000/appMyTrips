@@ -1,5 +1,9 @@
-import type { Poi } from '@mytrips/core';
-import type { CircleLayerSpecification, ExpressionSpecification } from 'maplibre-gl';
+import type { Poi, StepType } from '@mytrips/core';
+import type {
+  CircleLayerSpecification,
+  ExpressionSpecification,
+  SymbolLayerSpecification,
+} from 'maplibre-gl';
 
 /**
  * Lieux de la découverte dessinés par la carte (WebGL) plutôt qu'en marqueurs HTML : ils suivent
@@ -8,12 +12,21 @@ import type { CircleLayerSpecification, ExpressionSpecification } from 'maplibre
  */
 export const POI_SOURCE = 'pois';
 export const POI_LAYER = 'pois';
+/** Icônes des types, posées au centre des pastilles (images ajoutées par la carte). */
+export const POI_ICON_LAYER = 'poi-icons';
+
+/** Identifiant de l'image de l'icône d'un type d'étape (voir `lib/map/poiIcons.ts`). */
+export function poiIconId(type: StepType): string {
+  return `poi-icon-${type}`;
+}
 
 export interface PoiFeatureProperties {
   id: string;
   name: string;
   /** Couleur réelle du type d'étape (MapLibre ne lit pas les variables CSS). */
   color: string;
+  /** Image de l'icône du type (`poiIconId`). */
+  icon: string;
 }
 
 export interface PoiFeatureCollection {
@@ -34,14 +47,17 @@ export function poiFeatureCollection(
     features: pois.map((p) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      properties: { id: p.id, name: p.name, color: colorOf(p) },
+      properties: { id: p.id, name: p.name, color: colorOf(p), icon: poiIconId(p.stepType) },
     })),
   };
 }
 
 const active: ExpressionSpecification = ['boolean', ['feature-state', 'active'], false];
 
-/** Pastilles colorées par type, cerclées de `ringColor` ; plus grandes quand le lieu est actif. */
+/**
+ * Pastilles colorées par type, cerclées de `ringColor`, assez grandes pour leur icône ; plus
+ * grandes quand le lieu est actif.
+ */
 export function poiLayer(ringColor: string): CircleLayerSpecification {
   return {
     id: POI_LAYER,
@@ -49,11 +65,29 @@ export function poiLayer(ringColor: string): CircleLayerSpecification {
     source: POI_SOURCE,
     paint: {
       'circle-color': ['get', 'color'],
-      'circle-radius': ['case', active, 10, 7],
-      'circle-opacity': ['case', active, 1, 0.65],
+      'circle-radius': ['case', active, 15, 11],
+      'circle-opacity': ['case', active, 1, 0.85],
       'circle-stroke-color': ringColor,
       'circle-stroke-width': ['case', active, 3, 2],
     },
+  };
+}
+
+/**
+ * Icône blanche du type au centre de chaque pastille. Toujours affichée (pas de collision entre
+ * icônes) ; le clic et le survol restent sur la couche des pastilles.
+ */
+export function poiIconLayer(): SymbolLayerSpecification {
+  return {
+    id: POI_ICON_LAYER,
+    type: 'symbol',
+    source: POI_SOURCE,
+    layout: {
+      'icon-image': ['get', 'icon'],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+    paint: { 'icon-opacity': ['case', active, 1, 0.9] },
   };
 }
 

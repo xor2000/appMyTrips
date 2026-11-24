@@ -77,4 +77,31 @@ describe('MapPopup', () => {
     expect(ideas).toHaveBeenCalled();
     expect(add).not.toHaveBeenCalled();
   });
+
+  it('lieu découvert : icône du type à gauche du nom, source en petit sous l’adresse', () => {
+    const { container } = render(MapPopup, {
+      props: {
+        content: content({
+          kind: 'poi',
+          category: 'Musée',
+          icon: 'museum',
+          source: 'Geoapify · OpenStreetMap',
+          notes: '107 Rue de Rivoli, Paris',
+        }),
+      },
+    });
+    const heading = screen.getByRole('heading', { level: 4, name: 'Musée du Louvre' });
+    expect(heading.querySelector('.type-icon svg')).toBeTruthy();
+    expect(container.querySelector('.cat')?.textContent?.trim()).toBe('Musée');
+    const source = container.querySelector('.source');
+    expect(source?.textContent?.trim()).toBe('Geoapify · OpenStreetMap');
+    // Sous l'adresse.
+    expect(container.querySelector('.notes')?.nextElementSibling).toBe(source);
+  });
+
+  it('sans icône ni source (étape, trajet) : rien de plus', () => {
+    const { container } = render(MapPopup, { props: { content: content() } });
+    expect(container.querySelector('.type-icon')).toBeNull();
+    expect(container.querySelector('.source')).toBeNull();
+  });
 });

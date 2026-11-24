@@ -95,7 +95,7 @@ describe('legPopupContent (comme buildRoutePopup de la référence)', () => {
 describe('poiPopupContent (comme buildDiscoverPopup de la référence)', () => {
   const handlers = { addToDay: vi.fn(), addToIdeas: vi.fn(), remove: vi.fn() };
 
-  it('pas encore ajouté : « type · OpenStreetMap », nom, adresse, Ajouter au jour et aux idées', () => {
+  it('pas encore ajouté : type et icône, nom, adresse, source à part, Ajouter au jour et aux idées', () => {
     const c = poiPopupContent(
       makePoi({ address: '107 rue de Rivoli' }),
       false,
@@ -105,7 +105,9 @@ describe('poiPopupContent (comme buildDiscoverPopup de la référence)', () => {
     );
     expect(c).toMatchObject({
       kind: 'poi',
-      category: 'Musée · OpenStreetMap',
+      category: 'Musée',
+      icon: 'museum',
+      source: 'OpenStreetMap',
       title: 'Musée des Arts décoratifs',
       notes: '107 rue de Rivoli',
       color: '--type-museum',
@@ -135,7 +137,8 @@ describe('poiPopupContent (comme buildDiscoverPopup de la référence)', () => {
 
   it('source Geoapify ; lecture seule : pastille gardée, aucune action', () => {
     const c = poiPopupContent(makePoi({ source: 'geoapify' }), true, 'J2', false, handlers);
-    expect(c.category).toBe('Musée · Geoapify · OpenStreetMap');
+    expect(c.category).toBe('Musée');
+    expect(c.source).toBe('Geoapify · OpenStreetMap');
     expect(c.chip?.label).toBe('Déjà ajouté');
     expect(c.actions).toEqual([]);
   });
@@ -171,7 +174,9 @@ describe('clic droit sur la carte : lieu trouvé par Photon', () => {
     const c = placePopupContent(placeAtPoint(school, click), false, 'J1', true, handlers);
     expect(c).toMatchObject({
       kind: 'poi',
-      category: 'Musée · OpenStreetMap',
+      category: 'Musée',
+      icon: 'museum',
+      source: 'OpenStreetMap',
       title: 'École élémentaire',
       notes: '12 Rue de l’Arbre Sec, 75001 Paris, France',
       color: '--type-museum',
@@ -187,6 +192,8 @@ describe('clic droit sur la carte : lieu trouvé par Photon', () => {
   it('point sans lieu : pas de mention OpenStreetMap', () => {
     const c = placePopupContent(placeAtPoint(null, click), false, null, true, handlers);
     expect(c.category).toBe('Autre');
+    expect(c.icon).toBe('other');
+    expect(c.source).toBeUndefined();
     expect(c.title).toBe('Point sur la carte');
     expect(labels(c)).toEqual(['Ajouter aux idées']);
   });
