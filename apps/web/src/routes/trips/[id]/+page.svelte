@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    POI_CATEGORIES,
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
@@ -60,6 +61,7 @@
   } from '#lib/api.ts';
   import { dayHoursLabel, dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
+  import { createBasemapPoiFinder } from '#lib/map/basemapPois.ts';
   import {
     legPopupContent,
     poiPopupContent,
@@ -166,6 +168,10 @@
   let selectedPoi = $state<string | null>(null);
   let hoveredPoi = $state<string | null>(null);
   let poiRequest = 0;
+  /** Lieux dessinés par le fond « Plan OSM France » : toutes les catégories de la découverte. */
+  const findBasemapPois = createBasemapPoiFinder((area, zoom) =>
+    explorePois({ bbox: area, zoom }, POI_CATEGORIES),
+  );
   let editingLegId = $state<string | null>(null);
   /** Saisie manuelle d'un trajet sans itinéraire trouvé. */
   let manualLeg = $state<{ pair: DayPair; mode: LegMode } | null>(null);
@@ -1219,6 +1225,7 @@
         {hoveredPoi}
         onPickPoi={pickPoi}
         onHoverPoi={(poiId) => (hoveredPoi = poiId)}
+        findBasemapPois={online ? findBasemapPois : undefined}
         {exploring}
         onToggleExplore={online ? toggleExplore : undefined}
         onOffline={online ? openOffline : undefined}

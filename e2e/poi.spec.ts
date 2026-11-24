@@ -15,6 +15,7 @@ test.beforeEach(async ({ context }) => {
       : route.abort(),
   );
   await context.route('https://*.tile.opentopomap.org/**', (route) => route.abort());
+  await context.route('https://*.tile.openstreetmap.fr/**', (route) => route.abort());
 });
 
 const uniqueName = (label: string) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
@@ -244,4 +245,77 @@ test('taille d’affichage à 80 % : un clic sur la carte vise toujours le bon l
   await expect(page.getByTestId('poi-popup').getByRole('heading', { level: 4 })).toHaveText(
     'Musée des Arts décoratifs',
   );
+});
+
+/** Zoom sur le Louvre (clic sur sa carte de la timeline) et attente de la fin du vol. */
+async function zoomOnLouvre(page: Page) {
+  await page
+    .getByTestId('day-timeline')
+    .getByTestId('step-card')
+    .filter({ hasText: 'Musée du Louvre' })
+    .getByRole('button', { name: /Musée du Louvre Musée/ })
+    .click();
+  await expect(page.getByTestId('step-popup')).toBeVisible();
+  // Fin de l'animation : le Louvre est au centre de la carte, au zoom 15 au moins.
+  await expect
+    .poll(async () => {
+      const zoom = await page.evaluate(() => (window as MapTestWindow).__mapZoomForTests?.() ?? 0);
+      const center = await page.evaluate(() => {
+        const p = (window as MapTestWindow).__mapProjectForTests?.([2.3376, 48.8606]);
+        const canvas = document.querySelector<HTMLElement>('.maplibregl-canvas');
+        return p && canvas
+          ? Math.hypot(p.x - canvas.offsetWidth / 2, p.y - canvas.offsetHeight / 2)
+          : 999;
+      });
+      return zoom >= 15 && center < 1;
+    })
+    .toBe(true);
+}
+
+test('fond OSM France : clic sur un lieu dessiné par le fond, popup et ajout aux idées', async ({
+  page,
+}) => {
+  const poiRequests: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/poi?')) poiRequests.push(r.url());
+  });
+  await tripCenteredOnLouvre(page);
+  await zoomOnLouvre(page);
+
+  // Fond « Plan » : ses lieux ne sont pas cliquables, aucune recherche.
+  await clickMapAt(page, [2.333, 48.863]);
+  await expect(page.getByTestId('step-popup')).toHaveCount(0);
+
+  // Fond « Plan OSM France » : les lieux dessinés par les tuiles ouvrent la popup de la découverte.
+  await page.getByRole('button', { name: 'Fond de carte' }).click();
+  await page.getByRole('menuitemradio', { name: 'Plan OSM France' }).click();
+  // Musée des Arts décoratifs (e2e/mock-services.mjs), sans passer par « Explorer ».
+  await clickMapAt(page, [2.333, 48.863]);
+  const popup = page.getByTestId('poi-popup');
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée des Arts décoratifs');
+  await expect(popup).toContainText('Musée · OpenStreetMap');
+  await expect(popup).toContainText('107 Rue de Rivoli, Paris');
+  await expect(popup.getByRole('button', { name: 'Ajouter à J1' })).toBeVisible();
+  expect(poiRequests).toHaveLength(1);
+
+  // Un autre lieu de la même zone : pas de nouvelle requête.
+  await clickMapAt(page, [2.3405, 48.8622]);
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Café Kitsuné');
+  expect(poiRequests).toHaveLength(1);
+
+  // Loin de tout lieu : rien ne s'ouvre.
+  await clickMapAt(page, [2.3376, 48.8585]);
+  await expect(popup).toHaveCount(0);
+
+  await clickMapAt(page, [2.333, 48.863]);
+  await popup.getByRole('button', { name: 'Ajouter aux idées' }).click();
+  const ideas = page.getByRole('region', { name: 'Idées' });
+  await expect(
+    ideas.getByTestId('step-card').filter({ hasText: 'Musée des Arts décoratifs' }),
+  ).toHaveCount(1);
+
+  // Ajouté : le marqueur de l'idée recouvre le lieu du fond, son clic ouvre la popup de l'idée.
+  await clickMapAt(page, [2.333, 48.863]);
+  await expect(page.getByTestId('step-popup')).toContainText('Musée · Idée');
+  await expect(popup).toHaveCount(0);
 });

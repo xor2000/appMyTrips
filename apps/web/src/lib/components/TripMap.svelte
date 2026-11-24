@@ -1,7 +1,7 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { mount, onMount, unmount, untrack } from 'svelte';
-  import { STEP_TYPE_INFO, type Poi } from '@mytrips/core';
+  import { STEP_TYPE_INFO, type Bbox, type Poi } from '@mytrips/core';
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
   import Search from 'lucide-svelte/icons/search';
@@ -12,6 +12,7 @@
   import type { FocusTarget, MapPopupContent, PopupTarget } from '#lib/map/popups.ts';
   import BasemapPicker from './BasemapPicker.svelte';
   import MapPopup from './MapPopup.svelte';
+  import { BASEMAP_POI_TOLERANCE_PX, basemapPoisClickable } from '#lib/map/basemapPois.ts';
   import {
     closestPoiId,
     POI_HIT_TOLERANCE_PX,
@@ -45,6 +46,11 @@
     hoveredPoi?: string | null;
     onPickPoi?: (poi: Poi) => void;
     onHoverPoi?: (id: string | null) => void;
+    /**
+     * Lieux sous un clic sur le fond « Plan OSM France » (ses tuiles sont des images) : la popup
+     * du plus proche s'ouvre, comme pour un lieu de la découverte. Absent (hors ligne) : rien.
+     */
+    findBasemapPois?: (area: Bbox, zoom: number) => Promise<Poi[]>;
     /** Mode « Explorer » ; le bouton n'apparaît que si `onToggleExplore` est fourni. */
     exploring?: boolean;
     onToggleExplore?: () => void;
@@ -91,6 +97,7 @@
     hoveredPoi = null,
     onPickPoi = () => {},
     onHoverPoi = () => {},
+    findBasemapPois,
     exploring = false,
     onToggleExplore,
     onOffline,
@@ -112,8 +119,14 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
   let PopupClass: typeof Popup | undefined;
-  /** Popup ouverte (composant Svelte monté dans une popup MapLibre) et ce qu'elle montre. */
-  let popupRef: { kind: PopupTarget['kind']; key: string; popup: Popup } | undefined;
+  /**
+   * Popup ouverte (composant Svelte monté dans une popup MapLibre) et ce qu'elle montre.
+   * `basemap` : lieu dessiné par le fond, absent de la découverte.
+   */
+  let popupRef:
+    { kind: PopupTarget['kind']; key: string; popup: Popup; basemap: boolean } | undefined;
+  /** Change à chaque clic ou déplacement : une recherche de lieu du fond devenue inutile est ignorée. */
+  let basemapClick = 0;
   /** Lieux portant l'état `active` (survolé ou sélectionné) dans la source des lieux. */
   let activePois: string[] = [];
   /** Synchronisations reportées à la fin du chargement des tuiles (voir `whenStyleReady`). */
@@ -162,7 +175,10 @@
         if (!onAddHere) return;
         menu = { x: e.point.x, y: e.point.y, lat: e.lngLat.lat, lng: e.lngLat.lng };
       });
-      m.on('movestart', () => (menu = null));
+      m.on('movestart', () => {
+        menu = null;
+        basemapClick++;
+      });
       const emitView = () => {
         const b = m.getBounds();
         onViewChange({
@@ -207,7 +223,11 @@
           placing.onPlace({ lat: e.lngLat.lat, lng: e.lngLat.lng });
           return;
         }
-        if (!m.getLayer(POI_LAYER)) return;
+        basemapClick++;
+        if (!m.getLayer(POI_LAYER)) {
+          void openBasemapPoi(m, e.point);
+          return;
+        }
         const { x, y } = e.point;
         const t = POI_HIT_TOLERANCE_PX;
         const hits = m
@@ -234,6 +254,8 @@
         if (poi) {
           openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat]);
           onPickPoi(poi);
+        } else {
+          void openBasemapPoi(m, e.point);
         }
       });
       exposeForTests(m);
@@ -325,8 +347,42 @@
         : target.poi.id;
   }
 
+  /**
+   * Clic sur le fond « Plan OSM France » : lieux cherchés autour du clic (voir
+   * `lib/map/basemapPois.ts`), popup du plus proche. Rien sur un tracé de trajet (il a sa popup),
+   * hors ligne, sur un autre fond ou trop loin ; une recherche dépassée par un autre clic, un
+   * déplacement ou un changement de fond est ignorée, une erreur aussi (clic sans effet).
+   */
+  async function openBasemapPoi(m: MapLibreMap, point: { x: number; y: number }) {
+    if (!findBasemapPois || !basemapPoisClickable(styleId, m.getZoom())) return;
+    const legLayers = ['legs', 'legs-dashed'].filter((id) => m.getLayer(id));
+    const onLeg =
+      legLayers.length > 0 &&
+      m
+        .queryRenderedFeatures([point.x, point.y], { layers: legLayers })
+        .some((f) => String(f.properties?.key ?? '').includes('>'));
+    if (onLeg) return;
+    const click = basemapClick;
+    const t = BASEMAP_POI_TOLERANCE_PX;
+    const sw = m.unproject([point.x - t, point.y + t]);
+    const ne = m.unproject([point.x + t, point.y - t]);
+    let found: Poi[];
+    try {
+      found = await findBasemapPois(
+        { west: sw.lng, south: sw.lat, east: ne.lng, north: ne.lat },
+        m.getZoom(),
+      );
+    } catch {
+      return;
+    }
+    if (click !== basemapClick || placing || !basemapPoisClickable(styleId, m.getZoom())) return;
+    const id = closestPoiId(found, point, (ll) => m.project(ll));
+    const poi = found.find((p) => p.id === id);
+    if (poi) openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat], true);
+  }
+
   /** Popup comme la référence : catégorie, nom, notes, infos et actions (voir `lib/map/popups.ts`). */
-  function openPopup(target: PopupTarget, lngLat: [number, number]) {
+  function openPopup(target: PopupTarget, lngLat: [number, number], basemap = false) {
     const m = map;
     const content = popupFor(target);
     if (!m || !PopupClass || !content) {
@@ -366,7 +422,7 @@
       popupRef = undefined;
       onPopupClose(target.kind);
     });
-    popupRef = { kind: target.kind, key: targetKey(target), popup };
+    popupRef = { kind: target.kind, key: targetKey(target), popup, basemap };
   }
 
   // Élément choisi dans la colonne : cadrage comme la référence (`focusPoi`, `focusRoute`) et popup.
@@ -403,7 +459,7 @@
   $effect(() => {
     const ref = popupRef;
     if (ref?.kind === 'leg' && !lines.some((l) => l.key === ref.key)) closePopup();
-    if (ref?.kind === 'poi' && !pois.some((p) => p.id === ref.key)) closePopup();
+    if (ref?.kind === 'poi' && !ref.basemap && !pois.some((p) => p.id === ref.key)) closePopup();
   });
 
   /** Icône lucide « lightbulb » (marqueurs créés hors des composants Svelte). */
