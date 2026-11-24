@@ -9,7 +9,6 @@ const summary = {
   overrunMin: 54,
   conflictCount: 1,
   lateMin: 20,
-  missingLegs: 0,
 };
 
 describe('DaySummary', () => {
@@ -52,10 +51,11 @@ describe('DaySummary', () => {
     expect(screen.queryByRole('button', { name: 'Réorganiser' })).toBeNull();
   });
 
-  it('trajets manquants signalés', () => {
-    render(DaySummary, {
-      props: { summary: { ...summary, missingLegs: 2 }, canEdit: true, onReorganize: vi.fn() },
-    });
-    expect(screen.getByRole('status').textContent).toContain('2 trajets manquants');
+  it('trajets facultatifs : aucune alerte quand il n’y a ni conflit ni dépassement', () => {
+    // Un ancien résumé qui compterait encore des trajets absents n'affiche plus rien.
+    const quiet = { ...summary, overrunMin: 0, conflictCount: 0, lateMin: 0, missingLegs: 2 };
+    render(DaySummary, { props: { summary: quiet, canEdit: true, onReorganize: vi.fn() } });
+    expect(screen.queryByText(/trajets? manquants?/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

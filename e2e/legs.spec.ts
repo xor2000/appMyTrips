@@ -53,6 +53,10 @@ test('entre deux étapes, la tuile « + trajet » crée un trajet en voiture, tr
   await expect(tile).toContainText('+ trajet');
   await expect(page.getByTestId('trip-map')).toHaveAttribute('data-leg-lines', '0');
 
+  // Sans trajet, l'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+
+  await tile.hover();
+
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
   await expect(tile).toContainText('25 min · 12 km');
   await expect(tile).toContainText('routeur');
@@ -66,6 +70,8 @@ test('entre deux étapes, la tuile « + trajet » crée un trajet en voiture, tr
 test('forcer la durée affiche « forcé », puis recalculer revient au routeur', async ({ page }) => {
   await tripWithTwoSteps(page);
   const tile = timeline(page).getByTestId('leg-tile');
+  // Sans trajet, l'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+  await tile.hover();
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
   await expect(tile).toContainText('routeur');
 
@@ -90,6 +96,8 @@ test('réordonner les étapes retire l’ancien trajet ; un trajet forcé est pr
 }) => {
   await tripWithTwoSteps(page);
   const tile = timeline(page).getByTestId('leg-tile');
+  // Sans trajet, l'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+  await tile.hover();
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
   // Le clic sur le trajet ouvre sa popup sur la carte ; « Modifier » ouvre l'éditeur.
   await tile.getByRole('button', { name: /Voiture/ }).click();
@@ -114,6 +122,8 @@ test('réordonner les étapes retire l’ancien trajet ; un trajet forcé est pr
 test('aucun itinéraire en train : saisie manuelle de la durée', async ({ page }) => {
   await tripWithTwoSteps(page);
   const tile = timeline(page).getByTestId('leg-tile');
+  // Sans trajet, l'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+  await tile.hover();
   await tile.getByRole('button', { name: 'Trajet en Train' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nouveau trajet' });
   await expect(dialog).toContainText('Aucun itinéraire trouvé');
@@ -122,4 +132,39 @@ test('aucun itinéraire en train : saisie manuelle de la durée', async ({ page 
   await expect(tile).toContainText('Train');
   await expect(tile).toContainText('35 min');
   await expect(tile).toContainText('forcé');
+});
+
+test('timeline compacte et trajets facultatifs : pas d’alerte, ajout au survol, trajet sur une ligne', async ({
+  page,
+}) => {
+  await tripWithTwoSteps(page);
+  const cards = timeline(page).getByTestId('step-card');
+  const tile = timeline(page).getByTestId('leg-tile');
+  const height = async (l: import('@playwright/test').Locator) =>
+    (await l.boundingBox())?.height ?? 999;
+
+  // Trajet facultatif : aucun signalement.
+  await expect(page.getByText(/trajet manquant/)).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: /J1/ }).locator('.alert')).toHaveCount(0);
+
+  // Carte d'étape sur une ligne.
+  expect(await height(cards.first())).toBeLessThanOrEqual(48);
+  // Sans trajet : l'ajout est replié, les deux cartes se suivent de près.
+  const add = tile.getByRole('button', { name: 'Trajet en Voiture' });
+  // L'opacité est portée par la barre d'ajout (« + trajet » et les modes).
+  const bar = tile.locator('.reveal');
+  await page.mouse.move(5, 5);
+  await expect(bar).toHaveCSS('opacity', '0');
+  const first = await cards.first().boundingBox();
+  const second = await cards.nth(1).boundingBox();
+  expect(second!.y - (first!.y + first!.height)).toBeLessThanOrEqual(24);
+  // Survol de l'espace entre les lieux : l'ajout apparaît, sans décaler la liste.
+  await tile.hover();
+  await expect(bar).toHaveCSS('opacity', '1');
+  expect((await cards.nth(1).boundingBox())!.y).toBe(second!.y);
+
+  // Trajet existant : une ligne fine.
+  await add.click();
+  await expect(tile).toContainText('25 min');
+  expect(await height(tile.getByRole('button', { name: /Voiture/ }))).toBeLessThanOrEqual(26);
 });

@@ -44,7 +44,9 @@ test('en-tête : logo et nom de l’application, menu du profil', async ({ page 
 
   await accountButton(page, DEV_EMAIL).click();
   const menu = page.getByRole('menu');
-  await expect(menu.getByRole('menuitemradio')).toHaveCount(4);
+  await expect(menu.getByRole('group', { name: 'Thème' }).getByRole('menuitemradio')).toHaveCount(
+    4,
+  );
   await menu.getByRole('menuitem', { name: 'Paramètres' }).click();
   await expect(page).toHaveURL(/\/compte$/);
   await expect(menu).toHaveCount(0);
@@ -126,4 +128,32 @@ test('tablette : les jours passent sous la ligne du voyage, entiers', async ({ p
   ).toBeLessThan(4);
   expect(Math.abs((await centerY(select)) - profileY)).toBeLessThan(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test('taille d’affichage 80 / 90 / 100 % dans le menu du profil, gardée au rechargement', async ({
+  page,
+}) => {
+  await page.goto('/compte');
+  const zoom = () => page.evaluate(() => getComputedStyle(document.documentElement).zoom);
+  expect(await zoom()).toBe('1');
+
+  await accountButton(page, DEV_EMAIL).click();
+  const sizes = page.getByRole('menu').getByRole('group', { name: 'Taille d’affichage' });
+  await expect(sizes.getByRole('menuitemradio', { name: '100 %' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await sizes.getByRole('menuitemradio', { name: '80 %' }).click();
+  // Le menu reste ouvert pour comparer, comme dans appMyBank.
+  await expect(sizes.getByRole('menuitemradio', { name: '80 %' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  expect(await zoom()).toBe('0.8');
+
+  await page.reload();
+  expect(await zoom()).toBe('0.8');
+  await accountButton(page, DEV_EMAIL).click();
+  await page.getByRole('menuitemradio', { name: '100 %' }).click();
+  expect(await zoom()).toBe('1');
 });

@@ -28,10 +28,29 @@ describe('LegTile', () => {
     expect(screen.getByRole('button', { name: 'Trajet en Train' })).toBeTruthy();
   });
 
-  it('en lecture seule : trajet à définir, sans raccourci', () => {
+  it('en lecture seule, sans trajet (facultatif) : rien à afficher', () => {
     setup({ canEdit: false });
-    expect(screen.getByText('Trajet à définir')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^Trajet en/ })).toBeNull();
+    expect(screen.queryByText(/trajet/i)).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('sans trajet : ajout replié (affiché au survol), sauf trajet à reprendre', () => {
+    const { container } = render(LegTile, {
+      props: {
+        pair: { fromKey: 'a', toKey: 'b' },
+        leg: null,
+        canEdit: true,
+        highlighted: false,
+        suggestion: null,
+        onCreate: vi.fn(),
+        onEdit: vi.fn(),
+        onHover: vi.fn(),
+      },
+    });
+    expect(container.querySelector('[data-testid="leg-tile"]')?.classList.contains('vacant')).toBe(
+      true,
+    );
+    expect(container.querySelector('.reveal')?.classList.contains('shown')).toBe(false);
   });
 
   it('avec trajet : mode, durée, distance et origine des valeurs ; clic pour modifier', async () => {
@@ -71,6 +90,8 @@ describe('LegTile', () => {
       distanceM: 50_000,
     });
     const props = setup({ suggestion });
+    // Trajet à reprendre : l'ajout reste affiché (pas seulement au survol).
+    expect(document.querySelector('.reveal')?.classList.contains('shown')).toBe(true);
     await fireEvent.click(screen.getByRole('button', { name: 'Reprendre : Voiture 1 h 05' }));
     expect(props.onCreate).toHaveBeenCalledWith({
       mode: 'car',

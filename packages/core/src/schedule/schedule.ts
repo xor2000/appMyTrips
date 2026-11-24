@@ -23,7 +23,7 @@ export interface LocalTime {
   dayOffset: number;
 }
 
-export type ScheduleIssue = { kind: 'conflict'; lateMin: number } | { kind: 'missing_leg' };
+export type ScheduleIssue = { kind: 'conflict'; lateMin: number };
 
 export interface ScheduledItem {
   key: string;
@@ -56,7 +56,6 @@ export interface DaySummary {
   overrunMin: number;
   conflictCount: number;
   lateMin: number;
-  missingLegs: number;
 }
 
 export interface DaySchedule {
@@ -114,7 +113,7 @@ interface Slot {
  *   minutes) ; l'étape commence à son heure fixe dans les deux cas. Même règle pour le départ fixé
  *   d'un trajet.
  * - L'arrivée d'un trajet s'exprime dans le fuseau de l'étape d'arrivée (« +1 j » après minuit).
- * - Un trajet manquant compte 0 min et est signalé ; le calcul continue.
+ * - Les trajets sont facultatifs : sans trajet, l'enchaînement compte 0 min, sans signalement.
  * - Dépassement : fin de la dernière activité (ou arrivée au séjour du soir) après la fin du jour.
  */
 export function scheduleDay(input: DayScheduleInput): DaySchedule {
@@ -152,7 +151,6 @@ export function scheduleDay(input: DayScheduleInput): DaySchedule {
     overrunMin: 0,
     conflictCount: 0,
     lateMin: 0,
-    missingLegs: 0,
   };
   if (slots.length === 0) return { items: [], legs: [], summary };
 
@@ -189,7 +187,6 @@ export function scheduleDay(input: DayScheduleInput): DaySchedule {
         depart = anchor;
       }
       const durationMin = leg?.durationMin ?? 0;
-      if (!leg) issues.push({ kind: 'missing_leg' });
       arrival = depart.plus({ minutes: durationMin });
       scheduledLegs.push({
         key: legPairKey(from.key, slot.key),
@@ -204,7 +201,6 @@ export function scheduleDay(input: DayScheduleInput): DaySchedule {
       });
       summary.travelMin += durationMin;
       summary.freeMin += freeBeforeMin;
-      if (!leg) summary.missingLegs += 1;
       for (const issue of issues) {
         if (issue.kind === 'conflict') {
           summary.conflictCount += 1;

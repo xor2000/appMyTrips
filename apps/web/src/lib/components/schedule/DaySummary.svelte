@@ -26,8 +26,6 @@
     [
       summary.overrunMin > 0 && `Dépasse la journée de ${formatDuration(summary.overrunMin)}`,
       summary.conflictCount > 0 && plural(summary.conflictCount, 'conflit'),
-      summary.missingLegs > 0 &&
-        plural(summary.missingLegs, 'trajet manquant', 'trajets manquants'),
     ].filter((p): p is string => typeof p === 'string'),
   );
   const fixable = $derived(summary.overrunMin > 0 || summary.conflictCount > 0);

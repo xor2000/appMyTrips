@@ -13,6 +13,15 @@ body {
   height: 100%;
 }
 
+/*
+ * Taille d'affichage (lib/scale.svelte.ts, comme appMyBank) : toute la page zoomée comme par le
+ * navigateur. Le zoom réduit aussi la hauteur de <html> : on la divise pour remplir l'écran.
+ */
+html {
+  zoom: var(--zoom, 1);
+  height: calc(100% / var(--zoom, 1));
+}
+
 body {
   margin: 0;
   background: var(--bg);

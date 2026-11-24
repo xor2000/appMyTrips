@@ -1625,11 +1625,12 @@
     border-bottom: 1px solid var(--line);
   }
 
+  /* Timeline compacte : espacements resserrés entre les blocs de la colonne. */
   .block {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-3) 14px;
+    gap: var(--space-2);
+    padding: var(--space-2) 14px;
   }
 
   .day-head {
@@ -1660,12 +1661,12 @@
   }
 
   .add-main {
-    min-height: 40px;
+    min-height: 32px;
     border: 1.5px dashed var(--accent);
     border-radius: var(--radius-pill);
     background: transparent;
     color: var(--accent-strong);
-    font: 600 14px var(--font-display);
+    font: 600 13px var(--font-display);
     cursor: pointer;
     transition: background-color 0.15s;
   }
@@ -1682,7 +1683,7 @@
   }
 
   .add-more .btn {
-    min-height: 28px;
+    min-height: 26px;
     padding: 0 var(--space-3);
     font-size: 12px;
   }

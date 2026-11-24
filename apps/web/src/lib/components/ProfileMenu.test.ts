@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SCALE_KEY } from '#lib/scale.svelte.ts';
 import { THEME_KEY } from '#lib/theme.ts';
 import ProfileMenu from './ProfileMenu.svelte';
 
@@ -24,6 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.style.removeProperty('--zoom');
   vi.unstubAllGlobals();
 });
 
@@ -52,7 +54,9 @@ describe('ProfileMenu', () => {
   it('propose les quatre thèmes, le thème courant coché', async () => {
     store.set(THEME_KEY, 'pastel-dark');
     await open();
-    const themes = screen.getAllByRole('menuitemradio');
+    const themes = within(screen.getByRole('group', { name: 'Thème' })).getAllByRole(
+      'menuitemradio',
+    );
     expect(themes.map((t) => t.textContent?.trim())).toEqual([
       'Automatique',
       'Pastel ludique clair',
@@ -72,6 +76,25 @@ describe('ProfileMenu', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('carnet');
     expect(store.get(THEME_KEY)).toBe('carnet');
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('taille d’affichage 80 / 90 / 100 % en segments, comme appMyBank ; 100 % par défaut', async () => {
+    await open();
+    const group = screen.getByRole('group', { name: 'Taille d’affichage' });
+    const sizes = within(group).getAllByRole('menuitemradio');
+    expect(sizes.map((b) => b.textContent?.trim())).toEqual(['80 %', '90 %', '100 %']);
+    expect(sizes.map((b) => b.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+  });
+
+  it('choisir une taille l’applique et la garde ; le menu reste ouvert pour comparer', async () => {
+    await open();
+    await fireEvent.click(screen.getByRole('menuitemradio', { name: '90 %' }));
+    expect(document.documentElement.style.getPropertyValue('--zoom')).toBe('0.9');
+    expect(store.get(SCALE_KEY)).toBe('90');
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.getByRole('menuitemradio', { name: '90 %' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
   });
 
   it('« Paramètres » mène à la page du compte ; pas d’administration sans droit', async () => {
@@ -122,7 +145,7 @@ describe('ProfileMenu', () => {
   it('les flèches parcourent les entrées, en boucle', async () => {
     const menu = await open();
     const items = [...menu.querySelectorAll('[role^="menuitem"]')];
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(9);
     expect(document.activeElement).toBe(items[0]);
     await fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(items[1]);
