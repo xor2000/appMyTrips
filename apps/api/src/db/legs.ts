@@ -100,7 +100,9 @@ const round5 = (n: number) => n.toFixed(5);
 export function routeCacheKey(mode: LegMode, from: LatLng, to: LatLng, departAt?: string) {
   const points = `${round5(from.lat)},${round5(from.lng)}>${round5(to.lat)},${round5(to.lng)}`;
   const slot = (mode === 'bus' || mode === 'train') && departAt ? `:${departAt.slice(0, 13)}` : '';
-  return `${mode}:${points}${slot}`;
+  // « v2 » : tracés complets ; les entrées plus anciennes (tracés allégés à 600 points) sont
+  // ignorées et recalculées.
+  return `${mode}:v2:${points}${slot}`;
 }
 
 export async function getCachedRoute(

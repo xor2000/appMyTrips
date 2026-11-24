@@ -1,3 +1,4 @@
+import { decodePolyline, encodePolyline } from '@mytrips/core';
 import { env } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
 import { ALICE, BOB, addStep, call, createTrip, makeCaller, addMember } from './helpers';
@@ -21,24 +22,24 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const OSRM_BASE = 'https://routing.openstreetmap.de';
 
-/** Réponse OSRM (`overview=full`, `geometries=geojson`) d'un itinéraire. */
-function osrmResponse(distance = 72_000, duration = 4_500) {
+const SHORT_TRACK = encodePolyline([
+  { lat: 45.9, lng: 6.1 },
+  { lat: 45.95, lng: 6.5 },
+  { lat: 45.92, lng: 6.87 },
+]);
+
+/** Tracé de `n` points (polyligne précision 5), comme un long itinéraire OSRM. */
+function longTrack(n: number) {
+  return encodePolyline(
+    Array.from({ length: n }, (_, i) => ({ lat: 45 + i * 0.0003, lng: 6 + (i % 50) * 0.0002 })),
+  );
+}
+
+/** Réponse OSRM (`overview=full`, `geometries=polyline`) d'un itinéraire. */
+function osrmResponse(distance = 72_000, duration = 4_500, geometry = SHORT_TRACK) {
   return {
     code: 'Ok',
-    routes: [
-      {
-        distance,
-        duration,
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [6.1, 45.9],
-            [6.5, 45.95],
-            [6.87, 45.92],
-          ],
-        },
-      },
-    ],
+    routes: [{ distance, duration, geometry }],
     waypoints: [],
   };
 }
@@ -128,10 +129,52 @@ describe('trajets : création', () => {
     const b = t.trip.steps.find((s: { id: string }) => s.id === t.b);
     expect(url).toBe(
       `${OSRM_BASE}/${profile}/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}` +
-        '?overview=full&geometries=geojson',
+        '?overview=full&geometries=polyline',
     );
     expect(init.method ?? 'GET').toBe('GET');
     expect(new Headers(init.headers).get('user-agent')).toMatch(/^MyTrips\//);
+  });
+
+  it('tracé complet d’OSRM enregistré tel quel, sans allègement (2 000 points)', async () => {
+    const t = await tripWithSteps();
+    const track = longTrack(2000);
+    const res = await routeCaller(fakeFetch(() => json(osrmResponse(72_000, 4_500, track))))(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'car' },
+      v(t.trip),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.legs[0].geometry).toBe(track);
+    expect(decodePolyline(res.body.legs[0].geometry)).toHaveLength(2000);
+  });
+
+  it('ancien cache (tracé allégé) ignoré : nouveau calcul avec le tracé complet', async () => {
+    const from = place();
+    const to = place();
+    const r5 = (n: number) => Math.round(n * 1e5) / 1e5;
+    const oldKey = `car:${r5(from.lat)},${r5(from.lng)}>${r5(to.lat)},${r5(to.lng)}`;
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO route_cache (key, payload, created_at) VALUES (?, ?, ?)',
+    )
+      .bind(
+        oldKey,
+        JSON.stringify({
+          distanceM: 1000,
+          durationMin: 2,
+          geometry: SHORT_TRACK,
+          summary: null,
+          source: 'router',
+        }),
+        new Date().toISOString(),
+      )
+      .run();
+    const track = longTrack(1200);
+    const fetcher = fakeFetch(() => json(osrmResponse(10_000, 900, track)));
+    const res = await routeCaller(fetcher)(ALICE, 'POST', '/api/route', { mode: 'car', from, to });
+    expect(fetcher.mock.calls).toHaveLength(1);
+    expect(res.body.route.geometry).toBe(track);
   });
 
   it.each([429, 500, 503])('OSRM en erreur (%i) : estimation locale signalée', async (status) => {
@@ -326,6 +369,34 @@ describe('trajets : création', () => {
       v(t.trip),
     );
     expect(res.body.legs[0].summary).toBe('TER 17611');
+  });
+
+  it('train : tracé Transitous complet, sans allègement (1 500 points)', async () => {
+    const t = await tripWithSteps();
+    const points = Array.from({ length: 1500 }, (_, i) => ({
+      lat: 45 + i * 0.0004,
+      lng: 6 + (i % 40) * 0.0003,
+    }));
+    const itinerary = {
+      duration: 5100,
+      transfers: 0,
+      legs: [
+        {
+          mode: 'REGIONAL_RAIL',
+          duration: 5100,
+          displayName: 'TER 17611',
+          legGeometry: { points: encodePolyline(points, 6), precision: 6, length: 1500 },
+        },
+      ],
+    };
+    const res = await routeCaller(fakeFetch(() => json(transitousResponse([itinerary]))))(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'train' },
+      v(t.trip),
+    );
+    expect(decodePolyline(res.body.legs[0].geometry)).toHaveLength(1500);
   });
 
   it('bus sans itinéraire Transitous : 422 no_route', async () => {
