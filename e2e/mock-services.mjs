@@ -147,11 +147,36 @@ function readBody(req) {
   });
 }
 
+/** Polyligne encodée (algorithme de Google, précision 5) de points [lat, lng]. */
+function encodePolyline(points) {
+  let out = '';
+  let prevLat = 0;
+  let prevLng = 0;
+  const encode = (value) => {
+    let v = value < 0 ? ~(value << 1) : value << 1;
+    while (v >= 0x20) {
+      out += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
+      v >>= 5;
+    }
+    out += String.fromCharCode(v + 63);
+  };
+  for (const [lat, lng] of points) {
+    const la = Math.round(lat * 1e5);
+    const ln = Math.round(lng * 1e5);
+    encode(la - prevLat);
+    encode(ln - prevLng);
+    prevLat = la;
+    prevLng = ln;
+  }
+  return out;
+}
+
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   res.setHeader('content-type', 'application/json');
   if (url.pathname === '/health') return res.end('{"ok":true}');
-  // OSRM (routing.openstreetmap.de) : itinéraire fixe de 12,3 km en 25 min, tracé en trois points.
+  // OSRM (routing.openstreetmap.de) : itinéraire fixe de 12,3 km en 25 min, tracé en trois points
+  // (polyligne).
   const osrm = /^\/osrm\/routed-(car|bike|foot)\/route\/v1\/driving\/([^/]+)$/.exec(url.pathname);
   if (osrm && req.method === 'GET') {
     const [[lng1, lat1], [lng2, lat2]] = osrm[2].split(';').map((p) => p.split(',').map(Number));
@@ -162,14 +187,12 @@ createServer(async (req, res) => {
           {
             distance: 12_345,
             duration: 1_500,
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [lng1, lat1],
-                [(lng1 + lng2) / 2, (lat1 + lat2) / 2 + 0.002],
-                [lng2, lat2],
-              ],
-            },
+            // `geometries=polyline` : polyligne de précision 5, comme le vrai service.
+            geometry: encodePolyline([
+              [lat1, lng1],
+              [(lat1 + lat2) / 2 + 0.002, (lng1 + lng2) / 2],
+              [lat2, lng2],
+            ]),
           },
         ],
         waypoints: [],

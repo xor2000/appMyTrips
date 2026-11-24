@@ -126,7 +126,15 @@ test('trop loin : la découverte invite à zoomer', async ({ page }) => {
   const explore = page.getByRole('region', { name: 'Explorer' });
   await expect(explore.getByText('Zoomez pour explorer')).toHaveCount(0);
 
-  // Dézoomer de 13 à 11.
+  // Dézoomer de 13 à 11, une fois le cadrage sur le Louvre terminé (un clic pendant l'animation
+  // serait annulé par elle).
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { __mapZoomForTests: () => number }).__mapZoomForTests(),
+      ),
+    )
+    .toBeCloseTo(13, 1);
   const zoomOut = page.getByRole('button', { name: 'Zoom out' });
   await zoomOut.click();
   await zoomOut.click();
@@ -161,18 +169,56 @@ test('choisir un lieu dans la liste le met en évidence sur la carte, avec son n
     .getByRole('button', { name: /Musée des Arts décoratifs/ })
     .first()
     .click();
-  await expect(page.locator('.poi-popup')).toHaveText('Musée des Arts décoratifs');
+  const popup = page.getByTestId('poi-popup');
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée des Arts décoratifs');
   await expect
     .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
     .toEqual(['Musée des Arts décoratifs']);
+  // Zoom sur le lieu (15 au moins), comme la référence.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { __mapZoomForTests: () => number }).__mapZoomForTests(),
+      ),
+    )
+    .toBeGreaterThanOrEqual(15);
 
-  // Second clic : désélection, l'infobulle disparaît.
-  await explore
-    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+  // Fermer la popup désélectionne le lieu.
+  await page.locator('.map-popup .maplibregl-popup-close-button').click();
+  await expect(popup).toHaveCount(0);
+  await expect
+    .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
+    .toEqual([]);
+});
+
+test('popup d’un lieu découvert : type, source, Ajouter, puis « Déjà ajouté » et Supprimer', async ({
+  page,
+}) => {
+  await tripCenteredOnLouvre(page);
+  const explore = await exploreMuseums(page);
+  const item = explore.getByRole('listitem', { name: 'Musée des Arts décoratifs' });
+  await item
     .getByRole('button', { name: /Musée des Arts décoratifs/ })
     .first()
     .click();
-  await expect(page.locator('.poi-popup')).toHaveCount(0);
+  const popup = page.getByTestId('poi-popup');
+  await expect(popup).toContainText('Musée · OpenStreetMap');
+  await expect(popup.getByRole('button', { name: 'Ajouter aux idées' })).toBeVisible();
+  await popup.getByRole('button', { name: 'Ajouter à J1' }).click();
+  await expect(item).toContainText('Déjà ajouté');
+
+  await item
+    .getByRole('button', { name: /Musée des Arts décoratifs/ })
+    .first()
+    .click();
+  await expect(popup).toContainText('Déjà ajouté');
+  await expect(popup.getByRole('button', { name: /^Ajouter/ })).toHaveCount(0);
+  await popup.getByRole('button', { name: 'Supprimer' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Supprimer l’étape ?' })
+    .getByRole('button', { name: 'Supprimer' })
+    .click();
+  await expect(item).not.toContainText('Déjà ajouté');
 });
 
 test('cliquer un lieu sur la carte le sélectionne dans la liste', async ({ page }) => {
@@ -182,7 +228,9 @@ test('cliquer un lieu sur la carte le sélectionne dans la liste', async ({ page
 
   // Musée des Arts décoratifs (e2e/mock-services.mjs).
   await clickMapAt(page, [2.333, 48.863]);
-  await expect(page.locator('.poi-popup')).toHaveText('Musée des Arts décoratifs');
+  await expect(page.getByTestId('poi-popup').getByRole('heading', { level: 4 })).toHaveText(
+    'Musée des Arts décoratifs',
+  );
   await expect(
     explore
       .getByRole('listitem', { name: 'Musée des Arts décoratifs' })

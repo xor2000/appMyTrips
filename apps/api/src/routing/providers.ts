@@ -12,8 +12,6 @@ import type { Bindings } from '../env';
 const DEFAULT_OSRM_URL = 'https://routing.openstreetmap.de';
 const DEFAULT_TRANSITOUS_URL = 'https://api.transitous.org';
 const TIMEOUT_MS = 10_000;
-/** Au-delà, le tracé est allégé (un point sur n) : il ne sert qu'à l'affichage. */
-const MAX_POINTS = 600;
 
 /**
  * Serveurs OSRM de FOSSGIS : un serveur par profil (le profil écrit dans le chemin de l'API,
@@ -41,14 +39,6 @@ export function routingUserAgent(env: Bindings) {
     : 'MyTrips/0.1 (application personnelle de carnet de voyage)';
 }
 
-function thin(points: LatLng[]): LatLng[] {
-  if (points.length <= MAX_POINTS) return points;
-  const step = Math.ceil(points.length / MAX_POINTS);
-  const kept = points.filter((_, i) => i % step === 0);
-  if (kept[kept.length - 1] !== points[points.length - 1]) kept.push(points[points.length - 1]!);
-  return kept;
-}
-
 function pathLengthM(points: readonly LatLng[]) {
   let total = 0;
   for (let i = 1; i < points.length; i++) total += haversineM(points[i - 1]!, points[i]!);
@@ -65,8 +55,10 @@ async function osrmRoute(
   // Concaténation (et non new URL(chemin, base)) : une base avec chemin, ex. un relais, est gardée.
   const base = (env.OSRM_URL ?? DEFAULT_OSRM_URL).replace(/\/+$/, '');
   const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+  // Tracé complet (`overview=full`) en polyligne de précision 5, le format des trajets enregistrés :
+  // gardé tel quel, sans allègement ni décodage (peu de CPU pour le Worker), comme la référence.
   const res = await fetchImpl(
-    `${base}/${server}/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+    `${base}/${server}/route/v1/driving/${coords}?overview=full&geometries=polyline`,
     {
       headers: { accept: 'application/json', 'user-agent': routingUserAgent(env) },
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -74,22 +66,18 @@ async function osrmRoute(
   );
   const body = (await res.json().catch(() => ({}))) as {
     code?: string;
-    routes?: {
-      distance?: number;
-      duration?: number;
-      geometry?: { coordinates?: [number, number][] };
-    }[];
+    routes?: { distance?: number; duration?: number; geometry?: string }[];
   };
   // OSRM répond 400 avec `code: NoRoute` ou `NoSegment` quand aucun itinéraire n'existe.
   if (body.code && OSRM_NO_ROUTE.has(body.code)) throw new NoRouteError();
   if (!res.ok || body.code !== 'Ok') throw new Error(`OSRM ${res.status} ${body.code ?? ''}`);
   const route = body.routes?.[0];
   if (!route || typeof route.duration !== 'number') throw new NoRouteError();
-  const points = (route.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lat, lng }));
+  const geometry = route.geometry || encodePolyline([from, to]);
   return {
-    distanceM: Math.round(route.distance ?? pathLengthM(points)),
+    distanceM: Math.round(route.distance ?? pathLengthM(decodePolyline(geometry))),
     durationMin: Math.max(1, Math.round(route.duration / 60)),
-    geometry: encodePolyline(thin(points)),
+    geometry,
     summary: null,
     source: 'router',
   };
@@ -148,7 +136,7 @@ async function transitousRoute(
   return {
     distanceM: Math.round(distance),
     durationMin: Math.max(1, Math.round(best.duration! / 60)),
-    geometry: encodePolyline(thin(points.length > 1 ? points : [from, to])),
+    geometry: encodePolyline(points.length > 1 ? points : [from, to]),
     summary: lines.length > 0 ? lines.join(' → ') : null,
     source: 'router',
   };

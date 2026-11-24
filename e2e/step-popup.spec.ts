@@ -115,3 +115,60 @@ test('clic sur un marqueur de la carte : même popup', async ({ page }) => {
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée d’Orsay');
   await expect(popup).toContainText('Musée · J1');
 });
+
+const zoom = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __mapZoomForTests: () => number }).__mapZoomForTests(),
+  );
+
+test('clic sur un trajet : la carte cadre le tracé et ouvre sa popup (infos, Modifier, Supprimer)', async ({
+  page,
+}) => {
+  await tripWithTwoPlaces(page);
+  const tile = page.getByTestId('day-timeline').getByTestId('leg-tile');
+  await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
+  await expect(tile).toContainText('25 min');
+
+  await tile.getByRole('button', { name: /Voiture/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Modifier le trajet' })).toHaveCount(0);
+  const popup = page.getByTestId('leg-popup');
+  await expect(popup).toContainText('Voiture · J1');
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText(
+    'Musée du Louvre → Musée d’Orsay',
+  );
+  await expect(popup).toContainText('12 km · 25 min');
+  // Cadrage sur le tracé (zoom 16 au plus, comme la référence).
+  await expect.poll(() => zoom(page)).toBeGreaterThan(10);
+  expect(await zoom(page)).toBeLessThanOrEqual(16);
+
+  await popup.getByRole('button', { name: 'Modifier' }).click();
+  const editor = page.getByRole('dialog', { name: 'Modifier le trajet' });
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Fermer la fenêtre' }).click();
+
+  await tile.getByRole('button', { name: /Voiture/ }).click();
+  await popup.getByRole('button', { name: 'Supprimer' }).click();
+  await expect(tile).toContainText('+ trajet');
+  await expect(popup).toHaveCount(0);
+});
+
+test('clic sur une idée qui a un lieu : zoom et popup « … · Idée »', async ({ page }) => {
+  await tripWithTwoPlaces(page);
+  await page.getByRole('button', { name: 'Ajouter une idée' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
+  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Eiffel');
+  await dialog.getByRole('button', { name: /Tour Eiffel/ }).click();
+  await expect(dialog).toHaveCount(0);
+
+  const ideas = page.getByRole('region', { name: 'Idées' });
+  await ideas
+    .getByTestId('step-card')
+    .getByRole('button', { name: /Tour Eiffel/ })
+    .first()
+    .click();
+  await expect(page.getByRole('dialog', { name: 'Modifier l’étape' })).toHaveCount(0);
+  const popup = page.getByTestId('step-popup');
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Tour Eiffel');
+  await expect(popup).toContainText('· Idée');
+  await expect.poll(() => zoom(page)).toBeGreaterThanOrEqual(15);
+});

@@ -3,6 +3,7 @@
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
+    legPairKey,
     planOfflineTiles,
     proposeFixes,
     tripBboxes,
@@ -58,7 +59,13 @@
   } from '#lib/api.ts';
   import { dayHoursLabel, dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
-  import { stepPopupInfo } from '#lib/map/stepPopup.ts';
+  import {
+    legPopupContent,
+    poiPopupContent,
+    stepPopupContent,
+    type FocusTarget,
+    type PopupTarget,
+  } from '#lib/map/popups.ts';
   import { poiStepInput, sameView } from '#lib/poi/explore.ts';
   import {
     dayHikeLines,
@@ -143,7 +150,7 @@
   /** Lieu choisi dans la colonne ou sur la carte (popup ouverte) : reste mis en évidence. */
   let selectedKey = $state<string | null>(null);
   /** Demande de centrage et de popup pour la carte (`seq` change à chaque clic). */
-  let mapFocus = $state<{ key: string; seq: number } | null>(null);
+  let mapFocus = $state<{ target: FocusTarget; seq: number } | null>(null);
   let mapView = $state<MapView | null>(null);
   const mapCenter = $derived(mapView ? bboxCenter(mapView.bbox) : null);
   /** Découverte de lieux : panneau gauche et marqueurs dédiés. */
@@ -570,12 +577,72 @@
       return;
     }
     selectedKey = step.id;
-    mapFocus = { key: step.id, seq: (mapFocus?.seq ?? 0) + 1 };
+    focusMap({ kind: 'step', key: step.id });
   }
 
-  function popupFor(point: MapPoint) {
-    const step = point.stepId ? steps.find((x) => x.id === point.stepId) : undefined;
-    return step ? stepPopupInfo(step, days) : null;
+  function focusMap(target: FocusTarget) {
+    mapFocus = { target, seq: (mapFocus?.seq ?? 0) + 1 };
+  }
+
+  /**
+   * Clic sur un trajet de la colonne : la carte cadre son tracé et ouvre sa popup (« Modifier »
+   * y ouvre l'éditeur). Sans tracé affiché, ou en plein écran, l'éditeur s'ouvre directement.
+   */
+  function openLeg(leg: Leg) {
+    const key = legPairKey(leg.fromKey, leg.toKey);
+    if (layout === 'board' || !legLines.some((l) => l.key === key)) {
+      if (canEdit) editingLegId = leg.id;
+      return;
+    }
+    selectedKey = key;
+    focusMap({ kind: 'leg', key });
+  }
+
+  /** Clic sur un lieu de la découverte : sélection, zoom sur le lieu et popup. */
+  function openPoi(poi: Poi) {
+    selectedPoi = poi.id;
+    focusMap({ kind: 'poi', id: poi.id });
+  }
+
+  /** Nom d'un point du jour (étape ou séjour), pour le titre de la popup d'un trajet. */
+  const pointName = (key: string) => points.find((p) => p.key === key)?.name ?? '?';
+
+  function popupFor(target: PopupTarget) {
+    if (target.kind === 'step') {
+      const step = target.point.stepId
+        ? steps.find((x) => x.id === target.point.stepId)
+        : undefined;
+      return step
+        ? stepPopupContent(step, days, canEdit, {
+            edit: (stepId) => (editingStepId = stepId),
+            remove: askDeleteById,
+          })
+        : null;
+    }
+    if (target.kind === 'leg') {
+      const leg = legs.find((l) => legPairKey(l.fromKey, l.toKey) === target.key);
+      return leg
+        ? legPopupContent(
+            leg,
+            { from: pointName(leg.fromKey), to: pointName(leg.toKey) },
+            dayLabel,
+            canEdit,
+            { edit: (legId) => (editingLegId = legId), remove: removeLegById },
+          )
+        : null;
+    }
+    const poi = target.poi;
+    const step = poi.osmRef ? steps.find((x) => x.osmRef === poi.osmRef) : undefined;
+    return poiPopupContent(poi, step !== undefined, dayLabel, canEdit, {
+      addToDay: () => addPoi(poi, true),
+      addToIdeas: () => addPoi(poi, false),
+      remove: () => step && askDelete(step),
+    });
+  }
+
+  function onPopupClose(kind: PopupTarget['kind']) {
+    if (kind === 'poi') selectedPoi = null;
+    else selectedKey = null;
   }
 
   function askDeleteById(stepId: string) {
@@ -701,13 +768,12 @@
     );
   }
 
+  /** Lieu de la découverte cliqué sur la carte (la carte ouvre sa popup) : sélection dans la liste. */
   function pickPoi(poi: Poi) {
-    selectedPoi = selectedPoi === poi.id ? null : poi.id;
-    if (selectedPoi) {
-      document
-        .querySelector(`[data-poi-id="${CSS.escape(poi.id)}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    selectedPoi = poi.id;
+    document
+      .querySelector(`[data-poi-id="${CSS.escape(poi.id)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function toggleExplore() {
@@ -754,6 +820,10 @@
     const legId = editingLegId;
     if (!legId) return;
     editingLegId = null;
+    await removeLegById(legId);
+  }
+
+  async function removeLegById(legId: string) {
     await applyQuietly(() => deleteLeg(id, legId, version()));
     removedLegs = removedLegs.filter((l) => l.id !== legId);
   }
@@ -865,10 +935,10 @@
       {pair}
       leg={pair.leg}
       {canEdit}
-      highlighted={highlighted === `${pair.fromKey}>${pair.toKey}`}
+      highlighted={(highlighted ?? selectedKey) === `${pair.fromKey}>${pair.toKey}`}
       suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
       onCreate={(input) => addLeg(pair, input)}
-      onEdit={(leg) => (editingLegId = leg.id)}
+      onEdit={openLeg}
       onHover={(k) => (highlighted = k)}
     />
   {/if}
@@ -984,7 +1054,7 @@
           onToggleCategory={toggleCategory}
           onSearch={searchPois}
           onAdd={addPoi}
-          onSelect={pickPoi}
+          onSelect={openPoi}
           onHover={(poiId) => (hoveredPoi = poiId)}
           onBack={toggleExplore}
           loadWiki={(ref) => poiWiki(ref)}
@@ -1105,12 +1175,9 @@
         fitKey={selectedDay ?? 'all'}
         onHover={(k) => (highlighted = k)}
         onPick={pickPoint}
-        stepPopup={popupFor}
-        {canEdit}
-        onEditStep={(stepId) => (editingStepId = stepId)}
-        onDeleteStep={askDeleteById}
+        {popupFor}
         focus={mapFocus}
-        onPopupClose={() => (selectedKey = null)}
+        {onPopupClose}
         onAddHere={canEdit ? addHere : undefined}
         onViewChange={(v) => (mapView = v)}
         pois={exploring ? pois : []}
