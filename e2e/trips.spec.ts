@@ -45,7 +45,7 @@ test('créer un voyage, le retrouver dans la liste de l’en-tête', async ({ pa
 
   // Le voyage est choisi dans la liste déroulante de l'en-tête.
   const select = page.getByRole('combobox', { name: 'Choisir un voyage' });
-  await expect(select.locator('option:checked')).toHaveText(name);
+  await expect(select).toContainText(name);
 });
 
 test('beaucoup de jours : pas de barre de défilement, des flèches pour avancer dans les jours', async ({
@@ -255,9 +255,16 @@ test('supprimer un voyage après confirmation', async ({ page }) => {
   await expect(confirm).toContainText(name);
   await confirm.getByRole('button', { name: 'Supprimer définitivement' }).click();
   await expect(page).not.toHaveURL(tripUrl);
+  // Retiré de la liste de l'en-tête (absente s'il ne reste aucun voyage).
+  const switcher = page.getByRole('combobox', { name: 'Choisir un voyage' });
   await expect(
-    page.getByRole('combobox', { name: 'Choisir un voyage' }).getByRole('option', { name }),
-  ).toHaveCount(0);
+    switcher.or(page.getByRole('heading', { name: 'Aucun voyage pour l’instant' })),
+  ).toBeVisible();
+  if (await switcher.isVisible()) {
+    await switcher.click();
+    await expect(page.getByRole('listbox', { name: 'Voyages' })).toBeVisible();
+    await expect(page.getByRole('option', { name, exact: true })).toHaveCount(0);
+  }
 });
 
 test('un voyage inconnu affiche un message clair', async ({ page }) => {

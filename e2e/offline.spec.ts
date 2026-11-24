@@ -84,9 +84,11 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
   // « / » rouvre ce voyage depuis la copie ; la liste de l'en-tête le propose, sans création.
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Choisir un voyage' }).click();
   await expect(
-    page.getByRole('combobox', { name: 'Choisir un voyage' }).getByRole('option', { name }),
+    page.getByRole('listbox', { name: 'Voyages' }).getByRole('option', { name, exact: true }),
   ).toHaveCount(1);
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Nouveau voyage' })).toHaveCount(0);
 
   // Retour du réseau : l'édition revient.

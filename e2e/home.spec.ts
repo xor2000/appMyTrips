@@ -36,7 +36,11 @@ test('plus de page d’accueil : « / » rouvre le dernier voyage consulté', as
   await createTrip(page, first);
   const firstUrl = page.url();
   await createTrip(page, second);
-  await page.getByRole('combobox', { name: 'Choisir un voyage' }).selectOption({ label: first });
+  await page.getByRole('combobox', { name: 'Choisir un voyage' }).click();
+  await page
+    .getByRole('listbox', { name: 'Voyages' })
+    .getByRole('option', { name: first, exact: true })
+    .click();
   await expect(page).toHaveURL(firstUrl);
 
   await page.goto('/');
@@ -55,13 +59,24 @@ test('sans voyage : invitation à créer le premier', async ({ browser }) => {
 });
 
 test('photo de couverture changée depuis les paramètres du voyage', async ({ page }) => {
-  await createTrip(page, uniqueName('Escapade Alpes'));
+  const name = uniqueName('Escapade Alpes');
+  await createTrip(page, name);
   await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier le voyage' });
   await dialog.getByRole('button', { name: 'Changer la photo' }).click();
   await dialog.getByRole('radio', { name: 'Photo 2 : Photographe factice' }).check();
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toHaveCount(0);
+
+  // La vignette de la photo s'affiche dans la liste des voyages de l'en-tête.
+  const switcher = page.getByRole('combobox', { name: 'Choisir un voyage' });
+  await expect(switcher.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);
+  await switcher.click();
+  await expect(page.getByRole('option', { name, exact: true }).locator('img')).toHaveAttribute(
+    'src',
+    /commons-img\/2\.jpg/,
+  );
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
   await expect(dialog.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);

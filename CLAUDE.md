@@ -116,8 +116,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
     De même pour les boutons : toute fenêtre (`Modal`) a une croix « Fermer la fenêtre », donc
     `getByRole('button', { name: 'Fermer', exact: true })` ;
   - plus de page d'accueil : `page.goto('/')` redirige vers le dernier voyage consulté (ou l'écran
-    « Aucun voyage »). On change de voyage par la liste déroulante « Choisir un voyage » de
-    l'en-tête ; le nom du voyage reste un `<h1>` (réservé aux lecteurs d'écran) pour les attentes.
+    « Aucun voyage »). On change de voyage par la liste « Choisir un voyage » de l'en-tête
+    (combobox personnalisée : la cliquer, puis cliquer l'option de la liste « Voyages » avec
+    `getByRole('option', { name, exact: true })` ; les options n'existent que liste ouverte) ; le
+    nom du voyage reste un `<h1>` (réservé aux lecteurs d'écran) pour les attentes.
 - **Écritures sur un voyage (front)** : toujours passer par `apply()` de la page voyage (file
   `createSerialQueue`) et lire la version au moment de l'exécution (`() => updateStep(id, …, version(), …)`).
   Deux écritures rapprochées avec la même version donnent un faux conflit.

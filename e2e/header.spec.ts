@@ -27,6 +27,7 @@ async function createTrip(page: Page, name: string) {
 }
 
 const tripSelect = (page: Page) => page.getByRole('combobox', { name: 'Choisir un voyage' });
+const tripList = (page: Page) => page.getByRole('listbox', { name: 'Voyages' });
 
 /** Centre vertical d'un élément, pour vérifier qu'ils sont sur une même ligne. */
 async function centerY(l: Locator) {
@@ -59,7 +60,7 @@ test('page voyage : voyages, paramètres, ajout et jours sur une seule ligne com
   await createTrip(page, name);
 
   const banner = page.getByRole('banner');
-  await expect(tripSelect(page).locator('option:checked')).toHaveText(name);
+  await expect(tripSelect(page)).toContainText(name);
   const brand = banner.getByRole('link', { name: 'MyTrips, accueil' });
   const settings = banner.getByRole('button', { name: 'Paramètres du voyage' });
   const add = banner.getByRole('button', { name: 'Nouveau voyage' });
@@ -93,10 +94,31 @@ test('changer de voyage depuis la liste déroulante de l’en-tête', async ({ p
   const firstUrl = page.url();
   await createTrip(page, second);
 
-  await tripSelect(page).selectOption({ label: first });
+  // Liste personnalisée : vignette (initiale sans photo), nom et dates ; voyage ouvert coché.
+  await tripSelect(page).click();
+  const list = tripList(page);
+  await expect(list).toBeVisible();
+  const current = list.getByRole('option', { name: second, exact: true });
+  await expect(current).toHaveAttribute('aria-selected', 'true');
+  await expect(current).toContainText('10 – 12 juillet 2026');
+  await expect(current.locator('.thumb')).toBeVisible();
+  // La liste s'ouvre sous le bouton, par-dessus la page.
+  const boxTop = (await tripSelect(page).boundingBox())!;
+  expect((await list.boundingBox())!.y).toBeGreaterThanOrEqual(boxTop.y + boxTop.height - 1);
+
+  await list.getByRole('option', { name: first, exact: true }).click();
+  await expect(list).toHaveCount(0);
   await expect(page).toHaveURL(firstUrl);
   await expect(page.getByRole('heading', { level: 1, name: first })).toBeVisible();
-  await expect(tripSelect(page).locator('option:checked')).toHaveText(first);
+  await expect(tripSelect(page)).toContainText(first);
+
+  // Au clavier : flèches puis Entrée, Échap ferme.
+  await tripSelect(page).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(list).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  await expect(tripSelect(page)).toBeFocused();
 });
 
 test('fenêtres : fond flouté et bouton de fermeture', async ({ page }) => {
