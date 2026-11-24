@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { clickMapAt } from './map-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -173,10 +174,71 @@ test('type « Parking » : choisi dans l’éditeur, avec son libellé', async (
   await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
   await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
-  await editor.getByLabel('Type').selectOption({ label: 'Parking' });
+  // Catégories en grille de boutons (icône et libellé), comme la maquette.
+  await editor.getByText('Parking', { exact: true }).click();
   await editor.getByRole('button', { name: 'Enregistrer' }).click();
   const card = page.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' });
   await expect(card).toContainText('Parking ·');
+});
+
+test('fenêtre du lieu : latitude et longitude, nouvelle position en cliquant sur la carte', async ({
+  page,
+}) => {
+  await createTripAndOpenDay1(page);
+  await addPlace(page, 'Louvre', 'Musée du Louvre');
+  const zoom = () =>
+    page.evaluate(() =>
+      (window as unknown as { __mapZoomForTests?: () => number }).__mapZoomForTests?.(),
+    );
+  // Carte cadrée sur le lieu, animation terminée (zoom stable).
+  await expect.poll(zoom).toBeGreaterThan(12);
+  let last = -1;
+  await expect
+    .poll(async () => {
+      const z = await zoom();
+      const stable = z === last;
+      last = z ?? -1;
+      return stable;
+    })
+    .toBe(true);
+
+  await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
+  const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
+  await expect(editor).toContainText('Mettez à jour les informations de cette étape.');
+  await expect(editor.getByLabel('Latitude')).toHaveValue('48.860600');
+  await expect(editor.getByLabel('Longitude')).toHaveValue('2.337600');
+
+  // La fenêtre se masque le temps du choix ; Échap l'abandonne.
+  await editor.getByRole('button', { name: 'Choisir sur la carte' }).click();
+  await expect(editor).toBeHidden();
+  const banner = page.getByRole('status').filter({ hasText: 'Cliquez sur la carte' });
+  await expect(banner).toContainText('« Musée du Louvre »');
+  // Le bandeau prend la place du champ de recherche de la carte.
+  await expect(page.getByRole('button', { name: /Rechercher un lieu, une adresse/ })).toHaveCount(
+    0,
+  );
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeVisible();
+  await expect(banner).toHaveCount(0);
+  await expect(editor.getByLabel('Latitude')).toHaveValue('48.860600');
+
+  await editor.getByRole('button', { name: 'Choisir sur la carte' }).click();
+  await clickMapAt(page, [2.3396, 48.8616]);
+  await expect(editor).toBeVisible();
+  const lat = Number(await editor.getByLabel('Latitude').inputValue());
+  const lng = Number(await editor.getByLabel('Longitude').inputValue());
+  expect(Math.abs(lat - 48.8616)).toBeLessThan(0.0003);
+  expect(Math.abs(lng - 2.3396)).toBeLessThan(0.0003);
+  await editor.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(editor).toHaveCount(0);
+
+  // Position enregistrée, adresse du nouveau point (lieu le plus proche).
+  await page.getByRole('button', { name: /Musée du Louvre Musée/ }).click();
+  await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
+  await expect(editor.getByLabel('Latitude')).toHaveValue(lat.toFixed(6));
+  await expect(editor.getByLabel('Longitude')).toHaveValue(lng.toFixed(6));
+  await expect(editor).not.toContainText('Rue de Rivoli');
 });
 
 test('supprimer une étape demande confirmation', async ({ page }) => {

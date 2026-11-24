@@ -10,12 +10,24 @@
     highlighted: boolean;
     /** Trajet saisi à la main retiré par un réordonnancement, à reprendre en un clic. */
     suggestion: Leg | null;
+    /** Variable CSS de la couleur du trajet (choisie ou automatique) ; à défaut, celle du mode. */
+    color?: string | null;
     onCreate: (input: { mode: LegMode; distanceM?: number; durationMin?: number }) => Promise<void>;
     onEdit: (leg: Leg) => void;
     onHover: (key: string | null) => void;
   }
 
-  let { pair, leg, canEdit, highlighted, suggestion, onCreate, onEdit, onHover }: Props = $props();
+  let {
+    pair,
+    leg,
+    canEdit,
+    highlighted,
+    suggestion,
+    color = null,
+    onCreate,
+    onEdit,
+    onHover,
+  }: Props = $props();
 
   const key = $derived(legPairKey(pair.fromKey, pair.toKey));
   let busy = $state(false);
@@ -57,7 +69,7 @@
       type="button"
       class="line"
       class:highlighted
-      style={`--c: var(${LEG_MODE_INFO[leg.mode].color})`}
+      style={`--c: var(${color ?? LEG_MODE_INFO[leg.mode].color})`}
       onclick={() => onEdit(leg)}
     >
       <span class="icon"><Icon size={13} /></span>

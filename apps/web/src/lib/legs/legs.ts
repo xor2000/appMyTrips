@@ -1,6 +1,8 @@
 import {
-  LEG_MODE_INFO,
+  LEG_COLOR_COUNT,
+  dayLegColors,
   decodePolyline,
+  legColorVar,
   legPairKey,
   requiredLegs,
   type Leg,
@@ -14,6 +16,18 @@ import Footprints from 'lucide-svelte/icons/footprints';
 import Plane from 'lucide-svelte/icons/plane';
 import Ship from 'lucide-svelte/icons/ship';
 import TrainFront from 'lucide-svelte/icons/train-front';
+
+/** Noms des couleurs de la palette des trajets (pastilles de la fenêtre du trajet). */
+export const LEG_COLOR_NAMES = [
+  'Sarcelle',
+  'Bleu',
+  'Violet',
+  'Rose',
+  'Orange',
+  'Vert',
+  'Cyan',
+  'Ardoise',
+] as const;
 
 export const LEG_ICONS: Record<LegMode, typeof Car> = {
   car: Car,
@@ -30,24 +44,50 @@ export interface DayPair {
   fromKey: string;
   toKey: string;
   leg: Leg | null;
+  /** Variable CSS de la couleur du trajet (choisie ou automatique), null sans trajet. */
+  color: string | null;
+  /** Couleur (rang dans la palette) que le trajet prend en automatique, null sans trajet. */
+  autoColor: number | null;
 }
 
-/** Paires du jour indexées par leur départ (une tuile s'affiche après chaque point de départ). */
+/**
+ * Paires du jour indexées par leur départ (une tuile s'affiche après chaque point de départ).
+ * Les trajets existants, dans l'ordre du jour, reçoivent leur couleur (`dayLegColors`).
+ */
 export function dayPairs(
   items: readonly TimelineItem[],
   legs: readonly Leg[],
 ): Map<string, DayPair> {
   const byPair = new Map(legs.map((l) => [legPairKey(l.fromKey, l.toKey), l]));
+  const pairs = requiredLegs(items).map((r) => ({
+    fromKey: r.fromKey,
+    toKey: r.toKey,
+    leg: byPair.get(legPairKey(r.fromKey, r.toKey)) ?? null,
+  }));
+  const present = pairs.flatMap((p) => (p.leg ? [p.leg] : []));
+  const colors = dayLegColors(present);
+  // Couleur automatique : celle qui suit le trajet précédent (même règle que `dayLegColors`).
+  const autos = present.map((_, i) => (i === 0 ? 0 : (colors[i - 1]! + 1) % LEG_COLOR_COUNT));
+  const colorOf = new Map(present.map((l, i) => [l.id, { color: colors[i]!, auto: autos[i]! }]));
   return new Map(
-    requiredLegs(items).map((r) => [
-      r.fromKey,
-      {
-        fromKey: r.fromKey,
-        toKey: r.toKey,
-        leg: byPair.get(legPairKey(r.fromKey, r.toKey)) ?? null,
-      },
-    ]),
+    pairs.map((p) => {
+      const c = p.leg ? colorOf.get(p.leg.id) : undefined;
+      return [
+        p.fromKey,
+        { ...p, color: c ? legColorVar(c.color) : null, autoColor: c ? c.auto : null },
+      ];
+    }),
   );
+}
+
+/** Couleur automatique d'un trajet créé sur la paire `fromKey` : celle qui suit le trajet précédent. */
+export function newLegAutoColor(pairs: ReadonlyMap<string, DayPair>, fromKey: string): number {
+  let previous = -1;
+  for (const p of pairs.values()) {
+    if (p.fromKey === fromKey) break;
+    if (p.leg) previous = p.leg.color ?? p.autoColor ?? previous;
+  }
+  return (previous + 1) % LEG_COLOR_COUNT;
 }
 
 export const isManual = (leg: Leg) =>
@@ -73,7 +113,7 @@ export function suggestionFor(
 export interface LegLine {
   /** Clé de la paire (`départ>arrivée`), partagée avec la tuile pour le survol. */
   key: string;
-  /** Variable CSS de la couleur du mode. */
+  /** Variable CSS de la couleur (du trajet, ou verte pour une randonnée). */
   color: string;
   dashed: boolean;
   /** [lng, lat], ordre GeoJSON. */
@@ -82,16 +122,17 @@ export interface LegLine {
 
 /** Tracés des trajets existants du jour ; sans géométrie, ligne droite entre les deux points. */
 export function dayLegLines(items: readonly TimelineItem[], legs: readonly Leg[]): LegLine[] {
-  const byPair = new Map(legs.map((l) => [legPairKey(l.fromKey, l.toKey), l]));
+  const pairs = dayPairs(items, legs);
   const lines: LegLine[] = [];
   for (const r of requiredLegs(items)) {
     const key = legPairKey(r.fromKey, r.toKey);
-    const leg = byPair.get(key);
+    const pair = pairs.get(r.fromKey);
+    const leg = pair?.leg;
     if (!leg) continue;
     const points = leg.geometry ? decodePolyline(leg.geometry) : [r.from, r.to];
     lines.push({
       key,
-      color: LEG_MODE_INFO[leg.mode].color,
+      color: pair.color!,
       dashed: leg.mode === 'walk',
       coordinates: points.map((p) => [p.lng, p.lat]),
     });

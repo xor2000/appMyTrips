@@ -87,6 +87,7 @@ export function makeLeg(overrides: Partial<Leg> = {}): Leg {
     summary: null,
     departAt: null,
     bookingRef: null,
+    color: null,
     notes: '',
     computedAt: null,
     ...overrides,

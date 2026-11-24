@@ -169,9 +169,9 @@ export function legRoutes(fetchImpl: typeof fetch) {
       db
         .prepare(
           `INSERT INTO legs (id, trip_id, from_key, to_key, mode, distance_m, duration_min,
-             distance_source, duration_source, geometry, summary, depart_at, booking_ref, notes,
-             computed_at, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`,
+             distance_source, duration_source, geometry, summary, depart_at, booking_ref, color,
+             notes, computed_at, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`,
         )
         .bind(
           crypto.randomUUID(),
@@ -187,6 +187,7 @@ export function legRoutes(fetchImpl: typeof fetch) {
           routed?.summary ?? null,
           l.departAt ?? null,
           l.bookingRef ?? null,
+          l.color ?? null,
           l.notes,
           routed ? ts : null,
           ts,
@@ -215,6 +216,7 @@ export function legRoutes(fetchImpl: typeof fetch) {
     const fields: Record<string, unknown> = { mode, depart_at: departAt };
     if (p.bookingRef !== undefined) fields.booking_ref = p.bookingRef;
     if (p.notes !== undefined) fields.notes = p.notes;
+    if (p.color !== undefined) fields.color = p.color;
 
     const needsRoute =
       p.mode !== undefined ||

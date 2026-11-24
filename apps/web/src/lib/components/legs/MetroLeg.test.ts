@@ -59,6 +59,12 @@ describe('MetroLeg', () => {
     expect(screen.queryByRole('button', { name: 'Ajouter un trajet' })).toBeNull();
   });
 
+  it('rond de la couleur du trajet (celle de son tracé sur la carte)', () => {
+    setup({ leg: makeLeg(), color: '--leg-5' });
+    const node = screen.getByRole('button', { name: /Modifier le trajet/ });
+    expect(node.getAttribute('style')).toContain('--c: var(--leg-5)');
+  });
+
   it('signale le survol avec la clé de la paire', async () => {
     const props = setup({ leg: makeLeg() });
     await fireEvent.mouseEnter(screen.getByTestId('metro-leg'));

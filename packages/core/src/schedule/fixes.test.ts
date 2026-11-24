@@ -49,6 +49,7 @@ function leg(fromKey: string, toKey: string, durationMin: number): Leg {
     summary: null,
     departAt: null,
     bookingRef: null,
+    color: null,
     notes: '',
     computedAt: null,
   };

@@ -66,6 +66,16 @@
     focus?: { target: FocusTarget; seq: number } | null;
     /** La popup s'est fermée (croix, clic sur la carte, action). */
     onPopupClose?: (kind: PopupTarget['kind']) => void;
+    /**
+     * Choix d'une position (« Choisir sur la carte » de la fenêtre d'un lieu) : bandeau, curseur
+     * en croix ; un clic sur la carte donne le point, Échap ou « Annuler » abandonne. Les clics
+     * sur les marqueurs, tracés et lieux n'ouvrent alors rien.
+     */
+    placing?: {
+      label: string;
+      onPlace: (point: { lat: number; lng: number }) => void;
+      onCancel: () => void;
+    } | null;
   }
 
   let {
@@ -89,6 +99,7 @@
     popupFor = () => null,
     focus = null,
     onPopupClose = () => {},
+    placing = null,
   }: Props = $props();
 
   let container: HTMLDivElement;
@@ -174,6 +185,7 @@
         });
         m.on('mouseleave', layer, () => (m.getCanvas().style.cursor = ''));
         m.on('click', layer, (e) => {
+          if (placing) return;
           const key = e.features?.[0]?.properties?.key;
           if (typeof key === 'string' && key.includes('>')) {
             openPopup({ kind: 'leg', key }, [e.lngLat.lng, e.lngLat.lat]);
@@ -191,6 +203,10 @@
         onHoverPoi(null);
       });
       m.on('click', (e) => {
+        if (placing) {
+          placing.onPlace({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+          return;
+        }
         if (!m.getLayer(POI_LAYER)) return;
         const { x, y } = e.point;
         const t = POI_HIT_TOLERANCE_PX;
@@ -261,6 +277,7 @@
         el.addEventListener('mouseleave', () => onHover(null));
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
+          if (placing) return;
           // Point à jour (nom, position) : `p` est celui de la création du marqueur.
           const current = points.find((x) => x.key === p.key) ?? p;
           openPopup({ kind: 'step', point: current }, [current.lng, current.lat]);
@@ -612,10 +629,36 @@
   }
 </script>
 
-<!-- data-leg-lines : nombre de tracés (le canevas WebGL n'est pas lisible par les e2e). -->
-<div class="map-wrap" data-testid="trip-map" data-leg-lines={lines.length}>
+<!-- data-leg-lines et data-leg-colors : nombre et couleurs des tracés (le canevas WebGL n'est pas
+     lisible par les e2e). -->
+<svelte:window
+  onkeydown={(e) => {
+    if (placing && e.key === 'Escape') {
+      // Traité ici : la fenêtre réaffichée par l'abandon ne doit pas se fermer aussi.
+      e.preventDefault();
+      placing.onCancel();
+    }
+  }}
+/>
+
+<div
+  class="map-wrap"
+  class:placing={placing !== null}
+  data-testid="trip-map"
+  data-leg-lines={lines.length}
+  data-leg-colors={lines.map((l) => l.color).join(' ')}
+>
   <div class="map" bind:this={container}></div>
-  {#if onSearch && !exploring}
+  {#if placing}
+    <!-- Bandeau du choix d'une position, en haut de la carte. -->
+    <div class="placing-banner" role="status">
+      <span>Cliquez sur la carte pour placer « {placing.label} »</span>
+      <button type="button" class="btn btn-ghost" onclick={() => placing?.onCancel()}
+        >Annuler</button
+      >
+    </div>
+  {/if}
+  {#if onSearch && !exploring && !placing}
     <button type="button" class="search" onclick={onSearch}>
       <Search size={15} />Rechercher un lieu, une adresse…
     </button>
@@ -663,6 +706,38 @@
     position: absolute;
     inset: 0;
     background: var(--surface-2);
+  }
+
+  /* Choix d'une position : curseur en croix partout sur la carte (tracés compris) ; les marqueurs
+     laissent passer le clic, qui place le lieu là où il tombe. */
+  .placing :global(.maplibregl-canvas) {
+    cursor: crosshair !important;
+  }
+
+  .placing :global(.map-marker) {
+    pointer-events: none;
+  }
+
+  .placing-banner {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 6px 6px 6px 14px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-float);
+    color: var(--fg);
+    font: 600 13px var(--font-display);
+    translate: -50% 0;
+    white-space: nowrap;
+  }
+
+  .placing-banner .btn {
+    min-height: 30px;
   }
 
   .tools {

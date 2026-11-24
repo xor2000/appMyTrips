@@ -1,11 +1,23 @@
 <script lang="ts">
-  import { LEG_MODES, LEG_MODE_INFO, type Leg, type LegMode, type LegPatch } from '@mytrips/core';
+  import {
+    LEG_COLOR_COUNT,
+    LEG_MODES,
+    LEG_MODE_INFO,
+    legColorVar,
+    type Leg,
+    type LegMode,
+    type LegPatch,
+  } from '@mytrips/core';
+  import Check from 'lucide-svelte/icons/check';
+  import Sparkles from 'lucide-svelte/icons/sparkles';
   import { untrack } from 'svelte';
-  import { legSourceLabel } from '#lib/legs/legs.ts';
+  import { LEG_COLOR_NAMES, LEG_ICONS, legSourceLabel } from '#lib/legs/legs.ts';
   import Modal from '../Modal.svelte';
 
   interface Props {
     leg: Leg;
+    /** Couleur (rang dans la palette) que le trajet prend en automatique. */
+    autoColor: number;
     onSave: (patch: LegPatch) => Promise<void>;
     /** Revenir aux valeurs du routeur. */
     onRecompute: () => Promise<void>;
@@ -19,6 +31,7 @@
 
   let {
     leg,
+    autoColor,
     onSave,
     onRecompute,
     onDelete,
@@ -37,6 +50,9 @@
   let departAt = $state(start.departAt ?? '');
   let bookingRef = $state(start.bookingRef ?? '');
   let notes = $state(start.notes);
+  /** Couleur choisie ; null : automatique (absente d'un ancien cache hors ligne : automatique). */
+  const startColor = start.color ?? null;
+  let color = $state<number | null>(startColor);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -69,6 +85,7 @@
       if (String(distanceKm).trim() !== '' && Number(distanceKm) >= 0) {
         patch.distanceM = Math.round(Number(distanceKm) * 1000);
       }
+      if (color !== null) patch.color = color;
       await run(() => onSave(patch));
       return;
     }
@@ -95,6 +112,7 @@
     const nextBooking = bookingRef.trim() === '' ? null : bookingRef.trim();
     if (nextBooking !== start.bookingRef) patch.bookingRef = nextBooking;
     if (notes !== start.notes) patch.notes = notes;
+    if (color !== startColor) patch.color = color;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -103,7 +121,11 @@
   }
 </script>
 
-<Modal title={isNew ? 'Nouveau trajet' : 'Modifier le trajet'} {onClose}>
+<Modal
+  title={isNew ? 'Nouveau trajet' : 'Modifier le trajet'}
+  subtitle="Choisissez le mode de transport, la couleur du tracé et les détails du trajet."
+  {onClose}
+>
   <form id="leg-form" class="form" onsubmit={submit} novalidate>
     {#if message}
       <p class="notice" role="status">{message}</p>
@@ -114,20 +136,67 @@
         {#if start.summary}· {start.summary}{/if}
       </p>
     {/if}
-    <label class="field">
-      Mode
-      <select bind:value={mode}>
+    <!-- Modes en boutons icône et libellé (`.seg` de la maquette). -->
+    <fieldset class="field ref">
+      <legend>Mode de transport</legend>
+      <div class="seg">
         {#each LEG_MODES as m (m)}
-          <option value={m}>{LEG_MODE_INFO[m].label}</option>
+          {@const Icon = LEG_ICONS[m]}
+          <label>
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="leg-mode"
+              value={m}
+              bind:group={mode}
+            />
+            <Icon size={16} aria-hidden="true" />
+            <span>{LEG_MODE_INFO[m].label}</span>
+          </label>
         {/each}
-      </select>
-    </label>
-    <div class="row">
-      <label class="field">
+      </div>
+    </fieldset>
+    <!-- Couleur du tracé en pastilles rondes (`.swatches` de la maquette) ; la première suit le
+         jour (couleur suivante de la palette). -->
+    <fieldset class="field ref">
+      <legend>Couleur</legend>
+      <div class="swatches">
+        <label
+          class="auto"
+          style={`--c: var(${legColorVar(autoColor)})`}
+          title="Automatique : la couleur qui suit celle du trajet précédent"
+        >
+          <input
+            class="visually-hidden"
+            type="radio"
+            name="leg-color"
+            value={null}
+            aria-label={`Automatique (${LEG_COLOR_NAMES[autoColor]})`}
+            bind:group={color}
+          />
+          <Sparkles size={14} aria-hidden="true" />
+        </label>
+        {#each { length: LEG_COLOR_COUNT } as _, i (i)}
+          <label style={`--c: var(${legColorVar(i)})`} title={LEG_COLOR_NAMES[i]}>
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="leg-color"
+              value={i}
+              aria-label={LEG_COLOR_NAMES[i]}
+              bind:group={color}
+            />
+            {#if color === i}<Check size={14} aria-hidden="true" />{/if}
+          </label>
+        {/each}
+      </div>
+    </fieldset>
+    <div class="field-row">
+      <label class="field ref">
         Distance (km)
         <input type="number" min="0" step="0.1" bind:value={distanceKm} />
       </label>
-      <label class="field">
+      <label class="field ref">
         Durée (min)
         <input type="number" min="1" step="1" bind:value={durationMin} />
       </label>
@@ -136,12 +205,12 @@
       Une durée saisie est gardée. Une distance saisie seule donne une durée à la vitesse moyenne du
       mode.
     </p>
-    <div class="row">
-      <label class="field">
+    <div class="field-row">
+      <label class="field ref">
         Départ à
         <input type="time" bind:value={departAt} />
       </label>
-      <label class="field">
+      <label class="field ref">
         N° de réservation
         <input type="text" maxlength="200" bind:value={bookingRef} />
       </label>
@@ -152,7 +221,7 @@
         si son heure est fixe).
       </p>
     {/if}
-    <label class="field">
+    <label class="field ref">
       Notes
       <textarea rows="2" maxlength="5000" bind:value={notes}></textarea>
     </label>
@@ -163,16 +232,15 @@
 
   {#snippet actions()}
     {#if !isNew}
-      <button type="button" class="btn btn-ghost danger" onclick={onDelete}>Supprimer</button>
-    {/if}
-    <span class="spacer"></span>
-    {#if !isNew}
+      <button type="button" class="btn btn-danger-ghost" onclick={onDelete}>Supprimer</button>
       <button type="button" class="btn btn-soft" disabled={busy} onclick={() => run(onRecompute)}
         >Recalculer</button
       >
     {/if}
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-ghost" onclick={onClose}>Annuler</button>
     <button type="submit" form="leg-form" class="btn btn-primary" disabled={busy}
-      >Enregistrer</button
+      >{isNew ? 'Ajouter le trajet' : 'Enregistrer'}</button
     >
   {/snippet}
 </Modal>
@@ -181,13 +249,7 @@
   .form {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
+    gap: 14px;
   }
 
   .notice {
@@ -202,23 +264,19 @@
 
   .origin,
   .hint {
-    margin: 0;
-    font-size: 13px;
+    margin: -6px 0 0;
+    font-size: 12px;
     color: var(--muted);
   }
 
-  textarea {
-    padding: var(--space-2) var(--space-3);
-    border: 1.5px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--fg);
-    font: 500 14px var(--font-body);
-    resize: vertical;
+  .origin {
+    margin: 0;
   }
 
-  .danger {
-    color: var(--bad);
+  /* Pastille « automatique » : filet pointillé autour de la couleur que le trajet prendrait. */
+  .swatches .auto {
+    outline: 1.5px dashed var(--muted);
+    outline-offset: 2px;
   }
 
   .spacer {

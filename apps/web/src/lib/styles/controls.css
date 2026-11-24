@@ -129,6 +129,167 @@
   color: var(--muted);
 }
 
+/* Champs des fenêtres façon maquette : libellé court en gras, champs à coins de 10 px. */
+.field.ref {
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field.ref > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.field.ref input,
+.field.ref select,
+.field.ref textarea {
+  min-height: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: 500 14px var(--font-body);
+}
+
+.field textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg);
+  font: 500 14px var(--font-body);
+  resize: vertical;
+}
+
+.field textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Deux champs côte à côte (latitude et longitude, distance et durée…). */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/*
+ * Choix exclusifs en boutons (maquette : modes de transport `.seg`, catégories `.cat-grid`,
+ * couleurs `.swatches`). Ce sont de vrais boutons radio, masqués, dans leur libellé : clavier
+ * (flèches) et lecteurs d'écran comme une liste de choix. L'élément porte `--c` (sa couleur).
+ */
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.seg > label {
+  flex: 1;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 4px;
+  border-radius: 8px;
+  color: var(--muted);
+  font: 700 11.5px var(--font-display);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.seg > label:hover {
+  color: var(--fg);
+}
+
+.seg > label:has(input:checked) {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-float);
+}
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.cat-grid > label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font: 700 10.5px var(--font-display);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.cat-grid > label > svg {
+  color: var(--c);
+}
+
+.cat-grid > label:hover {
+  border-color: color-mix(in srgb, var(--c) 50%, var(--line));
+}
+
+.cat-grid > label:has(input:checked) {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 8%, var(--surface));
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatches > label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--c);
+  color: var(--on-type);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.swatches > label:has(input:checked) {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--c);
+}
+
+/* Focus clavier visible sur l'option (le bouton radio lui-même est masqué). */
+:is(.seg, .cat-grid, .swatches) > label:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .field input,
 .field select {
   min-height: 40px;

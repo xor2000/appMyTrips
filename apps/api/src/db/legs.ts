@@ -22,6 +22,7 @@ interface LegRow {
   summary: string | null;
   depart_at: string | null;
   booking_ref: string | null;
+  color: number | null;
   notes: string;
   computed_at: string | null;
 }
@@ -40,6 +41,7 @@ function toLeg(r: LegRow): Leg {
     summary: r.summary,
     departAt: r.depart_at,
     bookingRef: r.booking_ref,
+    color: r.color,
     notes: r.notes,
     computedAt: r.computed_at,
   };

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { clickMapAt, type MapTestWindow } from './map-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -18,32 +19,11 @@ test.beforeEach(async ({ context }) => {
 
 const uniqueName = (label: string) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
-/** Accès de test exposés par la carte (TripMap.svelte) : les lieux sont dessinés en WebGL. */
-interface MapTestWindow {
-  __mapPoisForTests?: () => { id: string; name: string; active: boolean }[];
-  __mapProjectForTests?: (lngLat: [number, number]) => { x: number; y: number };
-}
-
 /** Lieux de la découverte dessinés sur la carte (vides tant que la carte n'est pas prête). */
 const renderedPois = (page: Page) =>
   page.evaluate(() => (window as MapTestWindow).__mapPoisForTests?.() ?? []);
 
 const renderedPoiNames = async (page: Page) => (await renderedPois(page)).map((p) => p.name).sort();
-
-/** Clic sur la carte, à l'endroit d'un point géographique. */
-async function clickMapAt(page: Page, lngLat: [number, number]) {
-  const point = await page.evaluate(
-    (position) => (window as MapTestWindow).__mapProjectForTests?.(position),
-    lngLat,
-  );
-  const canvas = page.locator('.maplibregl-canvas');
-  const box = await canvas.boundingBox();
-  // Taille d'affichage (zoom CSS) : la boîte est à l'écran, la projection en pixels de la carte.
-  const width = await canvas.evaluate((el) => (el as HTMLElement).offsetWidth);
-  if (!point || !box) throw new Error('carte indisponible');
-  const ratio = box.width / width;
-  await page.mouse.click(box.x + point.x * ratio, box.y + point.y * ratio);
-}
 
 async function exploreMuseums(page: Page) {
   await page.getByRole('button', { name: 'Explorer' }).click();
@@ -119,7 +99,7 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
   await card.getByRole('button', { name: /Musée des Arts décoratifs Musée/ }).click();
   await page.getByTestId('step-popup').getByRole('button', { name: 'Modifier' }).click();
   const editor = page.getByRole('dialog', { name: 'Modifier l’étape' });
-  await expect(editor.getByLabel('Type')).toHaveValue('museum');
+  await expect(editor.getByRole('radio', { name: 'Musée', exact: true })).toBeChecked();
   await expect(editor.getByLabel('Horaires d’ouverture')).toHaveValue('Tu-Su 11:00-18:00');
   await expect(editor.getByLabel('Notes')).toHaveValue('Site : https://madparis.fr');
 });

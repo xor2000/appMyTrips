@@ -77,6 +77,8 @@ export function stepPopupContent(
 /** Trajet : « mode · jour », départ → arrivée, distance · durée, origine des valeurs en pastille. */
 export function legPopupContent(
   leg: Leg,
+  /** Variable CSS de la couleur du trajet (celle de son tracé). */
+  color: string,
   names: { from: string; to: string },
   dayLabel: string | null,
   canEdit: boolean,
@@ -86,7 +88,7 @@ export function legPopupContent(
   return {
     kind: 'leg',
     category: join(LEG_MODE_INFO[leg.mode].label, dayLabel),
-    color: LEG_MODE_INFO[leg.mode].color,
+    color,
     title: `${names.from} → ${names.to}`,
     notes: leg.summary ?? '',
     meta: [

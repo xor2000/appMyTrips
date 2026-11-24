@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TimeOfDay } from '../trip/schemas';
+import { LEG_COLOR_COUNT } from './colors';
 import { LEG_MODES, type LegMode, type LegValueSource } from './modes';
 
 export const LegModeSchema = z.enum(LEG_MODES);
@@ -12,6 +13,12 @@ const Duration = z
   .int()
   .min(1)
   .max(7 * 24 * 60);
+/** Rang de la couleur dans la palette des trajets. */
+const Color = z
+  .number()
+  .int()
+  .min(0)
+  .max(LEG_COLOR_COUNT - 1);
 const Point = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 
 /** Création (ou remplacement) du trajet d'une paire ; distance et durée facultatives = routeur. */
@@ -25,6 +32,8 @@ export const LegCreate = z
     /** Heure de départ fixée (train réservé…). */
     departAt: TimeOfDay.optional(),
     bookingRef: z.string().max(200).optional(),
+    /** Couleur choisie ; absente : automatique. */
+    color: Color.optional(),
     notes: z.string().max(5000).default(''),
   })
   .refine((v) => v.fromKey !== v.toKey, {
@@ -33,7 +42,10 @@ export const LegCreate = z
   });
 export type LegCreate = z.infer<typeof LegCreate>;
 
-/** Modification d'un trajet : null remet distance ou durée au routeur ; `recompute` relance le calcul. */
+/**
+ * Modification d'un trajet : null remet distance ou durée au routeur (la couleur en automatique) ;
+ * `recompute` relance le calcul.
+ */
 export const LegPatch = z
   .object({
     mode: LegModeSchema,
@@ -41,6 +53,7 @@ export const LegPatch = z
     durationMin: Duration.nullable(),
     departAt: TimeOfDay.nullable(),
     bookingRef: z.string().max(200).nullable(),
+    color: Color.nullable(),
     notes: z.string().max(5000),
     recompute: z.literal(true),
   })
@@ -73,6 +86,8 @@ export interface Leg {
   summary: string | null;
   departAt: string | null;
   bookingRef: string | null;
+  /** Couleur choisie (rang dans la palette), ou null : automatique (voir `dayLegColors`). */
+  color: number | null;
   notes: string;
   computedAt: string | null;
 }

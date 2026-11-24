@@ -5,6 +5,7 @@ import {
   dayHikeLines,
   dayLegLines,
   dayPairs,
+  newLegAutoColor,
   isManual,
   legSourceLabel,
   suggestionFor,
@@ -23,7 +24,40 @@ describe('dayPairs', () => {
     const pairs = dayPairs(items, [leg, makeLeg({ id: 'autre', fromKey: 'x', toKey: 'y' })]);
     expect([...pairs.keys()]).toEqual(['a', 'b']);
     expect(pairs.get('a')).toMatchObject({ fromKey: 'a', toKey: 'b', leg });
-    expect(pairs.get('b')).toMatchObject({ fromKey: 'b', toKey: 'c', leg: null });
+    expect(pairs.get('b')).toMatchObject({ fromKey: 'b', toKey: 'c', leg: null, color: null });
+  });
+
+  it('couleur de chaque trajet : automatique (la suivante de la palette) ou choisie', () => {
+    const four = dayTimeline(
+      '2026-07-10',
+      [...steps, makeStep({ id: 'd', position: 'a3', lat: 46.1, lng: 7.1 })],
+      [],
+    );
+    const legs = [
+      makeLeg({ id: 'l1', fromKey: 'a', toKey: 'b' }),
+      makeLeg({ id: 'l2', fromKey: 'b', toKey: 'c' }),
+      makeLeg({ id: 'l3', fromKey: 'c', toKey: 'd', color: 6 }),
+    ];
+    const pairs = dayPairs(four, legs);
+    expect([...pairs.values()].map((p) => p.color)).toEqual(['--leg-1', '--leg-2', '--leg-7']);
+    expect([...pairs.values()].map((p) => p.autoColor)).toEqual([0, 1, 2]);
+    // Sans trajet entre a et b : le premier trajet existant prend la première couleur.
+    const gap = dayPairs(four, legs.slice(1, 2));
+    expect(gap.get('b')).toMatchObject({ color: '--leg-1', autoColor: 0 });
+  });
+});
+
+describe('newLegAutoColor', () => {
+  it('nouveau trajet : la couleur qui suit celle du trajet existant précédent', () => {
+    const four = dayTimeline(
+      '2026-07-10',
+      [...steps, makeStep({ id: 'd', position: 'a3', lat: 46.1, lng: 7.1 })],
+      [],
+    );
+    const pairs = dayPairs(four, [makeLeg({ id: 'l1', fromKey: 'a', toKey: 'b', color: 4 })]);
+    expect(newLegAutoColor(pairs, 'a')).toBe(0);
+    expect(newLegAutoColor(pairs, 'b')).toBe(5);
+    expect(newLegAutoColor(pairs, 'c')).toBe(5);
   });
 });
 
@@ -54,7 +88,7 @@ describe('suggestionFor', () => {
 });
 
 describe('dayLegLines', () => {
-  it('tracés du jour : géométrie décodée, couleur et pointillés selon le mode', () => {
+  it('tracés du jour : géométrie décodée, couleur du trajet, pointillés pour la marche', () => {
     const geometry = encodePolyline([
       { lat: 45.9, lng: 6.1 },
       { lat: 45.95, lng: 6.5 },
@@ -67,7 +101,7 @@ describe('dayLegLines', () => {
     expect(lines).toEqual([
       {
         key: 'a>b',
-        color: '--type-transport',
+        color: '--leg-1',
         dashed: false,
         coordinates: [
           [6.1, 45.9],
@@ -78,7 +112,7 @@ describe('dayLegLines', () => {
       // Sans tracé : ligne droite entre les deux points ; la marche en pointillés.
       {
         key: 'b>c',
-        color: '--type-hike',
+        color: '--leg-2',
         dashed: true,
         coordinates: [
           [6.87, 45.92],

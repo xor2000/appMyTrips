@@ -64,6 +64,12 @@ describe('LegTile', () => {
     expect(props.onEdit).toHaveBeenCalledWith(leg);
   });
 
+  it('ligne et icône de la couleur du trajet (celle de son tracé sur la carte)', () => {
+    setup({ leg: makeLeg(), color: '--leg-4' });
+    const tile = screen.getByRole('button', { name: /Voiture/ });
+    expect(tile.getAttribute('style')).toContain('--c: var(--leg-4)');
+  });
+
   it('lecture seule : le trajet reste cliquable (popup d’infos sur la carte)', async () => {
     const leg = makeLeg();
     const props = setup({ leg, canEdit: false });
