@@ -48,6 +48,62 @@ test('créer un voyage, le retrouver dans la liste de l’en-tête', async ({ pa
   await expect(select.locator('option:checked')).toHaveText(name);
 });
 
+test('beaucoup de jours : pas de barre de défilement, des flèches pour avancer dans les jours', async ({
+  page,
+}) => {
+  await createTrip(page, uniqueName('Long séjour'), '2026-07-01', '2026-08-14');
+  const tablist = page.getByRole('tablist', { name: 'Jours du voyage' });
+  const first = tablist.getByRole('tab', { name: /^J1 / });
+  const last = tablist.getByRole('tab', { name: /^J45 / });
+  const prev = page.getByTitle('Jours précédents');
+  const next = page.getByTitle('Jours suivants');
+
+  // Barre de défilement masquée sur le conteneur des jours.
+  const scrollbar = await first.evaluate(
+    (tab) => getComputedStyle(tab.parentElement!).scrollbarWidth,
+  );
+  expect(scrollbar).toBe('none');
+
+  // Flèches de part et d'autre des jours : rien avant le premier jour au départ.
+  await expect(prev).toBeVisible();
+  await expect(next).toBeVisible();
+  await expect(prev).toBeDisabled();
+  const prevBox = await prev.boundingBox();
+  const firstBox = await first.boundingBox();
+  const allBox = await tablist.getByRole('tab', { name: /Tout le voyage/ }).boundingBox();
+  expect(allBox!.x).toBeLessThan(prevBox!.x);
+  expect(prevBox!.x + prevBox!.width).toBeLessThanOrEqual(firstBox!.x + 1);
+  await expect(last).not.toBeInViewport();
+
+  // Avancer jusqu'au dernier jour.
+  await next.click();
+  await expect(prev).toBeEnabled();
+  await expect(first).not.toBeInViewport();
+  for (let i = 0; i < 20 && (await next.isEnabled()); i++) {
+    await next.click();
+    await page.waitForTimeout(150);
+  }
+  await expect(next).toBeDisabled();
+  await expect(last).toBeInViewport();
+  const nextBox = await next.boundingBox();
+  const lastBox = await last.boundingBox();
+  expect(lastBox!.x + lastBox!.width).toBeLessThanOrEqual(nextBox!.x + 1);
+
+  // Revenir en arrière, puis choisir un jour.
+  await prev.click();
+  await expect(next).toBeEnabled();
+  await last.scrollIntoViewIfNeeded();
+  await last.click();
+  await expect(last).toHaveAttribute('aria-selected', 'true');
+});
+
+test('peu de jours : aucune flèche de défilement', async ({ page }) => {
+  await createTrip(page, uniqueName('Court séjour'));
+  await expect(page.getByRole('tab', { name: /J3/ })).toBeVisible();
+  await expect(page.getByTitle('Jours suivants')).toHaveCount(0);
+  await expect(page.getByTitle('Jours précédents')).toHaveCount(0);
+});
+
 test('la carte charge son web worker sans erreur', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (msg) => {
