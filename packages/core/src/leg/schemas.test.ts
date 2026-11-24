@@ -22,6 +22,17 @@ describe('schémas de trajet', () => {
     expect(LegPatch.safeParse({ departAt: '25:00' }).success).toBe(false);
   });
 
+  it('couleur : rang dans la palette (0 à 7), facultative ; null la remet en automatique', () => {
+    expect(LegCreate.parse({ fromKey: 'a', toKey: 'b', mode: 'car', color: 3 }).color).toBe(3);
+    expect(LegCreate.safeParse({ fromKey: 'a', toKey: 'b', mode: 'car', color: 8 }).success).toBe(
+      false,
+    );
+    expect(LegPatch.parse({ color: 0 })).toEqual({ color: 0 });
+    expect(LegPatch.parse({ color: null })).toEqual({ color: null });
+    expect(LegPatch.safeParse({ color: -1 }).success).toBe(false);
+    expect(LegPatch.safeParse({ color: 1.5 }).success).toBe(false);
+  });
+
   it('RouteRequest : mode, points et départ facultatif (date-heure ISO)', () => {
     const ok = RouteRequest.safeParse({
       mode: 'train',

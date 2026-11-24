@@ -1,7 +1,9 @@
 <script lang="ts">
   import { STEP_TYPES, STEP_TYPE_INFO, type Day, type Step, type StepPatch } from '@mytrips/core';
+  import MapPin from 'lucide-svelte/icons/map-pin';
   import { untrack } from 'svelte';
   import { dayTitle, formatKm } from '#lib/format.ts';
+  import { STEP_ICONS } from '#lib/steps/icons.ts';
   import ElevationProfile from '../gpx/ElevationProfile.svelte';
   import Modal from '../Modal.svelte';
 
@@ -11,12 +13,18 @@
     onSave: (patch: StepPatch) => Promise<void>;
     onDelete: () => void;
     onClose: () => void;
+    /**
+     * Choix d'une nouvelle position en cliquant sur la carte (fenêtre masquée le temps du choix) :
+     * le point cliqué, ou null si le choix est annulé.
+     */
+    onPickOnMap?: () => Promise<{ lat: number; lng: number } | null>;
     /** Import d'un GPX sur une randonnée (enregistré aussitôt). */
     onImportGpx?: (file: File) => Promise<void>;
     onRemoveGpx?: () => Promise<void>;
   }
 
-  let { step, days, onSave, onDelete, onClose, onImportGpx, onRemoveGpx }: Props = $props();
+  let { step, days, onSave, onDelete, onClose, onPickOnMap, onImportGpx, onRemoveGpx }: Props =
+    $props();
 
   // Valeurs de départ, lues une seule fois à l'ouverture.
   const start = untrack(() => step);
@@ -31,6 +39,28 @@
   let bookingUrl = $state(start.bookingUrl ?? '');
   let openingHours = $state(start.openingHours ?? '');
   let useElevation = $state(start.useElevation);
+  // Position à 6 décimales (environ 10 cm), comme la maquette ; texte pour garder la saisie.
+  const coord = (v: number | null) => (v === null ? '' : v.toFixed(6));
+  const startLat = coord(start.lat);
+  const startLng = coord(start.lng);
+  let lat = $state<string | number>(startLat);
+  let lng = $state<string | number>(startLng);
+  /** Fenêtre masquée pendant le choix d'une position sur la carte. */
+  let picking = $state(false);
+
+  async function pickOnMap() {
+    if (!onPickOnMap) return;
+    picking = true;
+    try {
+      const point = await onPickOnMap();
+      if (point) {
+        lat = coord(point.lat);
+        lng = coord(point.lng);
+      }
+    } finally {
+      picking = false;
+    }
+  }
   /** Tracé à jour (un import pendant l'édition met l'étape à jour). */
   const gpx = $derived(step.gpx);
   const isHike = $derived(type === 'hike');
@@ -84,6 +114,21 @@
       return;
     }
     const patch: StepPatch = {};
+    // Les champs numériques renvoient un nombre, ou '' quand ils sont vides.
+    if (!isGroup && (String(lat) !== startLat || String(lng) !== startLng)) {
+      const la = Number(lat);
+      const ln = Number(lng);
+      if (String(lat).trim() === '' || !Number.isFinite(la) || la < -90 || la > 90) {
+        error = 'La latitude doit être comprise entre -90 et 90.';
+        return;
+      }
+      if (String(lng).trim() === '' || !Number.isFinite(ln) || ln < -180 || ln > 180) {
+        error = 'La longitude doit être comprise entre -180 et 180.';
+        return;
+      }
+      patch.lat = la;
+      patch.lng = ln;
+    }
     if (name.trim() !== start.name) patch.name = name.trim();
     if (notes !== start.notes) patch.notes = notes;
     const nextDay = dayId === '' ? null : dayId;
@@ -114,51 +159,85 @@
   }
 </script>
 
-<Modal title={isGroup ? 'Modifier le dossier' : 'Modifier l’étape'} {onClose}>
+<Modal
+  title={isGroup ? 'Modifier le dossier' : 'Modifier l’étape'}
+  subtitle={isGroup
+    ? 'Renommez le dossier ou déplacez-le vers un autre jour.'
+    : 'Mettez à jour les informations de cette étape.'}
+  hidden={picking}
+  {onClose}
+>
   <form id="step-form" class="form" onsubmit={submit} novalidate>
-    <label class="field">
-      Nom
+    <label class="field ref">
+      {isGroup ? 'Nom du dossier' : 'Nom du lieu'}
       <input type="text" bind:value={name} maxlength="200" />
     </label>
     {#if !isGroup}
       {#if start.address}
         <p class="address">{start.address}</p>
       {/if}
-      <div class="row">
-        <label class="field">
-          Type
-          <select bind:value={type}>
-            {#each STEP_TYPES as t (t)}
-              <option value={t}>{STEP_TYPE_INFO[t].label}</option>
-            {/each}
-          </select>
+      <!-- Catégories en grille de boutons icône et libellé (`.cat-grid` de la maquette). -->
+      <fieldset class="field ref">
+        <legend>Catégorie</legend>
+        <div class="cat-grid">
+          {#each STEP_TYPES as t (t)}
+            {@const Icon = STEP_ICONS[t]}
+            <label style={`--c: var(${STEP_TYPE_INFO[t].color})`}>
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="step-type"
+                value={t}
+                bind:group={type}
+              />
+              <Icon size={18} aria-hidden="true" />
+              <span>{STEP_TYPE_INFO[t].label}</span>
+            </label>
+          {/each}
+        </div>
+      </fieldset>
+      <div class="field-row">
+        <label class="field ref">
+          Latitude
+          <input type="number" step="any" min="-90" max="90" bind:value={lat} />
         </label>
-        <label class="field">
+        <label class="field ref">
+          Longitude
+          <input type="number" step="any" min="-180" max="180" bind:value={lng} />
+        </label>
+      </div>
+      {#if onPickOnMap}
+        <button type="button" class="btn btn-ghost pick" onclick={pickOnMap}>
+          <MapPin size={15} aria-hidden="true" />Choisir sur la carte
+        </button>
+      {/if}
+      <div class="field-row">
+        <label class="field ref">
           Durée sur place (min)
           <input type="number" min="0" max="1440" step="5" bind:value={durationMin} />
         </label>
+        <div class="fixed">
+          <label class="check">
+            <input type="checkbox" bind:checked={hasFixed} />
+            Heure fixe
+          </label>
+          <label class="field ref" class:disabled={!hasFixed}>
+            <span class="visually-hidden">Heure</span>
+            <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
+          </label>
+        </div>
       </div>
-      <div class="row fixed">
-        <label class="check">
-          <input type="checkbox" bind:checked={hasFixed} />
-          Heure fixe
-        </label>
-        <label class="field" class:disabled={!hasFixed}>
-          Heure
-          <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
-        </label>
-      </div>
-      <div class="row">
-        <label class="field">
+      <div class="field-row">
+        <label class="field ref">
           N° de réservation
           <input type="text" bind:value={bookingRef} maxlength="200" />
         </label>
-        <label class="field">
+        <label class="field ref">
           Lien de réservation
           <input type="url" bind:value={bookingUrl} placeholder="https://…" />
         </label>
       </div>
-      <label class="field">
+      <label class="field ref">
         Horaires d’ouverture
         <input
           type="text"
@@ -205,7 +284,7 @@
         </fieldset>
       {/if}
     {/if}
-    <label class="field">
+    <label class="field ref">
       Jour
       <select bind:value={dayId}>
         {#each days as d, i (d.id)}
@@ -214,7 +293,7 @@
         <option value="">Idées (pas encore placé)</option>
       </select>
     </label>
-    <label class="field">
+    <label class="field ref">
       Notes
       <textarea rows="3" bind:value={notes} maxlength="5000"></textarea>
     </label>
@@ -224,7 +303,7 @@
   </form>
 
   {#snippet actions()}
-    <button type="button" class="btn btn-ghost danger" onclick={onDelete}>Supprimer</button>
+    <button type="button" class="btn btn-danger-ghost" onclick={onDelete}>Supprimer</button>
     <span class="spacer"></span>
     <button type="button" class="btn btn-ghost" onclick={onClose}>Annuler</button>
     <button type="submit" form="step-form" class="btn btn-primary" disabled={busy}
@@ -237,26 +316,34 @@
   .form {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 14px;
   }
 
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-  }
-
+  /* « Heure fixe » à côté de la durée : case et heure sur la ligne du champ. */
   .fixed {
-    align-items: end;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+  }
+
+  .fixed .field {
+    flex: 1;
   }
 
   .check {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    min-height: 40px;
-    font-size: 14px;
+    min-height: 38px;
+    font-size: 13px;
     font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pick {
+    align-self: flex-start;
+    min-height: 32px;
+    margin-top: -6px;
   }
 
   .disabled {
@@ -267,16 +354,6 @@
     margin: 0;
     font-size: 13px;
     color: var(--muted);
-  }
-
-  textarea {
-    padding: var(--space-2) var(--space-3);
-    border: 1.5px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--fg);
-    font: 500 14px var(--font-body);
-    resize: vertical;
   }
 
   .hike {
@@ -321,10 +398,6 @@
     inset: 0;
     opacity: 0;
     cursor: pointer;
-  }
-
-  .danger {
-    color: var(--bad);
   }
 
   .spacer {

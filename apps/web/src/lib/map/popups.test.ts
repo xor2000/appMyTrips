@@ -50,13 +50,14 @@ describe('legPopupContent (comme buildRoutePopup de la référence)', () => {
   const names = { from: 'Musée du Louvre', to: 'Musée d’Orsay' };
 
   it('« mode · jour », départ → arrivée, distance · durée, Modifier et Supprimer', () => {
-    const c = legPopupContent(makeLeg(), names, 'J1', true, handlers);
+    const c = legPopupContent(makeLeg(), '--leg-3', names, 'J1', true, handlers);
     expect(c).toMatchObject({
       kind: 'leg',
       category: 'Voiture · J1',
       title: 'Musée du Louvre → Musée d’Orsay',
       meta: ['72 km', '1 h 15'],
-      color: '--type-transport',
+      // Couleur du trajet (celle de son tracé), comme la couche dans la référence.
+      color: '--leg-3',
       chip: null,
       notes: '',
     });
@@ -68,6 +69,7 @@ describe('legPopupContent (comme buildRoutePopup de la référence)', () => {
   it('estimé ou forcé en pastille (le « Tracé direct » de la référence) ; lignes en notes', () => {
     const c = legPopupContent(
       makeLeg({ mode: 'train', distanceM: null, durationSource: 'estimate', summary: 'TER 17611' }),
+      '--leg-1',
       names,
       null,
       true,
@@ -80,7 +82,7 @@ describe('legPopupContent (comme buildRoutePopup de la référence)', () => {
   });
 
   it('lecture seule : aucune action', () => {
-    expect(legPopupContent(makeLeg(), names, 'J1', false, handlers).actions).toEqual([]);
+    expect(legPopupContent(makeLeg(), '--leg-1', names, 'J1', false, handlers).actions).toEqual([]);
   });
 });
 

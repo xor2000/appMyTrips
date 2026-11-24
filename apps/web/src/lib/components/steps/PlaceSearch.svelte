@@ -9,6 +9,8 @@
     /** Délai avant la recherche, en millisecondes (anti-rebond). */
     delay?: number;
     placeholder?: string;
+    /** Champ qui reçoit le focus à l'ouverture de la fenêtre (voir `Modal`). */
+    autofocus?: boolean;
   }
 
   let {
@@ -16,6 +18,7 @@
     onPick,
     delay = 300,
     placeholder = 'Musée, restaurant, adresse…',
+    autofocus = false,
   }: Props = $props();
 
   let query = $state('');
@@ -67,6 +70,7 @@
       oninput={onInput}
       {placeholder}
       autocomplete="off"
+      data-autofocus={autofocus || undefined}
     />
   </label>
   {#if loading}

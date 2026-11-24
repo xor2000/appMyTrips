@@ -49,6 +49,7 @@ function leg(fromKey: string, toKey: string, durationMin: number, extra: Partial
     summary: null,
     departAt: null,
     bookingRef: null,
+    color: null,
     notes: '',
     computedAt: null,
     ...extra,

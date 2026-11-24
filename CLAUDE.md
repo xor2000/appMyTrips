@@ -133,9 +133,16 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
 - **Ajout d'un trajet (timeline « Liste »)** : sans trajet, la barre « + trajet » est masquée et
   sans `pointer-events` hors survol. En e2e, survoler la tuile (`tile.hover()`) avant de cliquer un
   mode, sinon le clic n'atteint jamais le bouton.
+- **Choix exclusifs des fenêtres** (`.seg`, `.cat-grid`, `.swatches` de `controls.css`) : boutons radio
+  masqués (`visually-hidden`) dans leur libellé. En e2e, cliquer le libellé (`getByText('Vélo', { exact:
+true })`, `getByTitle('Rose')` pour une pastille) : un clic direct sur le bouton radio masqué est
+  intercepté par le libellé. Les lire par `getByRole('radio', { name })`.
+- **Échap et fenêtres** : entre deux écouteurs d'un même événement réel, les microtâches s'exécutent.
+  Un écouteur qui réaffiche une fenêtre (abandon du choix sur la carte) doit appeler
+  `preventDefault()` : `Modal` ignore un Échap déjà traité, sinon il se fermerait aussitôt.
 - **Taille d'affichage** (`zoom` CSS sur `<html>`, 80 / 90 / 100 %) : une coordonnée de la carte
   (`__mapProjectForTests`) est en pixels de la carte ; pour cliquer à l'écran, la multiplier par
-  `largeur affichée du canevas / offsetWidth` (voir `clickMapAt` de `e2e/poi.spec.ts`).
+  `largeur affichée du canevas / offsetWidth` (voir `clickMapAt` de `e2e/map-helpers.ts`).
 - **URL de base des services externes** : construire les URL par concaténation
   (`${base}/api/v5/plan`), jamais `new URL('/chemin', base)`, qui efface le chemin de la base (relais,
   services factices des e2e sous `/osrm`, `/transitous`…).

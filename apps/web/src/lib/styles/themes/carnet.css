@@ -34,6 +34,16 @@
   --type-transport: #8a9a9c;
   --on-type: #ffffff;
 
+  /* Palette des trajets (celle des couches de la maquette) : couleur choisie ou automatique. */
+  --leg-1: #0f766e;
+  --leg-2: #2563eb;
+  --leg-3: #7c3aed;
+  --leg-4: #db2777;
+  --leg-5: #ea580c;
+  --leg-6: #16a34a;
+  --leg-7: #0891b2;
+  --leg-8: #64748b;
+
   --marker-ring: #ffffff;
 
   --shadow-card: 0 1px 2px rgb(23 38 42 / 6%);

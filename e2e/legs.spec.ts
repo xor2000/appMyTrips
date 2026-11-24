@@ -119,6 +119,50 @@ test('réordonner les étapes retire l’ancien trajet ; un trajet forcé est pr
   await expect(tile).toContainText('forcé');
 });
 
+test('fenêtre du trajet façon maquette : modes en boutons, couleur automatique puis choisie', async ({
+  page,
+}) => {
+  await tripWithTwoSteps(page);
+  await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
+  const add = page.getByRole('dialog', { name: 'Ajouter un lieu' });
+  await add.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Eiffel');
+  await add.getByRole('button', { name: /Tour Eiffel/ }).click();
+  await expect(add).toHaveCount(0);
+
+  const tiles = timeline(page).getByTestId('leg-tile');
+  await expect(tiles).toHaveCount(2);
+  for (const i of [0, 1]) {
+    await tiles.nth(i).hover();
+    await tiles.nth(i).getByRole('button', { name: 'Trajet en Voiture' }).click();
+    await expect(tiles.nth(i)).toContainText('routeur');
+  }
+  // Couleur automatique : chaque trajet du jour prend la couleur suivante (tuile et carte).
+  const line = (i: number) => tiles.nth(i).getByRole('button', { name: /Voiture|Vélo/ });
+  await expect(line(0)).toHaveAttribute('style', /--leg-1\b/);
+  await expect(line(1)).toHaveAttribute('style', /--leg-2\b/);
+  const map = page.getByTestId('trip-map');
+  await expect(map).toHaveAttribute('data-leg-colors', '--leg-1 --leg-2');
+
+  await line(1).click();
+  await page.getByTestId('leg-popup').getByRole('button', { name: 'Modifier' }).click();
+  const editor = page.getByRole('dialog', { name: 'Modifier le trajet' });
+  const modes = editor.getByRole('group', { name: 'Mode de transport' });
+  await expect(modes.getByRole('radio')).toHaveCount(7);
+  await expect(modes.getByRole('radio', { name: 'Voiture' })).toBeChecked();
+  await expect(editor.getByRole('radio', { name: 'Automatique (Bleu)' })).toBeChecked();
+  await modes.getByText('Vélo', { exact: true }).click();
+  await editor.getByTitle('Rose').click();
+  await editor.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(editor).toHaveCount(0);
+
+  await expect(tiles.nth(1)).toContainText('Vélo');
+  await expect(line(1)).toHaveAttribute('style', /--leg-4\b/);
+  await expect(map).toHaveAttribute('data-leg-colors', '--leg-1 --leg-4');
+  // La popup du trajet prend aussi sa couleur.
+  await line(1).click();
+  await expect(page.getByTestId('leg-popup')).toHaveAttribute('style', /--leg-4\b/);
+});
+
 test('aucun itinéraire en train : saisie manuelle de la durée', async ({ page }) => {
   await tripWithTwoSteps(page);
   const tile = timeline(page).getByTestId('leg-tile');
@@ -128,7 +172,7 @@ test('aucun itinéraire en train : saisie manuelle de la durée', async ({ page 
   const dialog = page.getByRole('dialog', { name: 'Nouveau trajet' });
   await expect(dialog).toContainText('Aucun itinéraire trouvé');
   await dialog.getByLabel('Durée (min)').fill('35');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await dialog.getByRole('button', { name: 'Ajouter le trajet' }).click();
   await expect(tile).toContainText('Train');
   await expect(tile).toContainText('35 min');
   await expect(tile).toContainText('forcé');

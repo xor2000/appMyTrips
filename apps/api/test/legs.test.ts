@@ -548,6 +548,51 @@ describe('trajets : modification et suppression', () => {
     expect(t.fetcher.mock.calls.length).toBe(calls);
   });
 
+  it('couleur : automatique (null) à la création, choisie, puis remise en automatique', async () => {
+    const t = await tripWithLeg();
+    expect(t.leg.color).toBeNull();
+    const calls = t.fetcher.mock.calls.length;
+    const chosen = await t.caller(
+      ALICE,
+      'PATCH',
+      `/api/trips/${t.tripId}/legs/${t.leg.id}`,
+      { color: 4 },
+      v(t.snapshot),
+    );
+    expect(chosen.status).toBe(200);
+    expect(chosen.body.legs[0]).toMatchObject({ color: 4, durationMin: 75 });
+    expect(t.fetcher.mock.calls.length, 'aucun nouveau calcul').toBe(calls);
+    const auto = await t.caller(
+      ALICE,
+      'PATCH',
+      `/api/trips/${t.tripId}/legs/${t.leg.id}`,
+      { color: null },
+      v(chosen.body),
+    );
+    expect(auto.body.legs[0].color).toBeNull();
+    const invalid = await t.caller(
+      ALICE,
+      'PATCH',
+      `/api/trips/${t.tripId}/legs/${t.leg.id}`,
+      { color: 9 },
+      v(auto.body),
+    );
+    expect(invalid.status).toBe(400);
+  });
+
+  it('couleur donnée à la création', async () => {
+    const t = await tripWithSteps();
+    const res = await routeCaller(fakeFetch(() => json(osrmResponse())))(
+      ALICE,
+      'POST',
+      `/api/trips/${t.tripId}/legs`,
+      { fromKey: t.a, toKey: t.b, mode: 'car', color: 2 },
+      v(t.trip),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.legs[0].color).toBe(2);
+  });
+
   it('supprime un trajet', async () => {
     const t = await tripWithLeg();
     const res = await t.caller(

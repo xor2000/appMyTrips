@@ -3,6 +3,7 @@
     POI_MIN_ZOOM,
     bboxCenter,
     dayTimeline,
+    legColorVar,
     legPairKey,
     planOfflineTiles,
     proposeFixes,
@@ -71,6 +72,7 @@
     dayHikeLines,
     dayLegLines,
     isManual,
+    newLegAutoColor,
     suggestionFor,
     type DayPair,
   } from '#lib/legs/legs.ts';
@@ -562,9 +564,37 @@
     const stepId = editingStepId;
     if (!stepId) return;
     const name = steps.find((s) => s.id === stepId)?.name ?? 'étape';
+    // Lieu déplacé : l'adresse suit la nouvelle position (lieu le plus proche, sinon aucune).
+    if (patch.lat !== undefined && patch.lng !== undefined && patch.address === undefined) {
+      const place = await reversePlace({ lat: patch.lat, lng: patch.lng }).catch(() => null);
+      patch = { ...patch, address: place?.address ?? null };
+    }
     await runCommand(`Modifier ${name}`, [{ kind: 'step', id: stepId, patch }]);
     editingStepId = null;
   }
+
+  /** Choix d'une position sur la carte en cours (fenêtre du lieu masquée). */
+  let placing = $state<{
+    label: string;
+    resolve: (point: { lat: number; lng: number } | null) => void;
+  } | null>(null);
+
+  /** « Choisir sur la carte » : promesse résolue au clic sur la carte, null si abandon. */
+  function pickOnMap(label: string) {
+    return new Promise<{ lat: number; lng: number } | null>((resolve) => {
+      placing = { label, resolve };
+    });
+  }
+
+  function endPlacing(point: { lat: number; lng: number } | null) {
+    placing?.resolve(point);
+    placing = null;
+  }
+
+  // Fenêtre du lieu disparue pendant le choix (lieu supprimé par une autre écriture…) : abandon.
+  $effect(() => {
+    if (!editingStep && placing) untrack(() => endPlacing(null));
+  });
 
   /**
    * Clic sur un lieu de la colonne, comme sur la maquette de référence : sélection, zoom sur le
@@ -624,6 +654,7 @@
       return leg
         ? legPopupContent(
             leg,
+            pairs.get(leg.fromKey)?.color ?? legColorVar(leg.color ?? 0),
             { from: pointName(leg.fromKey), to: pointName(leg.toKey) },
             dayLabel,
             canEdit,
@@ -838,6 +869,7 @@
         mode: patch.mode ?? pending.mode,
         durationMin: patch.durationMin ?? undefined,
         distanceM: patch.distanceM ?? undefined,
+        color: patch.color ?? undefined,
       }),
     );
     manualLeg = null;
@@ -934,6 +966,7 @@
     <LegTile
       {pair}
       leg={pair.leg}
+      color={pair.color}
       {canEdit}
       highlighted={(highlighted ?? selectedKey) === `${pair.fromKey}>${pair.toKey}`}
       suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
@@ -951,6 +984,7 @@
     <MetroLeg
       {pair}
       leg={pair.leg}
+      color={pair.color}
       {canEdit}
       highlighted={highlighted === `${pair.fromKey}>${pair.toKey}`}
       suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
@@ -1192,6 +1226,9 @@
           ? () => (adding = { kind: selectedDay ? 'place' : 'idea', type: null })
           : undefined}
         lines={legLines}
+        placing={placing
+          ? { label: placing.label, onPlace: endPlacing, onCancel: () => endPlacing(null) }
+          : null}
       />
     {/snippet}
 
@@ -1432,6 +1469,7 @@
       step={editingStep}
       days={snapshot.days}
       onSave={saveStep}
+      onPickOnMap={layout === 'board' ? undefined : () => pickOnMap(editingStep.name)}
       onDelete={() => askDelete(editingStep)}
       onImportGpx={importGpx}
       onRemoveGpx={removeGpx}
@@ -1442,6 +1480,7 @@
   {#if editingLeg}
     <LegEditor
       leg={editingLeg}
+      autoColor={pairs.get(editingLeg.fromKey)?.autoColor ?? 0}
       onSave={saveLeg}
       onRecompute={recomputeLeg}
       onDelete={removeLeg}
@@ -1453,6 +1492,7 @@
     {@const pending = manualLeg}
     <LegEditor
       isNew
+      autoColor={newLegAutoColor(pairs, pending.pair.fromKey)}
       message="Aucun itinéraire trouvé : indiquez la durée (et la distance si vous la connaissez)."
       leg={{
         id: '',
@@ -1467,6 +1507,7 @@
         summary: null,
         departAt: null,
         bookingRef: null,
+        color: null,
         notes: '',
         computedAt: null,
       }}
