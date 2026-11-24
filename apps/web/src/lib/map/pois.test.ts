@@ -1,6 +1,15 @@
 import type { Poi } from '@mytrips/core';
 import { describe, expect, it } from 'vitest';
-import { closestPoiId, POI_LAYER, poiFeatureCollection, poiLayer, POI_SOURCE } from './pois';
+import {
+  closestPoiId,
+  POI_ICON_LAYER,
+  POI_LAYER,
+  poiFeatureCollection,
+  poiIconId,
+  poiIconLayer,
+  poiLayer,
+  POI_SOURCE,
+} from './pois';
 
 function poi(id: string, overrides: Partial<Poi> = {}): Poi {
   return {
@@ -24,7 +33,7 @@ function poi(id: string, overrides: Partial<Poi> = {}): Poi {
 }
 
 describe('poiFeatureCollection', () => {
-  it('un point par lieu, avec son identifiant, son nom et la couleur de son type', () => {
+  it('un point par lieu, avec son identifiant, son nom, la couleur et l’icône de son type', () => {
     const collection = poiFeatureCollection(
       [poi('osm:N1', { lat: 48.1, lng: 2.1 }), poi('osm:N2', { stepType: 'restaurant' })],
       (p) => (p.stepType === 'museum' ? '#111111' : '#222222'),
@@ -33,12 +42,22 @@ describe('poiFeatureCollection', () => {
       {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [2.1, 48.1] },
-        properties: { id: 'osm:N1', name: 'Lieu osm:N1', color: '#111111' },
+        properties: {
+          id: 'osm:N1',
+          name: 'Lieu osm:N1',
+          color: '#111111',
+          icon: 'poi-icon-museum',
+        },
       },
       {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [2.33, 48.86] },
-        properties: { id: 'osm:N2', name: 'Lieu osm:N2', color: '#222222' },
+        properties: {
+          id: 'osm:N2',
+          name: 'Lieu osm:N2',
+          color: '#222222',
+          icon: 'poi-icon-restaurant',
+        },
       },
     ]);
   });
@@ -56,6 +75,25 @@ describe('poiLayer', () => {
     expect(radius).toContain('feature-state');
     expect(radius).toContain('active');
     expect(layer.paint?.['circle-stroke-color']).toBe('#ffffff');
+  });
+
+  it('pastilles assez grandes pour une icône : 11 px, 15 px quand le lieu est actif', () => {
+    const radius = poiLayer('#ffffff').paint?.['circle-radius'] as unknown[];
+    expect(radius.slice(-2)).toEqual([15, 11]);
+  });
+});
+
+describe('poiIconLayer', () => {
+  it('icône du type au centre de chaque pastille, toujours affichée', () => {
+    const layer = poiIconLayer();
+    expect(layer).toMatchObject({ id: POI_ICON_LAYER, type: 'symbol', source: POI_SOURCE });
+    expect(layer.layout?.['icon-image']).toEqual(['get', 'icon']);
+    expect(layer.layout?.['icon-allow-overlap']).toBe(true);
+    expect(layer.layout?.['icon-ignore-placement']).toBe(true);
+  });
+
+  it('identifiant d’image par type d’étape', () => {
+    expect(poiIconId('museum')).toBe('poi-icon-museum');
   });
 });
 
