@@ -3,16 +3,24 @@ import {
   STEP_TYPE_INFO,
   type Day,
   type Leg,
+  type Place,
   type Poi,
   type Step,
+  type StepType,
 } from '@mytrips/core';
 import { formatDistance, formatDuration } from '#lib/format.ts';
 import { legSourceLabel } from '#lib/legs/legs.ts';
 import type { MapPoint } from './points';
 
-/** Ce que montre une popup de la carte : marqueur d'étape ou d'idée, tracé de trajet, lieu découvert. */
+/**
+ * Ce que montre une popup de la carte : marqueur d'étape ou d'idée, tracé de trajet, lieu découvert,
+ * lieu sous un clic droit (géocodage inverse).
+ */
 export type PopupTarget =
-  { kind: 'step'; point: MapPoint } | { kind: 'leg'; key: string } | { kind: 'poi'; poi: Poi };
+  | { kind: 'step'; point: MapPoint }
+  | { kind: 'leg'; key: string }
+  | { kind: 'poi'; poi: Poi }
+  | { kind: 'place'; place: Place };
 
 /** Élément choisi dans la colonne, à cadrer sur la carte (clé de point, de paire, id de lieu). */
 export type FocusTarget =
@@ -105,18 +113,22 @@ export function legPopupContent(
   };
 }
 
-/**
- * Lieu de la découverte : « type · source », nom, adresse. Pas encore dans le voyage : « Ajouter à
- * J2 » (jour affiché) et « Ajouter aux idées » ; déjà ajouté : pastille cochée et « Supprimer ».
- */
-export function poiPopupContent(
-  poi: Poi,
+/** Actions d'un lieu qu'on peut ajouter (au jour affiché ou aux idées), ou supprimer une fois ajouté. */
+interface AddPlaceHandlers {
+  addToDay: () => void;
+  addToIdeas: () => void;
+  remove: () => void;
+}
+
+/** Popup d'un lieu à ajouter : « type · source », nom, adresse, Ajouter au jour et aux idées. */
+function addablePlaceContent(
+  place: { stepType: StepType; name: string; address: string | null },
+  source: string | null,
   added: boolean,
   dayLabel: string | null,
   canEdit: boolean,
-  handlers: { addToDay: () => void; addToIdeas: () => void; remove: () => void },
+  handlers: AddPlaceHandlers,
 ): MapPopupContent {
-  const source = poi.source === 'geoapify' ? 'Geoapify · OpenStreetMap' : 'OpenStreetMap';
   let actions: PopupAction[] = [];
   if (canEdit && added) {
     actions = [{ label: 'Supprimer', icon: 'trash', run: handlers.remove }];
@@ -137,12 +149,55 @@ export function poiPopupContent(
   }
   return {
     kind: 'poi',
-    category: join(STEP_TYPE_INFO[poi.stepType].label, source),
-    color: STEP_TYPE_INFO[poi.stepType].color,
-    title: poi.name,
-    notes: poi.address ?? '',
+    category: join(STEP_TYPE_INFO[place.stepType].label, source),
+    color: STEP_TYPE_INFO[place.stepType].color,
+    title: place.name,
+    notes: place.address ?? '',
     meta: [],
     chip: added ? { label: 'Déjà ajouté', check: true } : null,
     actions,
   };
+}
+
+/**
+ * Lieu de la découverte : « type · source », nom, adresse. Pas encore dans le voyage : « Ajouter à
+ * J2 » (jour affiché) et « Ajouter aux idées » ; déjà ajouté : pastille cochée et « Supprimer ».
+ */
+export function poiPopupContent(
+  poi: Poi,
+  added: boolean,
+  dayLabel: string | null,
+  canEdit: boolean,
+  handlers: AddPlaceHandlers,
+): MapPopupContent {
+  const source = poi.source === 'geoapify' ? 'Geoapify · OpenStreetMap' : 'OpenStreetMap';
+  return addablePlaceContent(poi, source, added, dayLabel, canEdit, handlers);
+}
+
+/**
+ * Lieu sous un clic droit : celui du géocodage inverse (Photon), placé au point cliqué (« ici ») ;
+ * rien trouvé ou Photon injoignable : un point sans nom.
+ */
+export function placeAtPoint(found: Place | null, point: { lat: number; lng: number }): Place {
+  return found
+    ? { ...found, ...point }
+    : { name: 'Point sur la carte', address: null, type: 'other', osmRef: null, ...point };
+}
+
+/** Clic droit sur la carte : même popup qu'un lieu découvert, sans source pour un point sans lieu. */
+export function placePopupContent(
+  place: Place,
+  added: boolean,
+  dayLabel: string | null,
+  canEdit: boolean,
+  handlers: AddPlaceHandlers,
+): MapPopupContent {
+  return addablePlaceContent(
+    { stepType: place.type, name: place.name, address: place.address },
+    place.osmRef ? 'OpenStreetMap' : null,
+    added,
+    dayLabel,
+    canEdit,
+    handlers,
+  );
 }

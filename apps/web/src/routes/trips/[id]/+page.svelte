@@ -64,6 +64,8 @@
   import { createBasemapPoiFinder } from '#lib/map/basemapPois.ts';
   import {
     legPopupContent,
+    placeAtPoint,
+    placePopupContent,
     poiPopupContent,
     stepPopupContent,
     type FocusTarget,
@@ -668,6 +670,15 @@
           )
         : null;
     }
+    if (target.kind === 'place') {
+      const place = target.place;
+      const step = place.osmRef ? steps.find((x) => x.osmRef === place.osmRef) : undefined;
+      return placePopupContent(place, step !== undefined, dayLabel, canEdit, {
+        addToDay: () => addMapPlace(place, selectedDay),
+        addToIdeas: () => addMapPlace(place, null),
+        remove: () => step && askDelete(step),
+      });
+    }
     const poi = target.poi;
     const step = poi.osmRef ? steps.find((x) => x.osmRef === poi.osmRef) : undefined;
     return poiPopupContent(poi, step !== undefined, dayLabel, canEdit, {
@@ -679,7 +690,7 @@
 
   function onPopupClose(kind: PopupTarget['kind']) {
     if (kind === 'poi') selectedPoi = null;
-    else selectedKey = null;
+    else if (kind !== 'place') selectedKey = null;
   }
 
   function askDeleteById(stepId: string) {
@@ -738,19 +749,22 @@
     drop(stepId, { dayId, parentId: null, index: siblingsOf(dayId, null).length });
   }
 
-  /** Clic droit sur la carte : lieu le plus proche, ajouté au jour affiché (ou aux idées). */
-  async function addHere(point: { lat: number; lng: number }) {
-    const place = await reversePlace(point).catch(() => null);
-    const name = place?.name ?? 'Point sur la carte';
+  /** Clic droit sur la carte : lieu le plus proche (Photon), montré dans une popup avant l'ajout. */
+  async function findPlaceAt(point: { lat: number; lng: number }): Promise<Place> {
+    return placeAtPoint(await reversePlace(point).catch(() => null), point);
+  }
+
+  /** Lieu du clic droit ajouté au jour affiché ou aux idées (`dayId` null). */
+  async function addMapPlace(place: Place, dayId: string | null) {
     await applyQuietly(() =>
       createStep(id, version(), {
-        dayId: selectedDay,
-        type: place?.type ?? 'other',
-        name,
-        lat: point.lat,
-        lng: point.lng,
-        address: place?.address ?? null,
-        osmRef: place?.osmRef ?? null,
+        dayId,
+        type: place.type,
+        name: place.name,
+        lat: place.lat,
+        lng: place.lng,
+        address: place.address,
+        osmRef: place.osmRef,
       }),
     );
   }
@@ -1218,7 +1232,7 @@
         {popupFor}
         focus={mapFocus}
         {onPopupClose}
-        onAddHere={canEdit ? addHere : undefined}
+        findPlaceAt={canEdit ? findPlaceAt : undefined}
         onViewChange={(v) => (mapView = v)}
         pois={exploring ? pois : []}
         {selectedPoi}

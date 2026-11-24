@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { days, makeLeg, makePoi, makeStep } from '#lib/test/fixtures.ts';
-import { legPopupContent, poiPopupContent, stepPopupContent } from './popups';
+import {
+  legPopupContent,
+  placeAtPoint,
+  placePopupContent,
+  poiPopupContent,
+  stepPopupContent,
+} from './popups';
 
 const labels = (c: { actions: { label: string }[] }) => c.actions.map((a) => a.label);
 
@@ -132,5 +138,62 @@ describe('poiPopupContent (comme buildDiscoverPopup de la référence)', () => {
     expect(c.category).toBe('Musée · Geoapify · OpenStreetMap');
     expect(c.chip?.label).toBe('Déjà ajouté');
     expect(c.actions).toEqual([]);
+  });
+});
+
+describe('clic droit sur la carte : lieu trouvé par Photon', () => {
+  const handlers = { addToDay: vi.fn(), addToIdeas: vi.fn(), remove: vi.fn() };
+  const click = { lat: 48.8601, lng: 2.3372 };
+  const school = {
+    name: 'École élémentaire',
+    address: '12 Rue de l’Arbre Sec, 75001 Paris, France',
+    lat: 48.8612,
+    lng: 2.3401,
+    type: 'museum' as const,
+    osmRef: 'W42',
+  };
+
+  it('lieu de Photon placé au point cliqué (nom, type, adresse et référence gardés)', () => {
+    expect(placeAtPoint(school, click)).toEqual({ ...school, ...click });
+  });
+
+  it('rien trouvé (ou Photon injoignable) : « Point sur la carte », sans référence', () => {
+    expect(placeAtPoint(null, click)).toEqual({
+      name: 'Point sur la carte',
+      address: null,
+      type: 'other',
+      osmRef: null,
+      ...click,
+    });
+  });
+
+  it('popup comme un lieu découvert : catégorie, nom, adresse, Ajouter au jour et aux idées', () => {
+    const c = placePopupContent(placeAtPoint(school, click), false, 'J1', true, handlers);
+    expect(c).toMatchObject({
+      kind: 'poi',
+      category: 'Musée · OpenStreetMap',
+      title: 'École élémentaire',
+      notes: '12 Rue de l’Arbre Sec, 75001 Paris, France',
+      color: '--type-museum',
+      chip: null,
+    });
+    expect(labels(c)).toEqual(['Ajouter à J1', 'Ajouter aux idées']);
+    c.actions[0]!.run();
+    expect(handlers.addToDay).toHaveBeenCalled();
+    c.actions[1]!.run();
+    expect(handlers.addToIdeas).toHaveBeenCalled();
+  });
+
+  it('point sans lieu : pas de mention OpenStreetMap', () => {
+    const c = placePopupContent(placeAtPoint(null, click), false, null, true, handlers);
+    expect(c.category).toBe('Autre');
+    expect(c.title).toBe('Point sur la carte');
+    expect(labels(c)).toEqual(['Ajouter aux idées']);
+  });
+
+  it('déjà ajouté : pastille « Déjà ajouté » et « Supprimer »', () => {
+    const c = placePopupContent(placeAtPoint(school, click), true, 'J1', true, handlers);
+    expect(c.chip).toEqual({ label: 'Déjà ajouté', check: true });
+    expect(labels(c)).toEqual(['Supprimer']);
   });
 });
