@@ -52,9 +52,10 @@ describe('MetroLeg', () => {
     expect(props.onCreate).toHaveBeenCalledWith({ mode: 'car', durationMin: 35 });
   });
 
-  it('lecture seule : « Trajet à définir », sans bouton', () => {
+  it('lecture seule, sans trajet (facultatif) : rien à signaler, sans bouton', () => {
     setup({ canEdit: false });
-    expect(screen.getByText('Trajet à définir')).toBeTruthy();
+    expect(screen.queryByText(/Trajet à définir/)).toBeNull();
+    expect(screen.queryByText('?')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter un trajet' })).toBeNull();
   });
 

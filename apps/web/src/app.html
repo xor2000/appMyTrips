@@ -15,6 +15,11 @@
         if (['pastel-light', 'pastel-dark', 'carnet'].indexOf(theme) >= 0) {
           document.documentElement.setAttribute('data-theme', theme);
         }
+        // Taille d'affichage mémorisée (voir src/lib/scale.svelte.ts).
+        var scale = localStorage.getItem('mytrips.scale');
+        if (scale === '80' || scale === '90') {
+          document.documentElement.style.setProperty('--zoom', String(Number(scale) / 100));
+        }
       } catch (e) {
         // Stockage bloqué : thème automatique.
       }

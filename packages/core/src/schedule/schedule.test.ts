@@ -91,7 +91,6 @@ describe('scheduleDay', () => {
       overrunMin: 0,
       conflictCount: 0,
       lateMin: 0,
-      missingLegs: 0,
     });
   });
 
@@ -176,12 +175,12 @@ describe('scheduleDay', () => {
     expect(r.summary.overrunMin).toBe(114);
   });
 
-  it('trajet manquant : compté 0 min, signalé, le calcul continue', () => {
+  it('sans trajet (facultatif) : 0 min, sans signalement', () => {
     const r = scheduleDay(input([step('a', 60), step('b', 60)], []));
     expect(times(r, 'b')).toBe('09:00→10:00');
     expect(r.legs[0]).toMatchObject({ missing: true, durationMin: 0 });
-    expect(r.legs[0]!.issues).toEqual([{ kind: 'missing_leg' }]);
-    expect(r.summary.missingLegs).toBe(1);
+    expect(r.legs[0]!.issues).toEqual([]);
+    expect(r.summary).not.toHaveProperty('missingLegs');
   });
 
   it('dossier : début du premier enfant, fin du dernier', () => {

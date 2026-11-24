@@ -45,12 +45,10 @@ async function tripWithPlaces(page: Page, places: [string, string][]) {
 /** Crée un trajet en voiture (25 min, OSRM factice) sur chaque tuile vide, une à une. */
 async function carEverywhere(page: Page, count: number) {
   for (let i = 0; i < count; i++) {
-    await timeline(page)
-      .getByTestId('leg-tile')
-      .filter({ hasText: '+ trajet' })
-      .first()
-      .getByRole('button', { name: 'Trajet en Voiture' })
-      .click();
+    const vacant = timeline(page).getByTestId('leg-tile').filter({ hasText: '+ trajet' }).first();
+    // L'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+    await vacant.hover();
+    await vacant.getByRole('button', { name: 'Trajet en Voiture' }).click();
     await expect(
       timeline(page).getByTestId('leg-tile').filter({ hasText: '+ trajet' }),
     ).toHaveCount(count - i - 1);

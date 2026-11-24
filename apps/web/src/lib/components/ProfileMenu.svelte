@@ -2,6 +2,7 @@
   import type { Me } from '@mytrips/core';
   import { tick } from 'svelte';
   import { resolve } from '$app/paths';
+  import ALargeSmall from 'lucide-svelte/icons/a-large-small';
   import Check from 'lucide-svelte/icons/check';
   import CircleUserRound from 'lucide-svelte/icons/circle-user-round';
   import LogOut from 'lucide-svelte/icons/log-out';
@@ -13,6 +14,7 @@
   import ShieldCheck from 'lucide-svelte/icons/shield-check';
   import Sun from 'lucide-svelte/icons/sun';
   import { signOut } from '#lib/auth/signout.ts';
+  import { scale, SCALES, setScale } from '#lib/scale.svelte.ts';
   import { readTheme, saveTheme, THEMES, type ThemeId } from '#lib/theme.ts';
 
   interface Props {
@@ -162,6 +164,24 @@
         {/each}
       </div>
 
+      <!-- Taille d'affichage, comme appMyBank : segments ; le menu reste ouvert pour comparer. -->
+      <div class="scale" role="group" aria-labelledby="profile-menu-scale">
+        <p class="group-label" id="profile-menu-scale">
+          <ALargeSmall size={14} aria-hidden="true" /> Taille d’affichage
+        </p>
+        <div class="segments">
+          {#each SCALES as value (value)}
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={scale.value === value}
+              tabindex="-1"
+              onclick={() => setScale(value)}>{value} %</button
+            >
+          {/each}
+        </div>
+      </div>
+
       <hr />
 
       <a
@@ -273,6 +293,37 @@
     color: var(--muted);
     font-size: 12px;
     font-weight: 600;
+  }
+
+  .segments {
+    display: flex;
+    margin: 0 var(--space-3) var(--space-1);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+
+  .segments button {
+    flex: 1;
+    min-height: 28px;
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--muted);
+    font: 600 13px var(--font-body);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
+  .segments button:hover,
+  .segments button:focus-visible {
+    color: var(--fg);
+    outline: none;
+  }
+
+  .segments button[aria-checked='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   hr {

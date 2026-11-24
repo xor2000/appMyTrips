@@ -130,6 +130,12 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   navigateur (une interception Playwright ne les voit pas). Playwright lance des services factices
   (`e2e/mock-services.mjs`, port 8798) et passe `PHOTON_URL` et `OVERPASS_URLS` à `wrangler dev`.
   Après un glisser-déposer, attendre que le résultat soit affiché avant l'action suivante.
+- **Ajout d'un trajet (timeline « Liste »)** : sans trajet, la barre « + trajet » est masquée et
+  sans `pointer-events` hors survol. En e2e, survoler la tuile (`tile.hover()`) avant de cliquer un
+  mode, sinon le clic n'atteint jamais le bouton.
+- **Taille d'affichage** (`zoom` CSS sur `<html>`, 80 / 90 / 100 %) : une coordonnée de la carte
+  (`__mapProjectForTests`) est en pixels de la carte ; pour cliquer à l'écran, la multiplier par
+  `largeur affichée du canevas / offsetWidth` (voir `clickMapAt` de `e2e/poi.spec.ts`).
 - **URL de base des services externes** : construire les URL par concaténation
   (`${base}/api/v5/plan`), jamais `new URL('/chemin', base)`, qui efface le chemin de la base (relais,
   services factices des e2e sous `/osrm`, `/transitous`…).

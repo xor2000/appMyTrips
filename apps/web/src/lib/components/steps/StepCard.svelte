@@ -73,11 +73,11 @@
   <div class="box">
     <button type="button" class="main" onclick={() => onEdit(step)}>
       <span class="icon">
-        {#if Icon}<Icon size={18} />{/if}
+        {#if Icon}<Icon size={15} />{/if}
         {#if label}<span class="label">{label}</span>{/if}
       </span>
-      <!-- Ordre du DOM : nom, type, horaires, pastilles (le nom accessible garde la forme
-           « nom type… »). La mise en page place les pastilles à côté du nom. -->
+      <!-- Une seule ligne : nom, type et durée, pastilles (le nom accessible garde la forme
+           « nom type… »), puis l'horaire à droite. -->
       <span class="text">
         <span class="name">{step.name}</span>
         <span class="meta">
@@ -106,7 +106,7 @@
         </span>
       </span>
       {#if clock}
-        <!-- Façon agenda : début en gros, fin dessous. Texte lu : « début → fin ». -->
+        <!-- Horaire sur une ligne : début en gras, puis fin. Texte lu : « début → fin ». -->
         <span class="clock">
           <span class="visually-hidden">{clock.start} → {clock.end}</span>
           <span class="start" data-testid="step-start" aria-hidden="true">{clock.start}</span>
@@ -162,13 +162,13 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    margin: var(--space-2) 0;
-    padding: var(--space-1) var(--space-3);
+    margin: 3px 0;
+    padding: 1px var(--space-3);
     border: 1.5px dashed var(--ok);
     border-radius: var(--radius-pill);
     background: var(--ok-soft);
     color: var(--ok);
-    font: 700 13px var(--font-display);
+    font: 700 12px var(--font-display);
   }
 
   .main {
@@ -176,8 +176,8 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: 10px var(--space-3);
+    gap: var(--space-2);
+    padding: 5px var(--space-3) 5px 6px;
     border: 0;
     background: transparent;
     color: var(--fg);
@@ -190,8 +190,8 @@
     flex: none;
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--icon-radius);
     background: color-mix(in srgb, var(--c) var(--icon-tint), transparent);
     color: color-mix(in srgb, var(--c) var(--icon-ink), var(--on-type));
@@ -212,40 +212,29 @@
     box-shadow: var(--shadow-card);
   }
 
-  /*
-   * Ligne 1 : nom et pastilles ; ligne 2 : horaires puis type et durée. L'ordre visuel diffère de
-   * l'ordre du DOM (voir plus haut) grâce à `order` et à un saut de ligne en ::after.
-   */
+  /* Une ligne : le nom se raccourcit d'abord, puis le type ; les pastilles gardent leur place. */
   .text {
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px 6px;
-  }
-
-  .text::after {
-    content: '';
-    order: 3;
-    flex-basis: 100%;
-    height: 0;
-  }
-
-  .name {
-    order: 1;
-    max-width: 100%;
-    overflow: hidden;
-    font: 700 14px var(--font-display);
-    text-overflow: ellipsis;
+    align-items: baseline;
+    gap: 6px;
     white-space: nowrap;
   }
 
+  .name {
+    flex: 0 1 auto;
+    min-width: 3em;
+    overflow: hidden;
+    font: 700 13.5px var(--font-display);
+    text-overflow: ellipsis;
+  }
+
   .pills {
-    order: 2;
+    flex: none;
     display: flex;
-    flex-wrap: wrap;
     gap: var(--space-1);
+    align-self: center;
   }
 
   .pills:empty {
@@ -254,12 +243,10 @@
 
   .clock {
     flex: none;
-    align-self: stretch;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
-    padding-left: var(--space-3);
+    align-items: baseline;
+    gap: 4px;
+    padding-left: var(--space-2);
     border-left: 1.5px solid color-mix(in srgb, var(--c) 25%, var(--line));
   }
 
@@ -273,7 +260,7 @@
   }
 
   .start {
-    font: 700 17px/1.1 var(--font-mono);
+    font: 700 13.5px var(--font-mono);
     color: var(--fg);
   }
 
@@ -287,10 +274,14 @@
     white-space: nowrap;
   }
 
+  /* Le type et la durée cèdent leur place avant le nom (rétrécissement bien plus fort). */
   .meta {
-    order: 5;
+    flex: 0 1000 auto;
+    min-width: 0;
+    overflow: hidden;
     font-size: 12px;
     color: var(--muted);
+    text-overflow: ellipsis;
   }
 
   .chip {
@@ -320,16 +311,15 @@
     color: var(--accent-strong);
   }
 
-  /* Actions en surimpression au survol : elles ne prennent pas de largeur au texte. */
-  /* À gauche, sur l'icône : l'heure, à droite, reste visible au survol. */
+  /* Actions en surimpression au survol, en ligne à gauche (sur l'icône et le début du nom) :
+     l'heure, à droite, reste visible. */
   .actions {
     position: absolute;
-    top: var(--space-1);
-    left: var(--space-1);
-    bottom: var(--space-1);
+    top: 3px;
+    left: 3px;
+    bottom: 3px;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--c) var(--card-tint), var(--surface));
     opacity: 0;
@@ -344,8 +334,8 @@
   .actions button {
     display: grid;
     place-items: center;
-    width: 26px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;

@@ -49,7 +49,7 @@
    * décale sous le curseur et le dépôt tombe ailleurs. Seule la couleur signale la zone visée.
    */
   .zone {
-    height: var(--space-3);
+    height: var(--space-2);
     margin: 0 var(--space-2);
     border-radius: var(--radius-pill);
     transition: background-color 0.12s;

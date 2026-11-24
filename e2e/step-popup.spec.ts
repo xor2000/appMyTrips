@@ -126,6 +126,8 @@ test('clic sur un trajet : la carte cadre le tracé et ouvre sa popup (infos, Mo
 }) => {
   await tripWithTwoPlaces(page);
   const tile = page.getByTestId('day-timeline').getByTestId('leg-tile');
+  // Sans trajet, l'ajout n'apparaît qu'au survol de l'espace entre les lieux.
+  await tile.hover();
   await tile.getByRole('button', { name: 'Trajet en Voiture' }).click();
   await expect(tile).toContainText('25 min');
 

@@ -36,9 +36,13 @@ async function clickMapAt(page: Page, lngLat: [number, number]) {
     (position) => (window as MapTestWindow).__mapProjectForTests?.(position),
     lngLat,
   );
-  const box = await page.locator('.maplibregl-canvas').boundingBox();
+  const canvas = page.locator('.maplibregl-canvas');
+  const box = await canvas.boundingBox();
+  // Taille d'affichage (zoom CSS) : la boîte est à l'écran, la projection en pixels de la carte.
+  const width = await canvas.evaluate((el) => (el as HTMLElement).offsetWidth);
   if (!point || !box) throw new Error('carte indisponible');
-  await page.mouse.click(box.x + point.x, box.y + point.y);
+  const ratio = box.width / width;
+  await page.mouse.click(box.x + point.x * ratio, box.y + point.y * ratio);
 }
 
 async function exploreMuseums(page: Page) {
@@ -246,4 +250,18 @@ test('les marqueurs d’étapes suivent la carte sans animer leur position', asy
     .locator('.map-marker', { hasText: '1' })
     .evaluate((el) => getComputedStyle(el).transitionProperty);
   expect(transitioned).not.toMatch(/\b(transform|all)\b/);
+});
+
+test('taille d’affichage à 80 % : un clic sur la carte vise toujours le bon lieu', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('mytrips.scale', '80'));
+  await tripCenteredOnLouvre(page);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe('0.8');
+  await exploreMuseums(page);
+  await expect.poll(() => renderedPoiNames(page)).toHaveLength(3);
+  await clickMapAt(page, [2.333, 48.863]);
+  await expect(page.getByTestId('poi-popup').getByRole('heading', { level: 4 })).toHaveText(
+    'Musée des Arts décoratifs',
+  );
 });

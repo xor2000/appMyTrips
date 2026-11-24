@@ -119,9 +119,10 @@
       {/if}
     </div>
   {:else}
+    <!-- Trajet facultatif : en lecture seule, la ligne continue simplement. -->
     <div class="top"></div>
-    <span class="node missing" aria-hidden="true">?</span>
-    <div class="bottom"><span class="hint">Trajet à définir</span></div>
+    <span class="node empty" aria-hidden="true"></span>
+    <div class="bottom"></div>
   {/if}
 </div>
 
@@ -191,12 +192,9 @@
     color: var(--on-accent);
   }
 
-  .node.missing {
-    --c: var(--line);
-    background: var(--surface);
-    color: var(--muted);
-    font: 700 12px var(--font-display);
-    cursor: default;
+  /* Sans trajet en lecture seule : la ligne passe, sans rond. */
+  .node.empty {
+    visibility: hidden;
   }
 
   .bottom {

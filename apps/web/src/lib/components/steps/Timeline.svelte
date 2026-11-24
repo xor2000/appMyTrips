@@ -153,11 +153,11 @@
   }
 
   /*
-   * En édition, une zone de dépôt (--space-3) précède chaque étape, donc suit chaque trajet : le
+   * En édition, une zone de dépôt (--space-2) précède chaque étape, donc suit chaque trajet : le
    * trajet reçoit la même hauteur en plus au-dessus pour rester centré entre les deux étapes.
    */
   .timeline.editable {
-    --leg-offset: var(--space-3);
+    --leg-offset: var(--space-2);
   }
 
   .empty {
