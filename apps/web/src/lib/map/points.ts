@@ -1,4 +1,11 @@
-import { STEP_TYPE_INFO, dayTimeline, type Day, type Stay, type Step } from '@mytrips/core';
+import {
+  STEP_TYPE_INFO,
+  dayTimeline,
+  type Day,
+  type Stay,
+  type Step,
+  type StepType,
+} from '@mytrips/core';
 
 /** Marqueur affiché sur la carte. */
 export interface MapPoint {
@@ -13,6 +20,8 @@ export interface MapPoint {
   label: string;
   /** Variable CSS de la couleur du type. */
   color: string;
+  /** Type de l'étape (icône d'un marqueur d'idée) ; null pour un séjour. */
+  type: StepType | null;
   faded: boolean;
   /** Idée (étape sans jour) : marqueur distinct, hors numérotation et hors trajets. */
   idea: boolean;
@@ -28,6 +37,7 @@ function stepPoint(s: Step, label: string): MapPoint | null {
     lng: s.lng,
     label,
     color: s.type ? STEP_TYPE_INFO[s.type].color : '--type-transport',
+    type: s.type,
     faded: false,
     idea: false,
   };
@@ -51,6 +61,7 @@ function stayPoint(stay: Stay, key: string): MapPoint {
     lng: stay.lng,
     label: 'H',
     color: '--type-hotel',
+    type: null,
     faded: false,
     idea: false,
   };

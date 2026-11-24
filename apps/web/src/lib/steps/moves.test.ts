@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { positionAt, positionShift } from './moves';
+import { positionAt } from './moves';
 
 const siblings = [
   { id: 'a', position: 'a1' },
@@ -29,22 +29,5 @@ describe('positionAt (dépôt d’un élément à un index)', () => {
 
   it('fonctionne dans une liste vide', () => {
     expect(positionAt([], 0, 'x')).toBeTypeOf('string');
-  });
-});
-
-describe('positionShift (monter / descendre)', () => {
-  it('monte un élément d’un cran', () => {
-    const p = positionShift(siblings, 'c', -1)!;
-    expect(p > 'a1' && p < 'a2').toBe(true);
-  });
-
-  it('descend un élément d’un cran', () => {
-    const p = positionShift(siblings, 'a', 1)!;
-    expect(p > 'a2' && p < 'a3').toBe(true);
-  });
-
-  it('renvoie null aux bornes', () => {
-    expect(positionShift(siblings, 'a', -1)).toBeNull();
-    expect(positionShift(siblings, 'c', 1)).toBeNull();
   });
 });

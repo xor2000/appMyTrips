@@ -44,13 +44,15 @@ export interface MapPopupContent {
   kind: 'step' | 'leg' | 'poi';
   /** « Musée · J1 », « Voiture · J1 », « Musée ». */
   category: string;
-  /** Icône du type, à gauche du nom (lieux découverts et clic droit). */
+  /** Icône du type, à gauche du nom (étapes, idées, lieux découverts, clic droit). */
   icon?: StepType;
   /** Source des données, en petit sous les notes (« OpenStreetMap »…). */
   source?: string;
   /** Variable CSS de la couleur de la catégorie. */
   color: string;
   title: string;
+  /** Adresse, sous le nom et avant les notes (étape ou idée). */
+  address?: string;
   notes: string;
   /** Infos séparées par « · » (distance, durée). */
   meta: string[];
@@ -60,7 +62,10 @@ export interface MapPopupContent {
 
 const join = (...parts: (string | null)[]) => parts.filter((p) => p).join(' · ');
 
-/** Étape ou idée : « type · jour », nom, notes, Modifier et Supprimer. */
+/**
+ * Étape ou idée, comme la popup du clic droit : « type · jour », icône du type et nom, adresse,
+ * notes, Modifier et Supprimer.
+ */
 export function stepPopupContent(
   step: Step,
   days: readonly Day[],
@@ -73,7 +78,9 @@ export function stepPopupContent(
     kind: 'step',
     category: join(step.type ? STEP_TYPE_INFO[step.type].label : 'Lieu', context),
     color: step.type ? STEP_TYPE_INFO[step.type].color : '--type-transport',
+    ...(step.type ? { icon: step.type } : {}),
     title: step.name,
+    ...(step.address ? { address: step.address } : {}),
     notes: step.notes,
     meta: [],
     chip: null,

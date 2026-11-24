@@ -109,14 +109,9 @@ test('ligne de métro : ajouter, relier par un trajet, réordonner et glisser', 
   const box = await leg.boundingBox();
   expect(box!.width).toBeLessThanOrEqual(150);
 
-  // Plus tard : l'ordre change.
-  await page.getByTestId('metro-stop').first().hover();
-  await page.getByRole('button', { name: 'Plus tard : Musée du Louvre' }).click();
-  await expect.poll(() => stopNames(page)).toEqual(['Musée d’Orsay', 'Musée du Louvre']);
-
-  // Glisser la dernière station dans la première zone de dépôt : retour à l'ordre initial.
+  // Glisser la dernière station dans la première zone de dépôt : l'ordre change.
   await page.getByTestId('metro-stop').last().dragTo(line.getByTestId('drop-zone').first());
-  await expect.poll(() => stopNames(page)).toEqual(['Musée du Louvre', 'Musée d’Orsay']);
+  await expect.poll(() => stopNames(page)).toEqual(['Musée d’Orsay', 'Musée du Louvre']);
 
   // Un clic sur une station ouvre l'éditeur.
   await page.getByRole('button', { name: /^Musée du Louvre · Musée/ }).click();

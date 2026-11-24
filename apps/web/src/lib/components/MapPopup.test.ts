@@ -26,6 +26,16 @@ describe('MapPopup', () => {
     expect(screen.getByText('Billet coupe-file')).toBeTruthy();
   });
 
+  it('adresse sous le nom, avant les notes (comme la popup du clic droit)', () => {
+    const { container } = render(MapPopup, {
+      props: { content: content({ icon: 'museum', address: 'Rue de Rivoli, 75001 Paris' }) },
+    });
+    const address = screen.getByText('Rue de Rivoli, 75001 Paris');
+    const notes = screen.getByText('Billet coupe-file');
+    expect(address.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('.type-icon svg')).toBeTruthy();
+  });
+
   it('sans notes ni infos : ni paragraphe ni ligne d’infos', () => {
     const { container } = render(MapPopup, { props: { content: content({ notes: '' }) } });
     expect(container.querySelector('.notes')).toBeNull();

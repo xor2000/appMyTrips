@@ -10,8 +10,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     canEdit: true,
     highlighted: false,
     onEdit: vi.fn(),
-    onMove: vi.fn(),
-    onDelete: vi.fn(),
+    onContextMenu: vi.fn(),
     onHover: vi.fn(),
     ...overrides,
   };
@@ -139,20 +138,40 @@ describe('StepCard', () => {
     expect(props.onEdit).toHaveBeenCalledWith(props.step);
   });
 
-  it('propose de monter, descendre et supprimer l’étape', async () => {
+  it('plus d’actions au survol : ni monter, ni descendre, ni supprimer', () => {
+    setup();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Monter|Descendre|Supprimer/ })).toBeNull();
+  });
+
+  it('clic droit : ouvre le menu contextuel au pointeur, sans le menu du navigateur', async () => {
     const props = setup();
-    await fireEvent.click(screen.getByRole('button', { name: 'Monter Musée du Louvre' }));
-    expect(props.onMove).toHaveBeenLastCalledWith(props.step, -1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Descendre Musée du Louvre' }));
-    expect(props.onMove).toHaveBeenLastCalledWith(props.step, 1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Supprimer Musée du Louvre' }));
-    expect(props.onDelete).toHaveBeenCalledWith(props.step);
+    const card = screen.getByTestId('step-card');
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 120,
+      clientY: 340,
+    });
+    card.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(props.onContextMenu).toHaveBeenCalledWith(props.step, { x: 120, y: 340 });
     expect(props.onEdit).not.toHaveBeenCalled();
   });
 
-  it('en lecture seule, n’affiche aucune action et n’est pas déplaçable', () => {
+  it('touche Menu ou Maj+F10 sur la carte : ouvre le menu contextuel', async () => {
+    const props = setup();
+    const main = screen.getByRole('button', { name: /Musée du Louvre Musée/ });
+    await fireEvent.keyDown(main, { key: 'ContextMenu' });
+    expect(props.onContextMenu).toHaveBeenCalledTimes(1);
+    await fireEvent.keyDown(main, { key: 'F10', shiftKey: true });
+    expect(props.onContextMenu).toHaveBeenCalledTimes(2);
+    await fireEvent.keyDown(main, { key: 'F10' });
+    expect(props.onContextMenu).toHaveBeenCalledTimes(2);
+  });
+
+  it('en lecture seule, n’est pas déplaçable', () => {
     setup({ canEdit: false });
-    expect(screen.queryByRole('button', { name: /monter/i })).toBeNull();
     expect(screen.getByTestId('step-card').getAttribute('draggable')).toBe('false');
   });
 

@@ -1,11 +1,9 @@
 <script lang="ts">
   import { STEP_TYPE_INFO, type ScheduledItem, type Step } from '@mytrips/core';
-  import ChevronLeft from 'lucide-svelte/icons/chevron-left';
-  import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import Hourglass from 'lucide-svelte/icons/hourglass';
   import Lock from 'lucide-svelte/icons/lock';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
   import { formatDuration, formatKm } from '#lib/format.ts';
+  import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
   import { STEP_ICONS } from '#lib/steps/icons.ts';
 
@@ -16,8 +14,7 @@
     highlighted: boolean;
     time?: ScheduledItem | null;
     onEdit: (step: Step) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
   }
 
@@ -28,8 +25,7 @@
     highlighted,
     time = null,
     onEdit,
-    onMove,
-    onDelete,
+    onContextMenu,
     onHover,
   }: Props = $props();
 
@@ -43,7 +39,7 @@
   );
 </script>
 
-<!-- Station de la ligne de métro : mêmes informations et actions qu'une carte de la liste. -->
+<!-- Station de la ligne de métro : mêmes informations et menu contextuel qu'une carte de la liste. -->
 <div
   class="stop"
   class:highlighted
@@ -57,6 +53,10 @@
   ondragend={endDrag}
   onmouseenter={() => onHover(step.id)}
   onmouseleave={() => onHover(null)}
+  oncontextmenu={(e) => {
+    e.preventDefault();
+    onContextMenu(step, { x: e.clientX, y: e.clientY });
+  }}
 >
   <div class="top">
     {#if time && time.freeBeforeMin >= 5}
@@ -75,6 +75,10 @@
     class="node"
     aria-label={`${step.name} · ${info?.label ?? 'Étape'}`}
     onclick={() => onEdit(step)}
+    onkeydown={(e) => {
+      const point = contextMenuKey(e);
+      if (point) onContextMenu(step, point);
+    }}
   >
     {#if Icon}<Icon size={15} />{/if}
     {#if label}<span class="label">{label}</span>{/if}
@@ -90,23 +94,6 @@
       {#if step.gpx}<span class="chip gpx">GPX {formatKm(step.gpx.stats.distanceM)}</span>{/if}
       {#if step.bookingRef}<span class="chip booking">Résa {step.bookingRef}</span>{/if}
     </span>
-    {#if canEdit}
-      <span class="actions">
-        <button
-          type="button"
-          aria-label={`Plus tôt : ${step.name}`}
-          onclick={() => onMove(step, -1)}><ChevronLeft size={15} /></button
-        >
-        <button
-          type="button"
-          aria-label={`Plus tard : ${step.name}`}
-          onclick={() => onMove(step, 1)}><ChevronRight size={15} /></button
-        >
-        <button type="button" aria-label={`Supprimer ${step.name}`} onclick={() => onDelete(step)}
-          ><Trash2 size={14} /></button
-        >
-      </span>
-    {/if}
   </div>
 </div>
 
@@ -256,34 +243,6 @@
   .booking {
     background: var(--accent-soft);
     color: var(--accent-strong);
-  }
-
-  .actions {
-    display: flex;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-
-  .stop:hover .actions,
-  .stop:focus-within .actions {
-    opacity: 1;
-  }
-
-  .actions button {
-    display: grid;
-    place-items: center;
-    width: 26px;
-    height: 22px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    color: var(--muted);
-    cursor: pointer;
-  }
-
-  .actions button:hover {
-    color: var(--fg);
   }
 
   .visually-hidden {

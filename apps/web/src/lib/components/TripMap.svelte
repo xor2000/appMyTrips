@@ -31,7 +31,7 @@
     poiIconLayer,
     poiLayer,
   } from '#lib/map/pois.ts';
-  import { loadStepIconImage, POI_ICON_PIXEL_RATIO } from '#lib/map/poiIcons.ts';
+  import { loadStepIconImage, POI_ICON_PIXEL_RATIO, stepIconSvg } from '#lib/map/poiIcons.ts';
   import {
     missingImageResolver,
     styleFor,
@@ -47,6 +47,11 @@
     fitKey?: string;
     onHover?: (key: string | null) => void;
     onPick?: (point: MapPoint) => void;
+    /**
+     * Clic droit sur le marqueur d'une étape ou d'une idée : menu contextuel du lieu (à la place de
+     * la popup du lieu le plus proche). Rien sur un séjour.
+     */
+    onMarkerContextMenu?: (point: MapPoint, at: { x: number; y: number }) => void;
     /**
      * Clic droit : lieu sous le clic (géocodage inverse, jamais en échec), montré dans la même
      * popup qu'un lieu découvert ; absent en lecture seule.
@@ -104,6 +109,7 @@
     fitKey = '',
     onHover = () => {},
     onPick = () => {},
+    onMarkerContextMenu = () => {},
     findPlaceAt,
     onViewChange = () => {},
     pois = [],
@@ -130,7 +136,7 @@
   let styleId = $state<MapStyleId>('plan');
   // Cache des marqueurs MapLibre, volontairement non réactif (mis à jour par les effets).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
+  const markers = new Map<string, { marker: Marker; el: HTMLElement; icon?: string }>();
   let PopupClass: typeof Popup | undefined;
   /**
    * Popup ouverte (composant Svelte monté dans une popup MapLibre) et ce qu'elle montre.
@@ -318,6 +324,14 @@
           openPopup({ kind: 'step', point: current }, [current.lng, current.lat]);
           onPick(current);
         });
+        // Le clic droit ne doit pas remonter à la carte (popup du lieu le plus proche).
+        el.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (placing) return;
+          const current = points.find((x) => x.key === p.key) ?? p;
+          if (current.stepId) onMarkerContextMenu(current, { x: ev.clientX, y: ev.clientY });
+        });
         entry = {
           el,
           marker: new MarkerClass({ element: el, anchor: 'bottom' })
@@ -327,9 +341,19 @@
         markers.set(p.key, entry);
       }
       entry.marker.setLngLat([p.lng, p.lat]);
-      // Idée : ampoule plutôt que du texte (le nom accessible garde « Idée · … »).
-      if (p.idea) entry.el.replaceChildren(lightbulbIcon());
-      else entry.el.textContent = p.label;
+      // Idée : icône de sa catégorie plutôt que du texte (le nom accessible garde « Idée · … »).
+      // Le SVG vient de l'icône Lucide du type (`stepIconSvg`), refait seulement s'il change.
+      if (p.idea && p.type) {
+        if (entry.icon !== p.type) {
+          entry.el.innerHTML = stepIconSvg(p.type, 'currentColor', 15);
+          entry.icon = p.type;
+        }
+        entry.el.dataset.icon = p.type;
+      } else {
+        entry.el.textContent = p.label;
+        entry.icon = undefined;
+        delete entry.el.dataset.icon;
+      }
       entry.el.title = p.name;
       entry.el.setAttribute('aria-label', `${p.label} · ${p.name}`);
       entry.el.style.setProperty('--c', `var(${p.color})`);
@@ -485,31 +509,6 @@
     if (ref?.kind === 'leg' && !lines.some((l) => l.key === ref.key)) closePopup();
     if (ref?.kind === 'poi' && !ref.basemap && !pois.some((p) => p.id === ref.key)) closePopup();
   });
-
-  /** Icône lucide « lightbulb » (marqueurs créés hors des composants Svelte). */
-  function lightbulbIcon(): SVGSVGElement {
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '15');
-    svg.setAttribute('height', '15');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2.2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    svg.setAttribute('aria-hidden', 'true');
-    for (const d of [
-      'M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5',
-      'M9 18h6',
-      'M10 22h4',
-    ]) {
-      const path = document.createElementNS(ns, 'path');
-      path.setAttribute('d', d);
-      svg.append(path);
-    }
-    return svg;
-  }
 
   /** Couleur réelle d'une variable CSS (MapLibre ne lit pas les variables). */
   function cssColor(name: string) {
@@ -720,9 +719,14 @@
     testWindow.__mapZoomForTests = () => m.getZoom();
   }
 
-  // Mise en évidence du point survolé.
+  // Mise en évidence du point survolé. `highlighted` est lu hors de la boucle : sans marqueur au
+  // premier passage (carte encore en chargement), l'effet n'aurait sinon aucune dépendance et ne
+  // se relancerait jamais. Il suit aussi les points (marqueurs créés ou recréés).
   $effect(() => {
-    for (const [key, { el }] of markers) el.classList.toggle('highlighted', key === highlighted);
+    const current = highlighted;
+    void map;
+    void points;
+    for (const [key, { el }] of markers) el.classList.toggle('highlighted', key === current);
   });
 
   // Recadrage sur les points quand la vue change (jour sélectionné, ajout du premier point…).

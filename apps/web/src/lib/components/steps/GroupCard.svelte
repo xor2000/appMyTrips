@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
+  import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
   import { GROUP_ICON } from '#lib/steps/icons.ts';
   import DropZone from './DropZone.svelte';
@@ -14,8 +15,8 @@
     canEdit: boolean;
     highlighted: string | null;
     onEdit: (step: Step) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    /** Menu contextuel d'une étape du dossier ou du dossier lui-même (en-tête). */
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
     /** Dépôt dans le dossier, à l'index donné parmi ses étapes (sans l'élément déplacé). */
     onDropInto: (stepId: string, index: number) => void;
@@ -30,8 +31,7 @@
     canEdit,
     highlighted,
     onEdit,
-    onMove,
-    onDelete,
+    onContextMenu,
     onHover,
     onDropInto,
     after,
@@ -54,6 +54,10 @@
       draggable={canEdit ? 'true' : 'false'}
       ondragstart={(e) => startDrag(e, item.group.id, 'group')}
       ondragend={endDrag}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        onContextMenu(item.group, { x: e.clientX, y: e.clientY });
+      }}
     >
       <button
         type="button"
@@ -65,7 +69,15 @@
       >
         <ChevronRight size={16} />
       </button>
-      <button type="button" class="title" onclick={() => onEdit(item.group)}>
+      <button
+        type="button"
+        class="title"
+        onclick={() => onEdit(item.group)}
+        onkeydown={(e) => {
+          const point = contextMenuKey(e);
+          if (point) onContextMenu(item.group, point);
+        }}
+      >
         <span class="icon"><Icon size={16} /></span>
         <span class="name">{item.group.name}</span>
         {#if times.get(item.group.id)}
@@ -92,8 +104,7 @@
             highlighted={highlighted === child.id}
             time={times.get(child.id) ?? null}
             {onEdit}
-            {onMove}
-            {onDelete}
+            {onContextMenu}
             {onHover}
           />
           <!-- Le trajet qui suit la dernière étape sort du dossier (rendu par la timeline). -->
