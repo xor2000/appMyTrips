@@ -1,11 +1,9 @@
 <script lang="ts">
   import { STEP_TYPE_INFO, type ScheduledItem, type Step } from '@mytrips/core';
-  import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import Hourglass from 'lucide-svelte/icons/hourglass';
   import Lock from 'lucide-svelte/icons/lock';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
   import { formatDuration, formatKm } from '#lib/format.ts';
+  import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
   import { GROUP_ICON, STEP_ICONS } from '#lib/steps/icons.ts';
 
@@ -16,8 +14,8 @@
     canEdit: boolean;
     highlighted: boolean;
     onEdit: (step: Step) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    /** Clic droit, touche Menu ou Maj+F10 : menu contextuel (Modifier, Supprimer, Déplacer…). */
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
     /** Horaires calculés par le moteur (absents hors d'un jour). */
     time?: ScheduledItem | null;
@@ -29,8 +27,7 @@
     canEdit,
     highlighted,
     onEdit,
-    onMove,
-    onDelete,
+    onContextMenu,
     onHover,
     time = null,
   }: Props = $props();
@@ -69,9 +66,21 @@
   ondragend={endDrag}
   onmouseenter={() => onHover(step.id)}
   onmouseleave={() => onHover(null)}
+  oncontextmenu={(e) => {
+    e.preventDefault();
+    onContextMenu(step, { x: e.clientX, y: e.clientY });
+  }}
 >
   <div class="box">
-    <button type="button" class="main" onclick={() => onEdit(step)}>
+    <button
+      type="button"
+      class="main"
+      onclick={() => onEdit(step)}
+      onkeydown={(e) => {
+        const point = contextMenuKey(e);
+        if (point) onContextMenu(step, point);
+      }}
+    >
       <span class="icon">
         {#if Icon}<Icon size={15} />{/if}
         {#if label}<span class="label">{label}</span>{/if}
@@ -114,19 +123,6 @@
         </span>
       {/if}
     </button>
-    {#if canEdit}
-      <div class="actions">
-        <button type="button" aria-label={`Monter ${step.name}`} onclick={() => onMove(step, -1)}>
-          <ChevronUp size={16} />
-        </button>
-        <button type="button" aria-label={`Descendre ${step.name}`} onclick={() => onMove(step, 1)}>
-          <ChevronDown size={16} />
-        </button>
-        <button type="button" aria-label={`Supprimer ${step.name}`} onclick={() => onDelete(step)}>
-          <Trash2 size={15} />
-        </button>
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -309,42 +305,5 @@
   .booking {
     background: var(--accent-soft);
     color: var(--accent-strong);
-  }
-
-  /* Actions en surimpression au survol, en ligne à gauche (sur l'icône et le début du nom) :
-     l'heure, à droite, reste visible. */
-  .actions {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    bottom: 3px;
-    display: flex;
-    align-items: center;
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--c) var(--card-tint), var(--surface));
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-
-  .card:hover .actions,
-  .card:focus-within .actions {
-    opacity: 1;
-  }
-
-  .actions button {
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-  }
-
-  .actions button:hover {
-    background: var(--surface);
-    color: var(--fg);
   }
 </style>

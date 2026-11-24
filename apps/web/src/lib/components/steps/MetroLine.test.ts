@@ -41,8 +41,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     highlighted: null,
     onEdit: vi.fn(),
     onEditStay: vi.fn(),
-    onMove: vi.fn(),
-    onDelete: vi.fn(),
+    onContextMenu: vi.fn(),
     onHover: vi.fn(),
     onDrop: vi.fn(),
     after: createRawSnippet((key: () => string) => ({
@@ -95,16 +94,25 @@ describe('MetroLine', () => {
     expect(vol.textContent).toContain('Conflit +20 min');
   });
 
-  it('clic : ouvre l’étape ; plus tôt, plus tard, supprimer', async () => {
+  it('clic : ouvre l’étape ; clic droit : menu contextuel ; plus de flèches ni de corbeille', async () => {
     const props = setup();
     await fireEvent.click(screen.getByRole('button', { name: /^MuCEM/ }));
     expect(props.onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Plus tard : MuCEM' }));
-    expect(props.onMove).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a' }), 1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Plus tôt : Vol' }));
-    expect(props.onMove).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b' }), -1);
-    await fireEvent.click(screen.getByRole('button', { name: 'Supprimer Vol' }));
-    expect(props.onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+    await fireEvent.contextMenu(screen.getAllByTestId('metro-stop')[3]!, {
+      clientX: 10,
+      clientY: 20,
+    });
+    expect(props.onContextMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }), {
+      x: 10,
+      y: 20,
+    });
+    // L'en-tête d'un dossier ouvre aussi le menu (pour le dossier).
+    await fireEvent.contextMenu(screen.getByTestId('metro-group').querySelector('.group-head')!);
+    expect(props.onContextMenu).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'group' }),
+      expect.anything(),
+    );
+    expect(screen.queryByRole('button', { name: /Plus tôt|Plus tard|Supprimer/ })).toBeNull();
   });
 
   it('zones de dépôt entre les stations et dans le dossier ; aucune en lecture seule', () => {
@@ -115,7 +123,7 @@ describe('MetroLine', () => {
   it('lecture seule : ni zones de dépôt ni actions, stations non déplaçables', () => {
     setup({ canEdit: false });
     expect(screen.queryAllByTestId('drop-zone')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: /Plus tard/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Plus tard|Supprimer/ })).toBeNull();
     expect(screen.getAllByTestId('metro-stop')[0]!.getAttribute('draggable')).toBe('false');
   });
 

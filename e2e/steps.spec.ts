@@ -61,21 +61,12 @@ test('ajouter un lieu trouvé par la recherche : carte d’étape et marqueur nu
   await expect(page.locator('.map-marker', { hasText: '1' })).toBeVisible();
 });
 
-test('réordonner les étapes : boutons et glisser-déposer, la numérotation suit', async ({
-  page,
-}) => {
+test('réordonner les étapes au glisser-déposer, la numérotation suit', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
   await addPlace(page, 'Orsay', 'Musée d’Orsay');
   await addPlace(page, 'Eiffel', 'Tour Eiffel');
   expect(await timelineNames(page)).toEqual(['Musée du Louvre', 'Musée d’Orsay', 'Tour Eiffel']);
-
-  // Au clavier / bouton : monter la Tour Eiffel d'un cran.
-  await page.getByTestId('step-card').filter({ hasText: 'Tour Eiffel' }).hover();
-  await page.getByRole('button', { name: 'Monter Tour Eiffel' }).click();
-  await expect
-    .poll(() => timelineNames(page))
-    .toEqual(['Musée du Louvre', 'Tour Eiffel', 'Musée d’Orsay']);
 
   // Glisser-déposer : Orsay en tête.
   await page
@@ -245,14 +236,20 @@ test('supprimer une étape demande confirmation', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
   const card = page.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' });
-  await card.hover();
-  await page.getByRole('button', { name: 'Supprimer Musée du Louvre' }).click();
+  await card.click({ button: 'right' });
+  await page
+    .getByRole('menu', { name: 'Musée du Louvre' })
+    .getByRole('menuitem', { name: 'Supprimer' })
+    .click();
   const confirm = page.getByRole('alertdialog', { name: 'Supprimer l’étape ?' });
   await confirm.getByRole('button', { name: 'Annuler' }).click();
   await expect(card).toHaveCount(1);
 
-  await card.hover();
-  await page.getByRole('button', { name: 'Supprimer Musée du Louvre' }).click();
+  await card.click({ button: 'right' });
+  await page
+    .getByRole('menu', { name: 'Musée du Louvre' })
+    .getByRole('menuitem', { name: 'Supprimer' })
+    .click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Supprimer' }).click();
   await expect(card).toHaveCount(0);
 });

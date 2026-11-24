@@ -4,6 +4,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
+  import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { GROUP_ICON, STAY_ICON } from '#lib/steps/icons.ts';
   import DropZone from './DropZone.svelte';
@@ -20,8 +21,7 @@
     highlighted: string | null;
     onEdit: (step: Step) => void;
     onEditStay?: (item: StayItem) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
     /** Trajet après un point de passage (MetroLeg : compact, mêmes actions que la liste). */
@@ -36,8 +36,7 @@
     highlighted,
     onEdit,
     onEditStay = () => {},
-    onMove,
-    onDelete,
+    onContextMenu,
     onHover,
     onDrop,
     after,
@@ -144,8 +143,7 @@
             highlighted={highlighted === item.step.id}
             time={times.get(item.step.id) ?? null}
             {onEdit}
-            {onMove}
-            {onDelete}
+            {onContextMenu}
             {onHover}
           />
           {@render slot(item.step.id)}
@@ -175,8 +173,7 @@
                     highlighted={highlighted === child.id}
                     time={times.get(child.id) ?? null}
                     {onEdit}
-                    {onMove}
-                    {onDelete}
+                    {onContextMenu}
                     {onHover}
                   />
                   <!-- Le trajet qui suit la dernière étape sort du dossier (comme dans la liste). -->
@@ -202,6 +199,10 @@
               draggable={canEdit ? 'true' : 'false'}
               ondragstart={(e) => startDrag(e, group.id, 'group')}
               ondragend={endDrag}
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                onContextMenu(group, { x: e.clientX, y: e.clientY });
+              }}
             >
               <button
                 type="button"
@@ -211,7 +212,15 @@
                 aria-expanded={open}
                 onclick={() => toggle(group.id)}><ChevronRight size={14} /></button
               >
-              <button type="button" class="title" onclick={() => onEdit(group)}>
+              <button
+                type="button"
+                class="title"
+                onclick={() => onEdit(group)}
+                onkeydown={(e) => {
+                  const point = contextMenuKey(e);
+                  if (point) onContextMenu(group, point);
+                }}
+              >
                 <GroupIcon size={14} />
                 <span>{group.name}</span>
                 <small>{plural(item.children.length, 'étape')}</small>

@@ -159,6 +159,12 @@ describe('mapPoints', () => {
       expect(points.find((p) => p.key === 'i1')).toMatchObject({ label: 'Idée', idea: true });
     });
 
+    it('portent le type de leur étape (icône de la catégorie sur le marqueur)', () => {
+      const idea = mapPoints(data(), 'd1').find((p) => p.key === 'i1');
+      expect(idea?.type).toBe(step('i1').type);
+      expect(mapPoints(data(), null).find((p) => p.key === 'i1')?.type).toBe(step('i1').type);
+    });
+
     it('les étapes d’un jour ne sont pas des idées', () => {
       for (const p of mapPoints(data(), 'd1').filter((p) => p.key !== 'i1')) {
         expect(p.idea).toBe(false);

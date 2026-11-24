@@ -17,7 +17,7 @@
 </script>
 
 <!-- Popup de la carte, comme la maquette de référence : catégorie, nom (avec l'icône du type pour
-     un lieu à ajouter), notes, source, infos, actions. -->
+     un lieu), adresse, notes, source, infos, actions. -->
 <div
   class="map-popup-body"
   data-testid={`${content.kind}-popup`}
@@ -29,6 +29,9 @@
       <span class="type-icon" aria-hidden="true"><TypeIcon size={13} strokeWidth={2.4} /></span>
     {/if}{content.title}
   </h4>
+  {#if content.address}
+    <p class="notes address">{content.address}</p>
+  {/if}
   {#if content.notes}
     <p class="notes">{content.notes}</p>
   {/if}
@@ -103,6 +106,10 @@
     color: var(--muted);
     font-size: 12.5px;
     white-space: pre-wrap;
+  }
+
+  .address + .notes {
+    margin-top: 4px;
   }
 
   .source {

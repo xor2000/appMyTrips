@@ -108,8 +108,10 @@ test('réordonner les étapes retire l’ancien trajet ; un trajet forcé est pr
   await expect(tile).toContainText('forcé');
 
   // Orsay passe avant le Louvre : la paire Louvre → Orsay n'existe plus.
-  await timeline(page).getByTestId('step-card').filter({ hasText: 'Musée d’Orsay' }).hover();
-  await page.getByRole('button', { name: 'Monter Musée d’Orsay' }).click();
+  await timeline(page)
+    .getByTestId('step-card')
+    .filter({ hasText: 'Musée d’Orsay' })
+    .dragTo(timeline(page).getByTestId('drop-zone').first());
   await expect(timeline(page).getByTestId('step-card').first()).toContainText('Musée d’Orsay');
   await expect(tile).toContainText('+ trajet');
   await expect(page.getByTestId('trip-map')).toHaveAttribute('data-leg-lines', '0');

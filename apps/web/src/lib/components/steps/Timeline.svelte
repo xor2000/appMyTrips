@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ScheduledItem, Step, StayItem, TimelineItem } from '@mytrips/core';
   import type { Snippet } from 'svelte';
+  import type { MenuPoint } from '#lib/steps/contextMenu.ts';
   import type { DropTarget } from '#lib/steps/dnd.svelte.ts';
   import DropZone from './DropZone.svelte';
   import GroupCard from './GroupCard.svelte';
@@ -15,8 +16,7 @@
     highlighted: string | null;
     onEdit: (step: Step) => void;
     onEditStay?: (item: StayItem) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
     /** Rendu après chaque point de passage (clé d'étape ou de séjour) : tuile de trajet. */
@@ -32,8 +32,7 @@
     highlighted,
     onEdit,
     onEditStay = () => {},
-    onMove,
-    onDelete,
+    onContextMenu,
     onHover,
     onDrop,
     after,
@@ -94,8 +93,7 @@
             highlighted={highlighted === item.step.id}
             time={times.get(item.step.id) ?? null}
             {onEdit}
-            {onMove}
-            {onDelete}
+            {onContextMenu}
             {onHover}
           />
           {@render after?.(item.step.id)}
@@ -106,8 +104,7 @@
             {canEdit}
             {highlighted}
             {onEdit}
-            {onMove}
-            {onDelete}
+            {onContextMenu}
             {onHover}
             {after}
             {times}

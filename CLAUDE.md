@@ -87,6 +87,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   `transition` ni de `transform` en CSS sur l'élément du marqueur (il traîne derrière la carte) ;
   mettre en évidence avec la propriété `scale`. Pour des points nombreux, préférer une couche
   WebGL (source GeoJSON, `setFeatureState`), comme les lieux de la découverte (`lib/map/pois.ts`).
+- **Effet Svelte et collection non réactive** : un `$effect` ne dépend que de ce qu'il lit à son
+  premier passage. Une prop lue seulement dans une boucle sur une `Map` non réactive (marqueurs de
+  `TripMap`), vide au départ, ne crée aucune dépendance : l'effet ne se relance jamais. Lire l'état
+  avant la boucle (cas du survol des lieux, issue #46).
 - **`map.isStyleLoaded()`** reste faux tant que des tuiles chargent : une mise à jour de source
   ou de couche conditionnée par lui doit être reportée (`whenStyleReady` de `TripMap.svelte`,
   à l'événement `idle`), sinon elle est perdue.

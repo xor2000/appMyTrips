@@ -26,6 +26,9 @@ describe('stepPopupContent (comme buildPoiPopup de la référence)', () => {
       title: 'Musée du Louvre',
       notes: 'Billet coupe-file',
       color: '--type-museum',
+      // Comme la popup du clic droit : icône du type à gauche du nom, adresse.
+      icon: 'museum',
+      address: 'Rue de Rivoli, 75001 Paris',
       meta: [],
       chip: null,
     });
@@ -43,6 +46,10 @@ describe('stepPopupContent (comme buildPoiPopup de la référence)', () => {
     const untyped = stepPopupContent(makeStep({ type: null }), days, true, handlers);
     expect(untyped.category).toBe('Lieu · J1');
     expect(untyped.color).toBe('--type-transport');
+    expect(untyped.icon).toBeUndefined();
+    expect(
+      stepPopupContent(makeStep({ address: null }), days, true, handlers).address,
+    ).toBeUndefined();
     expect(stepPopupContent(makeStep({ dayId: 'x' }), days, true, handlers).category).toBe('Musée');
   });
 

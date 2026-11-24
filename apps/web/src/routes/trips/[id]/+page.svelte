@@ -81,7 +81,8 @@
     type DayPair,
   } from '#lib/legs/legs.ts';
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
-  import { positionAt, positionShift } from '#lib/steps/moves.ts';
+  import { positionAt } from '#lib/steps/moves.ts';
+  import { moveToEndOp, stepMenuEntries, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { createSerialQueue } from '#lib/serial.ts';
   import { pageHeader } from '#lib/page-header.svelte.ts';
   import { createHistory, inverseOps } from '#lib/schedule/history.ts';
@@ -101,6 +102,7 @@
   import Share2 from 'lucide-svelte/icons/share-2';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+  import ContextMenu, { type MenuEntry } from '#lib/components/ContextMenu.svelte';
   import DayTabs from '#lib/components/DayTabs.svelte';
   import ShareDialog from '#lib/components/ShareDialog.svelte';
   import SplitPane from '#lib/components/SplitPane.svelte';
@@ -725,13 +727,33 @@
     return steps.filter((s) => s.dayId === dayId && s.parentId === parentId);
   }
 
-  function move(step: Step, delta: -1 | 1) {
-    const position = positionShift(siblingsOf(step.dayId, step.parentId), step.id, delta);
-    if (position) {
-      runCommand(`Déplacer ${step.name}`, [
-        { kind: 'step', id: step.id, patch: { position } },
-      ]).catch((e) => (notice = e instanceof Error ? e.message : String(e)));
-    }
+  /** Menu contextuel ouvert (clic droit, touche Menu ou Maj+F10 sur un lieu ou un dossier). */
+  let contextMenu = $state<{ label: string; point: MenuPoint; entries: MenuEntry[] } | null>(null);
+
+  /**
+   * Menu contextuel d'un lieu (jour, dossier, idées, station, marqueur) ou d'un dossier : Modifier,
+   * Supprimer, Déplacer vers (annulable), Voir dans Google Maps. Rien à proposer : pas de menu.
+   */
+  function openContextMenu(step: Step, point: MenuPoint) {
+    const entries = stepMenuEntries(step, days, canEdit, {
+      edit: (s) => (editingStepId = s.id),
+      remove: askDelete,
+      moveTo: moveStepTo,
+    });
+    contextMenu = entries.length > 0 ? { label: step.name, point, entries } : null;
+  }
+
+  /** « Déplacer vers » : à la fin du jour visé ou des idées, hors de tout dossier (annulable). */
+  function moveStepTo(step: Step, dayId: string | null) {
+    runCommand(`Déplacer ${step.name}`, [moveToEndOp(step, dayId, steps)]).catch(
+      (e) => (notice = e instanceof Error ? e.message : String(e)),
+    );
+  }
+
+  /** Clic droit sur le marqueur d'une étape ou d'une idée : même menu que dans la colonne. */
+  function openMarkerMenu(point: MapPoint, at: MenuPoint) {
+    const step = steps.find((s) => s.id === point.stepId);
+    if (step) openContextMenu(step, at);
   }
 
   function drop(stepId: string, target: DropTarget) {
@@ -1214,8 +1236,7 @@
           highlighted={highlighted ?? selectedKey}
           onAdd={() => (adding = { kind: 'idea', type: null })}
           onEdit={openStep}
-          onMove={move}
-          onDelete={askDelete}
+          onContextMenu={openContextMenu}
           onHover={(k) => (highlighted = k)}
           onDrop={drop}
         />
@@ -1229,6 +1250,7 @@
         fitKey={selectedDay ?? 'all'}
         onHover={(k) => (highlighted = k)}
         onPick={pickPoint}
+        onMarkerContextMenu={openMarkerMenu}
         {popupFor}
         focus={mapFocus}
         {onPopupClose}
@@ -1278,8 +1300,7 @@
                         highlighted={highlighted ?? selectedKey}
                         onEdit={openStep}
                         onEditStay={editStay}
-                        onMove={move}
-                        onDelete={askDelete}
+                        onContextMenu={openContextMenu}
                         onHover={(k) => (highlighted = k)}
                         onDrop={drop}
                         after={legAfter}
@@ -1323,8 +1344,7 @@
                       {highlighted}
                       onEdit={(s) => (editingStepId = s.id)}
                       onEditStay={editStay}
-                      onMove={move}
-                      onDelete={askDelete}
+                      onContextMenu={openContextMenu}
                       onHover={(k) => (highlighted = k)}
                       onDrop={drop}
                       after={metroLegAfter}
@@ -1386,8 +1406,7 @@
                         {highlighted}
                         onEdit={(s) => (editingStepId = s.id)}
                         onEditStay={editStay}
-                        onMove={move}
-                        onDelete={askDelete}
+                        onContextMenu={openContextMenu}
                         onHover={(k) => (highlighted = k)}
                         onDrop={(id, target) => drop(id, { ...target, dayId: v.day.id })}
                         after={legAfter}
@@ -1565,6 +1584,19 @@
       onConfirm={confirmDeleteStep}
       onCancel={() => (deletingStep = null)}
     />
+  {/if}
+
+  {#if contextMenu}
+    <!-- Recréé à chaque ouverture : un nouveau clic droit le replace au pointeur. -->
+    {#key contextMenu}
+      <ContextMenu
+        x={contextMenu.point.x}
+        y={contextMenu.point.y}
+        label={contextMenu.label}
+        entries={contextMenu.entries}
+        onClose={() => (contextMenu = null)}
+      />
+    {/key}
   {/if}
 
   {#if deletingGroup}

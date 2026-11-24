@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sortByPosition, type Step } from '@mytrips/core';
   import Lightbulb from 'lucide-svelte/icons/lightbulb';
+  import type { MenuPoint } from '#lib/steps/contextMenu.ts';
   import type { DropTarget } from '#lib/steps/dnd.svelte.ts';
   import DropZone from './DropZone.svelte';
   import StepCard from './StepCard.svelte';
@@ -12,13 +13,12 @@
     highlighted: string | null;
     onAdd: () => void;
     onEdit: (step: Step) => void;
-    onMove: (step: Step, delta: -1 | 1) => void;
-    onDelete: (step: Step) => void;
+    onContextMenu: (step: Step, point: MenuPoint) => void;
     onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
   }
 
-  let { ideas, canEdit, highlighted, onAdd, onEdit, onMove, onDelete, onHover, onDrop }: Props =
+  let { ideas, canEdit, highlighted, onAdd, onEdit, onContextMenu, onHover, onDrop }: Props =
     $props();
 
   const sorted = $derived(sortByPosition(ideas));
@@ -53,8 +53,7 @@
         {canEdit}
         highlighted={highlighted === idea.id}
         {onEdit}
-        {onMove}
-        {onDelete}
+        {onContextMenu}
         {onHover}
       />
     {/each}
