@@ -7,8 +7,12 @@ export interface MapTestWindow {
   __mapZoomForTests?: () => number;
 }
 
-/** Clic sur la carte, à l'endroit d'un point géographique. */
-export async function clickMapAt(page: Page, lngLat: [number, number]) {
+/** Clic (ou clic droit) sur la carte, à l'endroit d'un point géographique. */
+export async function clickMapAt(
+  page: Page,
+  lngLat: [number, number],
+  options: { button?: 'left' | 'right' } = {},
+) {
   const point = await page.evaluate(
     (position) => (window as MapTestWindow).__mapProjectForTests?.(position),
     lngLat,
@@ -19,5 +23,5 @@ export async function clickMapAt(page: Page, lngLat: [number, number]) {
   const width = await canvas.evaluate((el) => (el as HTMLElement).offsetWidth);
   if (!point || !box) throw new Error('carte indisponible');
   const ratio = box.width / width;
-  await page.mouse.click(box.x + point.x * ratio, box.y + point.y * ratio);
+  await page.mouse.click(box.x + point.x * ratio, box.y + point.y * ratio, options);
 }

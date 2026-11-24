@@ -1,7 +1,7 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { mount, onMount, unmount, untrack } from 'svelte';
-  import { STEP_TYPE_INFO, type Bbox, type Poi } from '@mytrips/core';
+  import { STEP_TYPE_INFO, type Bbox, type Place, type Poi } from '@mytrips/core';
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
   import Search from 'lucide-svelte/icons/search';
@@ -36,8 +36,11 @@
     fitKey?: string;
     onHover?: (key: string | null) => void;
     onPick?: (point: MapPoint) => void;
-    /** Clic droit → « Ajouter ici » ; absent en lecture seule. */
-    onAddHere?: (point: { lat: number; lng: number }) => void;
+    /**
+     * Clic droit : lieu sous le clic (géocodage inverse, jamais en échec), montré dans la même
+     * popup qu'un lieu découvert ; absent en lecture seule.
+     */
+    findPlaceAt?: (point: { lat: number; lng: number }) => Promise<Place>;
     /** Zone visible et zoom, au chargement puis après chaque déplacement. */
     onViewChange?: (view: MapView) => void;
     /** Lieux de la découverte (marqueurs atténués, distincts des étapes). */
@@ -90,7 +93,7 @@
     fitKey = '',
     onHover = () => {},
     onPick = () => {},
-    onAddHere,
+    findPlaceAt,
     onViewChange = () => {},
     pois = [],
     selectedPoi = null,
@@ -114,7 +117,6 @@
   let MarkerClass: typeof Marker | undefined;
   let LngLatBoundsClass: typeof import('maplibre-gl').LngLatBounds | undefined;
   let styleId = $state<MapStyleId>('plan');
-  let menu = $state<{ x: number; y: number; lat: number; lng: number } | null>(null);
   // Cache des marqueurs MapLibre, volontairement non réactif (mis à jour par les effets).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const markers = new Map<string, { marker: Marker; el: HTMLElement }>();
@@ -125,8 +127,11 @@
    */
   let popupRef:
     { kind: PopupTarget['kind']; key: string; popup: Popup; basemap: boolean } | undefined;
-  /** Change à chaque clic ou déplacement : une recherche de lieu du fond devenue inutile est ignorée. */
-  let basemapClick = 0;
+  /**
+   * Change à chaque clic, clic droit ou déplacement : une recherche devenue inutile (lieu du fond,
+   * géocodage inverse) est ignorée.
+   */
+  let clickSeq = 0;
   /** Lieux portant l'état `active` (survolé ou sélectionné) dans la source des lieux. */
   let activePois: string[] = [];
   /** Synchronisations reportées à la fin du chargement des tuiles (voir `whenStyleReady`). */
@@ -172,13 +177,10 @@
         'bottom-left',
       );
       m.on('contextmenu', (e) => {
-        if (!onAddHere) return;
-        menu = { x: e.point.x, y: e.point.y, lat: e.lngLat.lat, lng: e.lngLat.lng };
+        if (placing) return;
+        void openPlaceAt({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       });
-      m.on('movestart', () => {
-        menu = null;
-        basemapClick++;
-      });
+      m.on('movestart', () => clickSeq++);
       const emitView = () => {
         const b = m.getBounds();
         onViewChange({
@@ -223,7 +225,7 @@
           placing.onPlace({ lat: e.lngLat.lat, lng: e.lngLat.lng });
           return;
         }
-        basemapClick++;
+        clickSeq++;
         if (!m.getLayer(POI_LAYER)) {
           void openBasemapPoi(m, e.point);
           return;
@@ -337,14 +339,13 @@
   }
 
   /** Décalage de la popup selon ce qu'elle désigne (marqueur en épingle, pastille, tracé). */
-  const POPUP_OFFSET = { step: 36, poi: 14, leg: 8 } as const;
+  const POPUP_OFFSET = { step: 36, poi: 14, leg: 8, place: 8 } as const;
 
   function targetKey(target: PopupTarget) {
-    return target.kind === 'step'
-      ? target.point.key
-      : target.kind === 'leg'
-        ? target.key
-        : target.poi.id;
+    if (target.kind === 'step') return target.point.key;
+    if (target.kind === 'leg') return target.key;
+    if (target.kind === 'poi') return target.poi.id;
+    return `place:${target.place.lat},${target.place.lng}`;
   }
 
   /**
@@ -362,7 +363,7 @@
         .queryRenderedFeatures([point.x, point.y], { layers: legLayers })
         .some((f) => String(f.properties?.key ?? '').includes('>'));
     if (onLeg) return;
-    const click = basemapClick;
+    const click = clickSeq;
     const t = BASEMAP_POI_TOLERANCE_PX;
     const sw = m.unproject([point.x - t, point.y + t]);
     const ne = m.unproject([point.x + t, point.y - t]);
@@ -375,10 +376,22 @@
     } catch {
       return;
     }
-    if (click !== basemapClick || placing || !basemapPoisClickable(styleId, m.getZoom())) return;
+    if (click !== clickSeq || placing || !basemapPoisClickable(styleId, m.getZoom())) return;
     const id = closestPoiId(found, point, (ll) => m.project(ll));
     const poi = found.find((p) => p.id === id);
     if (poi) openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat], true);
+  }
+
+  /**
+   * Clic droit : lieu sous le clic, dans la popup d'un lieu découvert (ajout au jour ou aux idées).
+   * Ignoré si un autre clic ou un déplacement est intervenu pendant la recherche.
+   */
+  async function openPlaceAt(point: { lat: number; lng: number }) {
+    if (!findPlaceAt) return;
+    const click = ++clickSeq;
+    const place = await findPlaceAt(point);
+    if (click !== clickSeq || placing) return;
+    openPopup({ kind: 'place', place }, [place.lng, place.lat]);
   }
 
   /** Popup comme la référence : catégorie, nom, notes, infos et actions (voir `lib/map/popups.ts`). */
@@ -678,11 +691,6 @@
     // sans émettre `style.load`, et les tracés et lieux ajoutés par l'appli seraient perdus.
     map?.setStyle(styleFor(id), { diff: false, transformStyle: transformFor(id) });
   }
-
-  function addHere() {
-    if (menu && onAddHere) onAddHere({ lat: menu.lat, lng: menu.lng });
-    menu = null;
-  }
 </script>
 
 <!-- data-leg-lines et data-leg-colors : nombre et couleurs des tracés (le canevas WebGL n'est pas
@@ -742,11 +750,6 @@
   <div class="basemap">
     <BasemapPicker value={styleId} onSelect={selectStyle} />
   </div>
-  {#if menu}
-    <div class="menu" style={`left: ${menu.x}px; top: ${menu.y}px`}>
-      <button type="button" onclick={addHere}>Ajouter ici</button>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -879,30 +882,6 @@
 
   .search:hover {
     color: var(--fg);
-  }
-
-  .menu {
-    position: absolute;
-    z-index: 5;
-    transform: translate(4px, 4px);
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    box-shadow: var(--shadow-float);
-  }
-
-  .menu button {
-    border: 0;
-    border-radius: var(--radius-sm);
-    padding: var(--space-2) var(--space-3);
-    background: transparent;
-    color: var(--fg);
-    font: 600 13px var(--font-display);
-    cursor: pointer;
-  }
-
-  .menu button:hover {
-    background: var(--surface-2);
   }
 
   /* Marqueurs créés par MapLibre hors du composant : styles globaux. */

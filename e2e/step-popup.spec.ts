@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { clickMapAt } from './map-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -173,4 +174,33 @@ test('clic sur une idée qui a un lieu : zoom et popup « … · Idée »', asyn
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Tour Eiffel');
   await expect(popup).toContainText('· Idée');
   await expect.poll(() => zoom(page)).toBeGreaterThanOrEqual(15);
+});
+
+test('clic droit sur la carte : popup du lieu trouvé par Photon, ajout au jour', async ({
+  page,
+}) => {
+  await tripWithTwoPlaces(page);
+  // Entre le Louvre et Orsay, loin des marqueurs.
+  await clickMapAt(page, [2.332, 48.8615], { button: 'right' });
+  const popup = page.getByTestId('poi-popup');
+  // Lieu renvoyé par le géocodage inverse factice (e2e/mock-services.mjs).
+  await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Lieu sur la carte');
+  await expect(popup).toContainText('Autre · OpenStreetMap');
+  await expect(popup).toContainText('Paris, France');
+  await expect(popup.getByRole('button', { name: 'Ajouter aux idées' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ajouter ici' })).toHaveCount(0);
+
+  await popup.getByRole('button', { name: 'Ajouter à J1' }).click();
+  await expect(popup).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId('day-timeline')
+      .getByTestId('step-card')
+      .filter({ hasText: 'Lieu sur la carte' }),
+  ).toHaveCount(1);
+
+  // Même lieu OSM ailleurs : déjà ajouté.
+  await clickMapAt(page, [2.3315, 48.8592], { button: 'right' });
+  await expect(popup).toContainText('Déjà ajouté');
+  await expect(popup.getByRole('button', { name: 'Supprimer' })).toBeVisible();
 });
