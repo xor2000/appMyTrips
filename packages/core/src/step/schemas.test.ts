@@ -31,6 +31,31 @@ describe('StepCreate', () => {
     expect(g).toMatchObject({ kind: 'group', type: null, durationMin: 0 });
   });
 
+  it('dossier : icône (un type d’étape) et couleur (0 à 7), null par défaut', () => {
+    expect(StepCreate.parse({ dayId: null, kind: 'group', name: 'Musées' })).toMatchObject({
+      icon: null,
+      color: null,
+    });
+    expect(
+      StepCreate.parse({ dayId: null, kind: 'group', name: 'Musées', icon: 'museum', color: 3 }),
+    ).toMatchObject({ kind: 'group', type: null, icon: 'museum', color: 3 });
+    for (const color of [-1, 8, 1.5]) {
+      expect(
+        StepCreate.safeParse({ dayId: null, kind: 'group', name: 'Musées', color }).success,
+      ).toBe(false);
+    }
+    expect(
+      StepCreate.safeParse({ dayId: null, kind: 'group', name: 'Musées', icon: 'volcan' }).success,
+    ).toBe(false);
+  });
+
+  it('refuse une icône ou une couleur sur une étape (réservées aux dossiers)', () => {
+    const step = { dayId: null, type: 'museum', name: 'Louvre', lat: 48.86, lng: 2.33 };
+    expect(StepCreate.safeParse({ ...step, icon: 'museum' }).success).toBe(false);
+    expect(StepCreate.safeParse({ ...step, color: 2 }).success).toBe(false);
+    expect(StepCreate.parse(step)).toMatchObject({ icon: null, color: null });
+  });
+
   it('refuse un type inconnu, un nom vide, une durée négative et une heure fixe invalide', () => {
     const base = { dayId: null, name: 'X', ...point };
     expect(StepCreate.safeParse({ ...base, type: 'volcan' }).success).toBe(false);
@@ -61,6 +86,12 @@ describe('StepPatch', () => {
 
   it('accepte de retirer l’heure fixe', () => {
     expect(StepPatch.parse({ fixedStart: null })).toEqual({ fixedStart: null });
+  });
+
+  it('accepte une icône et une couleur, ou null pour revenir aux valeurs par défaut', () => {
+    expect(StepPatch.parse({ icon: 'park', color: 7 })).toEqual({ icon: 'park', color: 7 });
+    expect(StepPatch.parse({ icon: null, color: null })).toEqual({ icon: null, color: null });
+    expect(StepPatch.safeParse({ color: 8 }).success).toBe(false);
   });
 
   it('refuse un objet vide', () => {

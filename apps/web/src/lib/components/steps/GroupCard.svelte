@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { GroupItem, ScheduledItem, Step } from '@mytrips/core';
+  import { legColorVar, type GroupItem, type ScheduledItem, type Step } from '@mytrips/core';
   import type { Snippet } from 'svelte';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
   import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag } from '#lib/steps/dnd.svelte.ts';
-  import { GROUP_ICON } from '#lib/steps/icons.ts';
+  import { GROUP_ICON, STEP_ICONS } from '#lib/steps/icons.ts';
   import DropZone from './DropZone.svelte';
   import StepCard from './StepCard.svelte';
 
@@ -23,6 +23,8 @@
     /** Rendu après chaque étape du dossier sauf la dernière : tuile de trajet. */
     after?: Snippet<[string]>;
     times?: Map<string, ScheduledItem>;
+    /** Variante compacte (colonne des idées). */
+    dense?: boolean;
   }
 
   let {
@@ -36,17 +38,34 @@
     onDropInto,
     after,
     times = new Map(),
+    dense = false,
   }: Props = $props();
 
   let open = $state(true);
-  const Icon = GROUP_ICON;
+  /** Icône choisie du dossier (type d'étape), sinon l'icône dossier. */
+  const iconType = $derived(item.group.icon ?? null);
+  const Icon = $derived(iconType ? STEP_ICONS[iconType] : GROUP_ICON);
+  /** Couleur choisie (palette des trajets), sinon l'accent du thème. */
+  const tint = $derived(
+    item.group.color !== null && item.group.color !== undefined
+      ? `var(${legColorVar(item.group.color)})`
+      : 'var(--accent)',
+  );
 
   function indexWithout(stepId: string, i: number) {
     return item.children.slice(0, i).filter((c) => c.id !== stepId).length;
   }
 </script>
 
-<div class="group-row" role="listitem" data-testid="group-card" data-step-id={item.group.id}>
+<div
+  class="group-row"
+  class:dense
+  role="listitem"
+  data-testid="group-card"
+  data-step-id={item.group.id}
+  data-icon={iconType ?? 'folder'}
+  style={`--gc: ${tint}`}
+>
   <div class="group">
     <div
       class="header"
@@ -72,7 +91,8 @@
       <button
         type="button"
         class="title"
-        onclick={() => onEdit(item.group)}
+        aria-expanded={open}
+        onclick={() => (open = !open)}
         onkeydown={(e) => {
           const point = contextMenuKey(e);
           if (point) onContextMenu(item.group, point);
@@ -93,6 +113,7 @@
           {#if canEdit}
             <DropZone
               stepsOnly
+              {dense}
               label={`Déposer dans ${item.group.name}`}
               onDrop={(id) => onDropInto(id, indexWithout(id, i))}
             />
@@ -101,6 +122,7 @@
             step={child}
             label={labels.get(child.id) ?? null}
             {canEdit}
+            {dense}
             highlighted={highlighted === child.id}
             time={times.get(child.id) ?? null}
             {onEdit}
@@ -115,6 +137,7 @@
         {#if canEdit}
           <DropZone
             stepsOnly
+            {dense}
             label={`Déposer à la fin de ${item.group.name}`}
             onDrop={(id) => onDropInto(id, indexWithout(id, item.children.length))}
           />
@@ -134,9 +157,24 @@
     gap: var(--space-1);
     min-width: 0;
     padding: var(--space-2);
-    border: 1.5px var(--group-edge-style) var(--group-edge);
+    border: 1.5px var(--group-edge-style) color-mix(in srgb, var(--gc) 45%, var(--group-edge));
     border-radius: var(--group-radius);
-    background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+    background: color-mix(in srgb, var(--gc) 6%, var(--surface));
+  }
+
+  /* Variante compacte (idées) : marges et en-tête réduits. */
+  .dense .group {
+    gap: 0;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .dense .toggle {
+    width: 22px;
+    height: 22px;
+  }
+
+  .dense .name {
+    font-size: 13px;
   }
 
   .header {
@@ -180,7 +218,7 @@
   }
 
   .icon {
-    color: var(--accent-strong);
+    color: var(--gc);
     display: grid;
   }
 

@@ -83,7 +83,7 @@ test('regrouper des étapes dans un dossier repliable', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Notre-Dame', 'Notre-Dame de Paris');
   await addPlace(page, 'Comptoir', 'Le Comptoir');
-  await page.getByRole('button', { name: 'Nouveau dossier' }).click();
+  await page.getByRole('button', { name: 'Nouveau dossier', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Nouveau dossier' });
   await dialog.getByLabel('Nom du dossier').fill('Île de la Cité');
   await dialog.getByRole('button', { name: 'Créer le dossier' }).click();
@@ -110,7 +110,9 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
   page,
 }) => {
   await createTripAndOpenDay1(page);
-  await page.getByRole('button', { name: 'Ajouter une idée' }).click();
+  // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
+  await page.getByRole('tab', { name: 'Tout le voyage' }).click();
+  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
@@ -138,16 +140,19 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
 test('une idée apparaît sur la carte, sans numéro ni trajet', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
-  await page.getByRole('button', { name: 'Ajouter une idée' }).click();
+  // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
+  await page.getByRole('tab', { name: 'Tout le voyage' }).click();
+  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
   await expect(dialog).toHaveCount(0);
+  await page.getByRole('tab', { name: /J1/ }).click();
 
   // Marqueur « Idée » distinct ; l'étape du jour garde le numéro 1 ; aucun tracé de trajet.
   const ideaMarker = page.getByRole('button', { name: 'Idée · Musée d’Orsay' });
   await expect(ideaMarker).toBeVisible();
-  // Une ampoule plutôt que le mot « Idée ».
+  // L'icône de sa catégorie plutôt que le mot « Idée ».
   await expect(ideaMarker.locator('svg')).toHaveCount(1);
   await expect(ideaMarker).toHaveText('');
   await expect(page.getByRole('button', { name: '1 · Musée du Louvre' })).toBeVisible();

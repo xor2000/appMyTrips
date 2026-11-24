@@ -100,6 +100,7 @@
   import OfflineDialog from '#lib/components/offline/OfflineDialog.svelte';
   import Redo2 from 'lucide-svelte/icons/redo-2';
   import Share2 from 'lucide-svelte/icons/share-2';
+  import FolderPlus from 'lucide-svelte/icons/folder-plus';
   import Undo2 from 'lucide-svelte/icons/undo-2';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import ContextMenu, { type MenuEntry } from '#lib/components/ContextMenu.svelte';
@@ -113,7 +114,7 @@
   import LegTile from '#lib/components/legs/LegTile.svelte';
   import AddPlaceDialog from '#lib/components/steps/AddPlaceDialog.svelte';
   import DeleteGroupDialog from '#lib/components/steps/DeleteGroupDialog.svelte';
-  import GroupDialog from '#lib/components/steps/GroupDialog.svelte';
+  import GroupDialog, { type GroupValues } from '#lib/components/steps/GroupDialog.svelte';
   import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
   import StepEditor from '#lib/components/steps/StepEditor.svelte';
@@ -147,7 +148,10 @@
   let pendingPeriod = $state<{ values: TripFormValues; dates: string[] } | null>(null);
   /** Fenêtre d'ajout ouverte : lieu du jour, idée, dossier ou séjour. */
   let adding = $state<
-    { kind: 'place' | 'idea'; type: StepType | null } | { kind: 'group' | 'stay' } | null
+    | { kind: 'place' | 'idea'; type: StepType | null }
+    | { kind: 'group'; dayId: string | null }
+    | { kind: 'stay' }
+    | null
   >(null);
   let editingStepId = $state<string | null>(null);
   let editingStayId = $state<string | null>(null);
@@ -222,7 +226,8 @@
         )
       : [],
   );
-  const ideas = $derived(steps.filter((s) => s.dayId === null && s.parentId === null));
+  /** Idées : étapes et dossiers sans jour (racines et étapes rangées dans un dossier d'idées). */
+  const ideas = $derived(steps.filter((s) => s.dayId === null));
   const points = $derived(mapPoints({ days, steps, stays }, selectedDay));
   const editingStep = $derived(steps.find((s) => s.id === editingStepId) ?? null);
   const editingStay = $derived(stays.find((s) => s.id === editingStayId) ?? null);
@@ -492,9 +497,25 @@
     await apply(() => deleteGpx(id, stepId, version()));
   }
 
-  async function addGroup(name: string) {
-    await apply(() => createStep(id, version(), { dayId: selectedDay, kind: 'group', name }));
+  /** Nouveau dossier : dans le jour de l'en-tête où il a été demandé, ou dans les idées. */
+  async function addGroup(values: GroupValues) {
+    const dayId = adding?.kind === 'group' ? adding.dayId : selectedDay;
+    await apply(() => createStep(id, version(), { dayId, kind: 'group', ...values }));
     adding = null;
+  }
+
+  /** Dossier modifié (nom, icône, couleur) : seuls les champs changés, annulable. */
+  async function saveGroup(values: GroupValues) {
+    const group = editingStep;
+    if (!group) return;
+    const patch: StepPatch = {};
+    if (values.name !== group.name) patch.name = values.name;
+    if (values.icon !== (group.icon ?? null)) patch.icon = values.icon;
+    if (values.color !== (group.color ?? null)) patch.color = values.color;
+    if (Object.keys(patch).length > 0) {
+      await runCommand(`Modifier ${group.name}`, [{ kind: 'step', id: group.id, patch }]);
+    }
+    editingStepId = null;
   }
 
   async function saveStay(values: StayValues) {
@@ -1142,7 +1163,22 @@
       {@const summary = schedules.get(d.id)?.summary}
       <div class="dayhead">
         <div class="day-head">
-          <h2>{dayTitle(d.date)}</h2>
+          <div class="day-title">
+            <h2>{dayTitle(d.date)}</h2>
+            {#if canEdit}
+              <!-- Ajout d'un dossier dans ce jour, près de la barre du temps. -->
+              <button
+                type="button"
+                class="icon-btn add-folder"
+                aria-label="Nouveau dossier"
+                title="Nouveau dossier"
+                onclick={() => {
+                  selectedDay = d.id;
+                  adding = { kind: 'group', dayId: d.id };
+                }}><FolderPlus size={16} aria-hidden="true" /></button
+              >
+            {/if}
+          </div>
           <p class="hours">{dayHoursLabel(d.dayStart ?? trip.dayStart, d.dayEnd ?? trip.dayEnd)}</p>
         </div>
         {#if summary}
@@ -1184,16 +1220,6 @@
             >
               Ajouter un séjour
             </button>
-            <button
-              type="button"
-              class="btn btn-soft"
-              onclick={() => {
-                selectedDay = dayId;
-                adding = { kind: 'group' };
-              }}
-            >
-              Nouveau dossier
-            </button>
             <label class="btn btn-soft file">
               Importer une randonnée (GPX)
               <input
@@ -1234,7 +1260,7 @@
           {ideas}
           {canEdit}
           highlighted={highlighted ?? selectedKey}
-          onAdd={() => (adding = { kind: 'idea', type: null })}
+          onAddGroup={() => (adding = { kind: 'group', dayId: null })}
           onEdit={openStep}
           onContextMenu={openContextMenu}
           onHover={(k) => (highlighted = k)}
@@ -1487,7 +1513,7 @@
   {/if}
 
   {#if adding?.kind === 'group'}
-    <GroupDialog onCreate={addGroup} onClose={() => (adding = null)} />
+    <GroupDialog onSave={addGroup} onClose={() => (adding = null)} />
   {/if}
 
   {#if adding?.kind === 'stay' || editingStay}
@@ -1504,7 +1530,9 @@
     />
   {/if}
 
-  {#if editingStep}
+  {#if editingStep?.kind === 'group'}
+    <GroupDialog group={editingStep} onSave={saveGroup} onClose={() => (editingStepId = null)} />
+  {:else if editingStep}
     <StepEditor
       step={editingStep}
       days={snapshot.days}
@@ -1725,6 +1753,17 @@
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-2) 14px;
+  }
+
+  .day-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .add-folder {
+    width: 28px;
+    height: 28px;
   }
 
   .day-head {

@@ -31,6 +31,8 @@ function step(id: string, durationMin: number, extra: Partial<Step> = {}): Step 
     gpx: null,
     useElevation: false,
     durationManual: false,
+    icon: null,
+    color: null,
     ...extra,
   };
 }

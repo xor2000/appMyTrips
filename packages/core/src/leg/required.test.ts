@@ -28,6 +28,8 @@ function step(id: string, position: string, extra: Partial<Step> = {}): Step {
     gpx: null,
     useElevation: false,
     durationManual: false,
+    icon: null,
+    color: null,
     ...extra,
   };
 }

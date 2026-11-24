@@ -28,7 +28,6 @@
 
   // Valeurs de départ, lues une seule fois à l'ouverture.
   const start = untrack(() => step);
-  const isGroup = start.kind === 'group';
 
   let name = $state(start.name);
   let type = $state(start.type ?? 'other');
@@ -115,7 +114,7 @@
     }
     const patch: StepPatch = {};
     // Les champs numériques renvoient un nombre, ou '' quand ils sont vides.
-    if (!isGroup && (String(lat) !== startLat || String(lng) !== startLng)) {
+    if (String(lat) !== startLat || String(lng) !== startLng) {
       const la = Number(lat);
       const ln = Number(lng);
       if (String(lat).trim() === '' || !Number.isFinite(la) || la < -90 || la > 90) {
@@ -133,16 +132,14 @@
     if (notes !== start.notes) patch.notes = notes;
     const nextDay = dayId === '' ? null : dayId;
     if (nextDay !== start.dayId) patch.dayId = nextDay;
-    if (!isGroup) {
-      if (type !== start.type) patch.type = type;
-      if (durationMin !== start.durationMin) patch.durationMin = durationMin;
-      const fixed = hasFixed ? fixedStart : null;
-      if (fixed !== start.fixedStart) patch.fixedStart = fixed;
-      if (orNull(bookingRef) !== start.bookingRef) patch.bookingRef = orNull(bookingRef);
-      if (orNull(bookingUrl) !== start.bookingUrl) patch.bookingUrl = orNull(bookingUrl);
-      if (orNull(openingHours) !== start.openingHours) patch.openingHours = orNull(openingHours);
-      if (useElevation !== start.useElevation) patch.useElevation = useElevation;
-    }
+    if (type !== start.type) patch.type = type;
+    if (durationMin !== start.durationMin) patch.durationMin = durationMin;
+    const fixed = hasFixed ? fixedStart : null;
+    if (fixed !== start.fixedStart) patch.fixedStart = fixed;
+    if (orNull(bookingRef) !== start.bookingRef) patch.bookingRef = orNull(bookingRef);
+    if (orNull(bookingUrl) !== start.bookingUrl) patch.bookingUrl = orNull(bookingUrl);
+    if (orNull(openingHours) !== start.openingHours) patch.openingHours = orNull(openingHours);
+    if (useElevation !== start.useElevation) patch.useElevation = useElevation;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -160,129 +157,125 @@
 </script>
 
 <Modal
-  title={isGroup ? 'Modifier le dossier' : 'Modifier l’étape'}
-  subtitle={isGroup
-    ? 'Renommez le dossier ou déplacez-le vers un autre jour.'
-    : 'Mettez à jour les informations de cette étape.'}
+  title="Modifier l’étape"
+  subtitle="Mettez à jour les informations de cette étape."
   hidden={picking}
   {onClose}
 >
   <form id="step-form" class="form" onsubmit={submit} novalidate>
     <label class="field ref">
-      {isGroup ? 'Nom du dossier' : 'Nom du lieu'}
+      Nom du lieu
       <input type="text" bind:value={name} maxlength="200" />
     </label>
-    {#if !isGroup}
-      {#if start.address}
-        <p class="address">{start.address}</p>
-      {/if}
-      <!-- Catégories en grille de boutons icône et libellé (`.cat-grid` de la maquette). -->
-      <fieldset class="field ref">
-        <legend>Catégorie</legend>
-        <div class="cat-grid">
-          {#each STEP_TYPES as t (t)}
-            {@const Icon = STEP_ICONS[t]}
-            <label style={`--c: var(${STEP_TYPE_INFO[t].color})`}>
-              <input
-                class="visually-hidden"
-                type="radio"
-                name="step-type"
-                value={t}
-                bind:group={type}
-              />
-              <Icon size={18} aria-hidden="true" />
-              <span>{STEP_TYPE_INFO[t].label}</span>
-            </label>
-          {/each}
-        </div>
-      </fieldset>
-      <div class="field-row">
-        <label class="field ref">
-          Latitude
-          <input type="number" step="any" min="-90" max="90" bind:value={lat} />
-        </label>
-        <label class="field ref">
-          Longitude
-          <input type="number" step="any" min="-180" max="180" bind:value={lng} />
-        </label>
-      </div>
-      {#if onPickOnMap}
-        <button type="button" class="btn btn-ghost pick" onclick={pickOnMap}>
-          <MapPin size={15} aria-hidden="true" />Choisir sur la carte
-        </button>
-      {/if}
-      <div class="field-row">
-        <label class="field ref">
-          Durée sur place (min)
-          <input type="number" min="0" max="1440" step="5" bind:value={durationMin} />
-        </label>
-        <div class="fixed">
-          <label class="check">
-            <input type="checkbox" bind:checked={hasFixed} />
-            Heure fixe
-          </label>
-          <label class="field ref" class:disabled={!hasFixed}>
-            <span class="visually-hidden">Heure</span>
-            <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
-          </label>
-        </div>
-      </div>
-      <div class="field-row">
-        <label class="field ref">
-          N° de réservation
-          <input type="text" bind:value={bookingRef} maxlength="200" />
-        </label>
-        <label class="field ref">
-          Lien de réservation
-          <input type="url" bind:value={bookingUrl} placeholder="https://…" />
-        </label>
-      </div>
-      <label class="field ref">
-        Horaires d’ouverture
-        <input
-          type="text"
-          bind:value={openingHours}
-          maxlength="500"
-          placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
-        />
-      </label>
-      {#if isHike}
-        <fieldset class="hike">
-          <legend>Randonnée</legend>
-          {#if gpx}
-            <p class="stats">{gpxSummary}</p>
-            <ElevationProfile track={gpx.track} />
-          {/if}
-          <label class="check">
+    {#if start.address}
+      <p class="address">{start.address}</p>
+    {/if}
+    <!-- Catégories en grille de boutons icône et libellé (`.cat-grid` de la maquette). -->
+    <fieldset class="field ref">
+      <legend>Catégorie</legend>
+      <div class="cat-grid">
+        {#each STEP_TYPES as t (t)}
+          {@const Icon = STEP_ICONS[t]}
+          <label style={`--c: var(${STEP_TYPE_INFO[t].color})`}>
             <input
-              type="checkbox"
-              bind:checked={useElevation}
-              disabled={!gpx || gpx.stats.ascentM === null}
+              class="visually-hidden"
+              type="radio"
+              name="step-type"
+              value={t}
+              bind:group={type}
             />
-            Inclure le dénivelé (+1 h / 600 m)
+            <Icon size={18} aria-hidden="true" />
+            <span>{STEP_TYPE_INFO[t].label}</span>
           </label>
-          <div class="gpx-actions">
-            {#if onImportGpx}
-              <label class="btn btn-soft file">
-                Importer un GPX
-                <input type="file" accept=".gpx,application/gpx+xml" onchange={importFile} />
-              </label>
-            {/if}
-            {#if gpx && onRemoveGpx}
-              <button
-                type="button"
-                class="btn btn-ghost"
-                disabled={busy}
-                onclick={() => runGpx(onRemoveGpx)}>Retirer le GPX</button
-              >
-            {/if}
-          </div>
-          <p class="hint">
-            La durée se calcule depuis le tracé, à la vitesse du voyage ; une durée saisie reste
-            manuelle jusqu’au prochain changement d’option.
-          </p>
-        </fieldset>
-      {/if}
+        {/each}
+      </div>
+    </fieldset>
+    <div class="field-row">
+      <label class="field ref">
+        Latitude
+        <input type="number" step="any" min="-90" max="90" bind:value={lat} />
+      </label>
+      <label class="field ref">
+        Longitude
+        <input type="number" step="any" min="-180" max="180" bind:value={lng} />
+      </label>
+    </div>
+    {#if onPickOnMap}
+      <button type="button" class="btn btn-ghost pick" onclick={pickOnMap}>
+        <MapPin size={15} aria-hidden="true" />Choisir sur la carte
+      </button>
+    {/if}
+    <div class="field-row">
+      <label class="field ref">
+        Durée sur place (min)
+        <input type="number" min="0" max="1440" step="5" bind:value={durationMin} />
+      </label>
+      <div class="fixed">
+        <label class="check">
+          <input type="checkbox" bind:checked={hasFixed} />
+          Heure fixe
+        </label>
+        <label class="field ref" class:disabled={!hasFixed}>
+          <span class="visually-hidden">Heure</span>
+          <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
+        </label>
+      </div>
+    </div>
+    <div class="field-row">
+      <label class="field ref">
+        N° de réservation
+        <input type="text" bind:value={bookingRef} maxlength="200" />
+      </label>
+      <label class="field ref">
+        Lien de réservation
+        <input type="url" bind:value={bookingUrl} placeholder="https://…" />
+      </label>
+    </div>
+    <label class="field ref">
+      Horaires d’ouverture
+      <input
+        type="text"
+        bind:value={openingHours}
+        maxlength="500"
+        placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
+      />
+    </label>
+    {#if isHike}
+      <fieldset class="hike">
+        <legend>Randonnée</legend>
+        {#if gpx}
+          <p class="stats">{gpxSummary}</p>
+          <ElevationProfile track={gpx.track} />
+        {/if}
+        <label class="check">
+          <input
+            type="checkbox"
+            bind:checked={useElevation}
+            disabled={!gpx || gpx.stats.ascentM === null}
+          />
+          Inclure le dénivelé (+1 h / 600 m)
+        </label>
+        <div class="gpx-actions">
+          {#if onImportGpx}
+            <label class="btn btn-soft file">
+              Importer un GPX
+              <input type="file" accept=".gpx,application/gpx+xml" onchange={importFile} />
+            </label>
+          {/if}
+          {#if gpx && onRemoveGpx}
+            <button
+              type="button"
+              class="btn btn-ghost"
+              disabled={busy}
+              onclick={() => runGpx(onRemoveGpx)}>Retirer le GPX</button
+            >
+          {/if}
+        </div>
+        <p class="hint">
+          La durée se calcule depuis le tracé, à la vitesse du voyage ; une durée saisie reste
+          manuelle jusqu’au prochain changement d’option.
+        </p>
+      </fieldset>
     {/if}
     <label class="field ref">
       Jour

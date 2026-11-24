@@ -82,14 +82,6 @@ describe('StepEditor', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/lien/i);
   });
 
-  it('pour un dossier, ne propose que le nom, le jour et les notes', () => {
-    setup(makeStep({ kind: 'group', type: null, name: 'Vieux-Port', lat: null, lng: null }));
-    expect(screen.getByRole('dialog', { name: 'Modifier le dossier' })).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Catégorie' })).toBeNull();
-    expect(screen.queryByLabelText('Latitude')).toBeNull();
-    expect(screen.queryByLabelText('Durée sur place (min)')).toBeNull();
-  });
-
   it('catégorie en grille de boutons (icône et libellé), comme la maquette', async () => {
     const props = setup();
     const group = screen.getByRole('group', { name: 'Catégorie' });

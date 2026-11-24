@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoDate, TimeOfDay } from '../trip/schemas';
 import { GpxData } from '../gpx/gpx';
+import { LEG_COLOR_COUNT } from '../leg/colors';
 import { STEP_TYPES, defaultDuration, type StepType } from './types';
 
 export const StepTypeSchema = z.enum(STEP_TYPES);
@@ -23,6 +24,12 @@ const Duration = z
   .min(0)
   .max(24 * 60);
 const Id = z.uuid();
+/** Couleur d'un dossier : rang dans la palette des trajets (0 à 7). */
+const GroupColor = z
+  .number()
+  .int()
+  .min(0)
+  .max(LEG_COLOR_COUNT - 1);
 
 /** Création d'une étape ou d'un dossier (kind = group : ni type ni coordonnées). */
 export const StepCreate = z
@@ -49,8 +56,18 @@ export const StepCreate = z
     gpx: GpxData.optional(),
     /** Durée de randonnée avec le dénivelé (+1 h par 600 m de D+). */
     useElevation: z.boolean().default(false),
+    /** Dossier : icône (type d'étape, null : icône dossier) et couleur (null : accent). */
+    icon: StepTypeSchema.nullable().optional(),
+    color: GroupColor.nullable().optional(),
   })
   .superRefine((v, ctx) => {
+    if (v.kind === 'step' && (v.icon != null || v.color != null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['icon'],
+        message: 'Icône et couleur sont réservées aux dossiers',
+      });
+    }
     if (v.gpx && v.type !== 'hike') {
       ctx.addIssue({
         code: 'custom',
@@ -71,6 +88,8 @@ export const StepCreate = z
     return {
       ...v,
       type: v.kind === 'group' ? null : (v.type as StepType),
+      icon: v.icon ?? null,
+      color: v.color ?? null,
       lat: first ? first[0] : v.lat,
       lng: first ? first[1] : v.lng,
       exitLat: last ? last[0] : null,
@@ -102,6 +121,9 @@ export const StepPatch = z
     bookingUrl: HttpUrl.nullable(),
     openingHours: z.string().max(500).nullable(),
     useElevation: z.boolean(),
+    /** Dossier seulement (l'API refuse sur une étape) ; null : valeur par défaut. */
+    icon: StepTypeSchema.nullable(),
+    color: GroupColor.nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Aucune modification')
@@ -185,6 +207,10 @@ export interface Step {
   useElevation: boolean;
   /** Durée saisie à la main : non recalculée depuis le GPX. */
   durationManual: boolean;
+  /** Dossier : icône choisie (type d'étape), null = icône dossier. */
+  icon: StepType | null;
+  /** Dossier : couleur choisie (rang 0 à 7 de la palette des trajets), null = accent. */
+  color: number | null;
 }
 
 /** Séjour tel que renvoyé par l'API. */

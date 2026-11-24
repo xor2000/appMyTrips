@@ -91,6 +91,8 @@ const STEP_COLUMNS = {
   bookingRef: 'booking_ref',
   bookingUrl: 'booking_url',
   openingHours: 'opening_hours',
+  icon: 'icon',
+  color: 'color',
 } as const;
 
 /**
@@ -109,6 +111,17 @@ export async function planStepUpdate(
       error: {
         status: 400,
         body: { error: 'invalid', issues: [{ message: 'Un dossier n’a ni lieu ni type' }] },
+      },
+    };
+  }
+  if (step.kind === 'step' && (p.icon !== undefined || p.color !== undefined)) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          error: 'invalid',
+          issues: [{ message: 'Icône et couleur sont réservées aux dossiers' }],
+        },
       },
     };
   }

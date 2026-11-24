@@ -68,6 +68,15 @@ describe('inverseOps', () => {
     ).toEqual([{ kind: 'step', id: 's1', patch: { dayId: 'd1', parentId: null, position: 'a1' } }]);
   });
 
+  it('icône et couleur d’un dossier : remises à leurs anciennes valeurs (null compris)', () => {
+    const group = makeStep({ id: 'g1', kind: 'group', type: null, icon: 'park', color: null });
+    expect(
+      inverseOps({ steps: [group], days }, [
+        { kind: 'step', id: 'g1', patch: { icon: null, color: 4 } },
+      ]),
+    ).toEqual([{ kind: 'step', id: 'g1', patch: { icon: 'park', color: null } }]);
+  });
+
   it('option dénivelé d’une randonnée : remise à son ancienne valeur', () => {
     expect(
       inverseOps({ steps, days }, [{ kind: 'step', id: 's1', patch: { useElevation: true } }]),
