@@ -93,6 +93,66 @@ describe('dossiers', () => {
     expect(snap.steps.filter((s: any) => s.parentId === group.id)).toHaveLength(2);
   });
 
+  it('un dossier a une icône et une couleur (null par défaut), modifiables', async () => {
+    const t = await createTrip();
+    const day = t.days[0].id;
+    const plain = byName(
+      await addStep(t.trip.id, 1, { kind: 'group', name: 'Sans style', dayId: day }),
+      'Sans style',
+    );
+    expect(plain).toMatchObject({ icon: null, color: null });
+    const snap = await addStep(t.trip.id, 2, {
+      kind: 'group',
+      name: 'Musées',
+      dayId: day,
+      icon: 'museum',
+      color: 3,
+    });
+    const group = byName(snap, 'Musées');
+    expect(group).toMatchObject({ kind: 'group', type: null, icon: 'museum', color: 3 });
+    const patched = await call(
+      ALICE,
+      'PATCH',
+      `/api/trips/${t.trip.id}/steps/${group.id}`,
+      { icon: 'park', color: null },
+      { 'if-match': String(snap.trip.version) },
+    );
+    expect(patched.status).toBe(200);
+    expect(byName(patched.body, 'Musées')).toMatchObject({ icon: 'park', color: null });
+  });
+
+  it('refuse une icône ou une couleur sur une étape (400)', async () => {
+    const t = await createTrip();
+    const day = t.days[0].id;
+    const created = await call(
+      ALICE,
+      'POST',
+      `/api/trips/${t.trip.id}/steps`,
+      { ...LOUVRE, dayId: day, color: 2 },
+      { 'if-match': '1' },
+    );
+    expect(created.status).toBe(400);
+    const snap = await addStep(t.trip.id, 1, { ...LOUVRE, dayId: day });
+    const step = byName(snap, 'Musée du Louvre');
+    expect(step).toMatchObject({ icon: null, color: null });
+    const patched = await call(
+      ALICE,
+      'PATCH',
+      `/api/trips/${t.trip.id}/steps/${step.id}`,
+      { icon: 'park' },
+      { 'if-match': String(snap.trip.version) },
+    );
+    expect(patched.status).toBe(400);
+  });
+
+  it('un dossier d’idées (sans jour) reçoit des idées', async () => {
+    const t = await createTrip();
+    const created = await addStep(t.trip.id, 1, { kind: 'group', name: 'À trier', dayId: null });
+    const group = byName(created, 'À trier');
+    const snap = await addStep(t.trip.id, 2, { ...LOUVRE, dayId: null, parentId: group.id });
+    expect(byName(snap, 'Musée du Louvre')).toMatchObject({ dayId: null, parentId: group.id });
+  });
+
   it('refuse un parent qui n’est pas un dossier, un dossier imbriqué ou un autre jour (400)', async () => {
     const { t, day, group, snap } = await withGroup();
     const louvre = byName(snap, 'Musée du Louvre');

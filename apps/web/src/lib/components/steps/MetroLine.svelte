@@ -1,12 +1,18 @@
 <script lang="ts">
-  import type { ScheduledItem, Step, StayItem, TimelineItem } from '@mytrips/core';
+  import {
+    legColorVar,
+    type ScheduledItem,
+    type Step,
+    type StayItem,
+    type TimelineItem,
+  } from '@mytrips/core';
   import type { Snippet } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import { plural } from '#lib/format.ts';
   import { contextMenuKey, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { endDrag, startDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
-  import { GROUP_ICON, STAY_ICON } from '#lib/steps/icons.ts';
+  import { GROUP_ICON, STAY_ICON, STEP_ICONS } from '#lib/steps/icons.ts';
   import DropZone from './DropZone.svelte';
   import MetroStop from './MetroStop.svelte';
 
@@ -67,7 +73,13 @@
     retour: 'Retour',
   };
   const StayIcon = STAY_ICON;
-  const GroupIcon = GROUP_ICON;
+
+  /** Icône et couleur d'un dossier : celles choisies, sinon l'icône dossier et l'accent. */
+  const groupIcon = (group: Step) => (group.icon ? STEP_ICONS[group.icon] : GROUP_ICON);
+  const groupTint = (group: Step) =>
+    group.color !== null && group.color !== undefined
+      ? `var(${legColorVar(group.color)})`
+      : 'var(--accent)';
 </script>
 
 {#snippet stay(item: StayItem)}
@@ -150,7 +162,14 @@
         {:else}
           {@const group = item.group}
           {@const open = !folded.has(group.id)}
-          <div class="group" data-testid="metro-group" role="listitem">
+          {@const GroupIcon = groupIcon(group)}
+          <div
+            class="group"
+            data-testid="metro-group"
+            data-icon={group.icon ?? 'folder'}
+            role="listitem"
+            style={`--gc: ${groupTint(group)}`}
+          >
             <div class="children" role="list">
               {#if open}
                 {#each item.children as child, i (child.id)}
@@ -215,7 +234,8 @@
               <button
                 type="button"
                 class="title"
-                onclick={() => onEdit(group)}
+                aria-expanded={open}
+                onclick={() => toggle(group.id)}
                 onkeydown={(e) => {
                   const point = contextMenuKey(e);
                   if (point) onContextMenu(group, point);
@@ -334,10 +354,10 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    border: 1.5px var(--group-edge-style) var(--group-edge);
+    border: 1.5px var(--group-edge-style) color-mix(in srgb, var(--gc) 45%, var(--group-edge));
     border-top: 0;
     border-radius: 0 0 var(--group-radius) var(--group-radius);
-    background: color-mix(in srgb, var(--accent) 4%, transparent);
+    background: color-mix(in srgb, var(--gc) 6%, transparent);
   }
 
   .children {
@@ -384,6 +404,10 @@
     color: var(--fg);
     font: 700 12.5px var(--font-display);
     cursor: pointer;
+  }
+
+  .title :global(svg) {
+    color: var(--gc);
   }
 
   .title small {

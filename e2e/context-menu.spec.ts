@@ -162,7 +162,7 @@ test('clic droit sur un marqueur, une idée, un dossier : même menu ; icône de
   await page.keyboard.press('Escape');
 
   // Dossier : Modifier, Supprimer, Déplacer vers, sans Google Maps.
-  await page.getByRole('button', { name: 'Nouveau dossier' }).click();
+  await page.getByRole('button', { name: 'Nouveau dossier', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Nouveau dossier' });
   await dialog.getByLabel('Nom du dossier').fill('Rive gauche');
   await dialog.getByRole('button', { name: 'Créer le dossier' }).click();

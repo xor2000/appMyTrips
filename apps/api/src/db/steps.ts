@@ -25,6 +25,8 @@ export interface StepRow {
   gpx_track: string | null;
   use_elevation: number;
   duration_manual: number;
+  icon: StepType | null;
+  color: number | null;
 }
 
 interface StayRow {
@@ -69,6 +71,8 @@ export function toStep(r: StepRow): Step {
         : null,
     useElevation: r.use_elevation === 1,
     durationManual: r.duration_manual === 1,
+    icon: r.icon,
+    color: r.color,
   };
 }
 
@@ -90,7 +94,7 @@ function toStay(r: StayRow): Stay {
 
 const STEP_COLUMNS = `id, day_id, parent_id, position, kind, type, name, lat, lng, address, exit_lat,
   exit_lng, duration_min, fixed_start, timezone, opening_hours, osm_ref, booking_ref, booking_url, notes,
-  gpx_stats, gpx_track, use_elevation, duration_manual`;
+  gpx_stats, gpx_track, use_elevation, duration_manual, icon, color`;
 
 export async function getSteps(db: D1Database, tripId: string): Promise<Step[]> {
   const { results } = await db

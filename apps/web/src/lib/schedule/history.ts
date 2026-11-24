@@ -68,6 +68,8 @@ const STEP_FIELDS = [
   'bookingUrl',
   'openingHours',
   'useElevation',
+  'icon',
+  'color',
 ] as const;
 
 /**

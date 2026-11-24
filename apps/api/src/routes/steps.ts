@@ -62,8 +62,8 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
           `INSERT INTO steps (id, trip_id, day_id, parent_id, position, kind, type, name, lat, lng,
              address, exit_lat, exit_lng, duration_min, fixed_start, timezone, opening_hours,
              osm_ref, booking_ref, booking_url, notes, gpx_stats, gpx_track, use_elevation,
-             duration_manual, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+             duration_manual, icon, color, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
            WHERE ${guard}`,
         )
         .bind(
@@ -92,6 +92,8 @@ export function registerStepRoutes(trips: Hono<TripsEnv>) {
           s.gpx ? JSON.stringify(s.gpx.track) : null,
           s.useElevation ? 1 : 0,
           s.gpx && s.durationManual ? 1 : 0,
+          s.icon,
+          s.color,
           ts,
           ts,
           ...g,

@@ -32,6 +32,8 @@ function step(id: string, overrides: Partial<Step> = {}): Step {
     gpx: null,
     useElevation: false,
     durationManual: false,
+    icon: null,
+    color: null,
     ...overrides,
   };
 }

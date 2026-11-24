@@ -19,6 +19,8 @@
     onHover: (key: string | null) => void;
     /** Horaires calculés par le moteur (absents hors d'un jour). */
     time?: ScheduledItem | null;
+    /** Variante compacte (colonne des idées) : moins haute. */
+    dense?: boolean;
   }
 
   let {
@@ -30,6 +32,7 @@
     onContextMenu,
     onHover,
     time = null,
+    dense = false,
   }: Props = $props();
 
   const info = $derived(step.type ? STEP_TYPE_INFO[step.type] : null);
@@ -55,6 +58,7 @@
 {/if}
 <div
   class="card"
+  class:dense
   class:highlighted
   class:conflict={late > 0}
   data-testid="step-card"
@@ -179,6 +183,16 @@
     color: var(--fg);
     text-align: left;
     cursor: inherit;
+  }
+
+  /* Variante compacte (idées) : icône et marges réduites. */
+  .dense .main {
+    padding: 2px var(--space-3) 2px 4px;
+  }
+
+  .dense .icon {
+    width: 22px;
+    height: 22px;
   }
 
   .icon {
