@@ -1,4 +1,4 @@
-import type { Poi, PoiCategory } from '@mytrips/core';
+import { POI_CATEGORIES, type Poi, type PoiCategory } from '@mytrips/core';
 import type { MapView, StepInput } from '#lib/api.ts';
 
 /** Longueur maximale des horaires dans le schéma d'étape. */
@@ -24,6 +24,19 @@ export function poiStepInput(poi: Poi, dayId: string | null): StepInput {
     osmRef: poi.osmRef,
     notes,
   };
+}
+
+/**
+ * Lieux groupés par catégorie, dans l'ordre des catégories de la découverte (`POI_CATEGORIES`),
+ * sans groupe vide ; dans un groupe, l'ordre reçu (classement de l'API) est gardé.
+ */
+export function groupPoisByCategory(
+  pois: readonly Poi[],
+): { category: PoiCategory; pois: Poi[] }[] {
+  return POI_CATEGORIES.map((category) => ({
+    category,
+    pois: pois.filter((p) => p.category === category),
+  })).filter((g) => g.pois.length > 0);
 }
 
 /** Nombre de lieux par catégorie. */

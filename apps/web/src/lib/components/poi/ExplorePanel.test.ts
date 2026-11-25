@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import type { PoiCategory } from '@mytrips/core';
+import { POI_CATEGORIES, type PoiCategory } from '@mytrips/core';
 import { makePoi } from '#lib/test/fixtures.ts';
 import ExplorePanel from './ExplorePanel.svelte';
 
@@ -33,6 +33,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     addedRefs: new Set(['N1000']),
     selectedId: null as string | null,
     onToggleCategory: vi.fn(),
+    onSetCategories: vi.fn(),
     onSearch: vi.fn(),
     onAdd: vi.fn().mockResolvedValue(undefined),
     onSelect: vi.fn(),
@@ -66,7 +67,7 @@ describe('ExplorePanel', () => {
 
   it('liste les lieux ; ajout au jour sélectionné ou aux idées', async () => {
     const props = setup();
-    const list = screen.getByRole('list', { name: 'Lieux trouvés' });
+    const list = screen.getByRole('group', { name: 'Lieux trouvés' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
     await fireEvent.click(
       screen.getByRole('button', { name: 'Ajouter Musée des Arts décoratifs à J2' }),
@@ -123,5 +124,44 @@ describe('ExplorePanel', () => {
   it('affiche l’erreur de recherche', () => {
     setup({ status: 'error', error: 'La découverte de lieux est indisponible.', pois: [] });
     expect(screen.getByRole('alert').textContent).toContain('indisponible');
+  });
+
+  it('« Tous » coche toutes les catégories d’un coup', async () => {
+    const props = setup();
+    const chips = within(screen.getByRole('group', { name: 'Catégories' }));
+    const all = chips.getByRole('button', { name: 'Tous' });
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    await fireEvent.click(all);
+    expect(props.onSetCategories).toHaveBeenCalledWith([...POI_CATEGORIES]);
+  });
+
+  it('« Tous » quand tout est coché : décoche tout', async () => {
+    const props = setup({ categories: [...POI_CATEGORIES] });
+    const all = screen.getByRole('button', { name: 'Tous' });
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(all);
+    expect(props.onSetCategories).toHaveBeenCalledWith([]);
+  });
+
+  it('résultats groupés par catégorie : titre avec icône et nombre, dans l’ordre des catégories', () => {
+    setup();
+    const list = screen.getByRole('group', { name: 'Lieux trouvés' });
+    const titles = within(list).getAllByRole('heading', { level: 3 });
+    expect(titles.map((t) => t.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Cafés 1 lieu',
+      'Musées 2 lieux',
+    ]);
+    // Une liste par catégorie, nommée par son titre (pas de titre directement dans une liste).
+    expect(within(list).getByRole('list', { name: /Musées/ }).children).toHaveLength(2);
+    expect(within(list).getByRole('list', { name: /Cafés/ }).children).toHaveLength(1);
+    for (const title of titles) expect(title.parentElement?.tagName).not.toBe('UL');
+    expect(titles.every((t) => t.querySelector('svg'))).toBe(true);
+    // Les lieux restent les seuls éléments de la liste.
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    // Café Kitsuné (catégorie Cafés) vient avant les musées.
+    const names = within(list)
+      .getAllByRole('listitem')
+      .map((li) => li.querySelector('.name')?.textContent);
+    expect(names[0]).toBe('Café Kitsuné');
   });
 });

@@ -35,7 +35,7 @@ async function exploreMuseums(page: Page) {
     .getByRole('button', { name: /Musées/ })
     .click();
   await expect(
-    explore.getByRole('list', { name: 'Lieux trouvés' }).getByRole('listitem'),
+    explore.getByRole('group', { name: 'Lieux trouvés' }).getByRole('listitem'),
   ).toHaveCount(3);
   return explore;
 }
@@ -71,7 +71,7 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
     .getByRole('group', { name: 'Catégories' })
     .getByRole('button', { name: /Musées/ })
     .click();
-  const list = explore.getByRole('list', { name: 'Lieux trouvés' });
+  const list = explore.getByRole('group', { name: 'Lieux trouvés' });
   // Louvre (article Wikipédia) en tête, puis par distance au centre de la vue.
   await expect(list.getByRole('listitem')).toHaveCount(3);
   await expect(list.getByRole('listitem', { name: 'Musée du Louvre' })).toContainText(
@@ -331,4 +331,35 @@ test('fond OSM France : clic sur un lieu dessiné par le fond, popup et ajout au
   await clickMapAt(page, [2.333, 48.863]);
   await expect(page.getByTestId('step-popup')).toContainText('Musée · Idée');
   await expect(popup).toHaveCount(0);
+});
+
+test('« Explorer la zone » : « Tous » lance une seule recherche, résultats groupés par catégorie', async ({
+  page,
+}) => {
+  await tripCenteredOnLouvre(page);
+  await page.getByRole('button', { name: 'Explorer la zone', exact: true }).click();
+  const explore = page.getByRole('region', { name: 'Explorer' });
+  const chips = explore.getByRole('group', { name: 'Catégories' });
+
+  const searches: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/poi?')) searches.push(r.url());
+  });
+  await chips.getByRole('button', { name: 'Tous', exact: true }).click();
+  const list = explore.getByRole('group', { name: 'Lieux trouvés' });
+  await expect(list.getByRole('listitem')).toHaveCount(4);
+  // Toutes les catégories cochées, en une seule requête.
+  for (const button of await chips.getByRole('button').all()) {
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+  }
+  expect(searches).toHaveLength(1);
+  expect(new URL(searches[0]!).searchParams.get('categories')?.split(',')).toHaveLength(9);
+
+  // Un titre par catégorie (icône, nombre), dans l'ordre des catégories : Cafés avant Musées.
+  await expect(list.getByRole('heading', { level: 3 })).toHaveText([/Cafés\s*1/, /Musées\s*3/]);
+  await expect(list.getByRole('listitem').first()).toContainText('Café Kitsuné');
+
+  // « Tous » de nouveau : tout est décoché, plus de résultats.
+  await chips.getByRole('button', { name: 'Tous', exact: true }).click();
+  await expect(list).toHaveCount(0);
 });

@@ -808,7 +808,7 @@
       {/if}
       {#if onToggleExplore}
         <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
-          <Compass size={15} />Explorer
+          <Compass size={15} />Explorer la zone
         </button>
       {/if}
       {#if onOffline}

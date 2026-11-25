@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePoi } from '#lib/test/fixtures.ts';
-import { poiCounts, poiStepInput, sameView } from './explore.ts';
+import { groupPoisByCategory, poiCounts, poiStepInput, sameView } from './explore.ts';
 
 describe('poiStepInput', () => {
   it('pré-remplit l’étape : nom, type, point, adresse, horaires, référence OSM', () => {
@@ -68,5 +68,29 @@ describe('sameView', () => {
     // Décalage de 0,016° vers l'est sur une zone large de 0,08° : 20 %.
     const shifted = { west: 2.316, south: 48.84, east: 2.396, north: 48.88 };
     expect(sameView(view, { ...view, bbox: shifted })).toBe(false);
+  });
+});
+
+describe('groupPoisByCategory (résultats de l’explorateur, par catégorie)', () => {
+  const louvre = makePoi({ id: 'm1', name: 'Louvre' });
+  const orsay = makePoi({ id: 'm2', name: 'Orsay' });
+  const kitsune = makePoi({ id: 'c1', name: 'Kitsuné', category: 'cafe', stepType: 'cafe' });
+  const tuileries = makePoi({ id: 'p1', name: 'Tuileries', category: 'park', stepType: 'park' });
+
+  it('groupes dans l’ordre des catégories de la découverte, sans groupe vide', () => {
+    const groups = groupPoisByCategory([tuileries, louvre, kitsune, orsay]);
+    expect(groups.map((g) => g.category)).toEqual(['cafe', 'museum', 'park']);
+  });
+
+  it('dans un groupe, l’ordre de classement est gardé', () => {
+    const groups = groupPoisByCategory([orsay, kitsune, louvre]);
+    expect(groups.find((g) => g.category === 'museum')?.pois.map((p) => p.name)).toEqual([
+      'Orsay',
+      'Louvre',
+    ]);
+  });
+
+  it('aucun lieu : aucun groupe', () => {
+    expect(groupPoisByCategory([])).toEqual([]);
   });
 });

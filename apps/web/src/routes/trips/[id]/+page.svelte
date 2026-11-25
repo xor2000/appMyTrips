@@ -897,19 +897,34 @@
     }
   }
 
+  /** Plus aucune catégorie : plus de lieux, et une recherche en cours est ignorée. */
+  function clearPois() {
+    poiRequest++;
+    pois = [];
+    poiStatus = 'idle';
+  }
+
   function toggleCategory(category: PoiCategory) {
     poiCategories = poiCategories.includes(category)
       ? poiCategories.filter((c) => c !== category)
       : [...poiCategories, category];
     if (poiCategories.length === 0) {
-      poiRequest++;
-      pois = [];
-      poiStatus = 'idle';
+      clearPois();
       return;
     }
     // Catégorie retirée : filtrage local ; ajoutée : nouvelle recherche.
     pois = pois.filter((p) => poiCategories.includes(p.category));
     if (poiCategories.includes(category)) searchPois();
+  }
+
+  /** « Tous » de l'explorateur : toutes les catégories en une seule recherche, ou aucune. */
+  function setCategories(list: PoiCategory[]) {
+    poiCategories = list;
+    if (list.length === 0) {
+      clearPois();
+      return;
+    }
+    searchPois();
   }
 
   async function addPoi(poi: Poi, toDay: boolean) {
@@ -1205,6 +1220,7 @@
           {addedRefs}
           selectedId={selectedPoi}
           onToggleCategory={toggleCategory}
+          onSetCategories={setCategories}
           onSearch={searchPois}
           onAdd={addPoi}
           onSelect={openPoi}

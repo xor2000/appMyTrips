@@ -10,7 +10,8 @@
   import RefreshCw from 'lucide-svelte/icons/refresh-cw';
   import ZoomIn from 'lucide-svelte/icons/zoom-in';
   import { plural } from '#lib/format.ts';
-  import { poiCounts } from '#lib/poi/explore.ts';
+  import { groupPoisByCategory, poiCounts } from '#lib/poi/explore.ts';
+  import { STEP_ICONS } from '#lib/steps/icons.ts';
   import PoiCard from './PoiCard.svelte';
 
   interface Props {
@@ -28,6 +29,8 @@
     addedRefs: Set<string>;
     selectedId: string | null;
     onToggleCategory: (category: PoiCategory) => void;
+    /** « Tous » : toutes les catégories d'un coup (une seule recherche), ou aucune. */
+    onSetCategories: (categories: PoiCategory[]) => void;
     onSearch: () => void;
     onAdd: (poi: Poi, toDay: boolean) => Promise<void>;
     onSelect: (poi: Poi) => void;
@@ -48,6 +51,7 @@
     addedRefs,
     selectedId,
     onToggleCategory,
+    onSetCategories,
     onSearch,
     onAdd,
     onSelect,
@@ -57,6 +61,8 @@
   }: Props = $props();
 
   const counts = $derived(poiCounts(pois));
+  const groups = $derived(groupPoisByCategory(pois));
+  const allOn = $derived(POI_CATEGORIES.every((c) => categories.includes(c)));
 </script>
 
 <section class="explore" aria-label="Explorer">
@@ -68,6 +74,12 @@
   </div>
 
   <div class="chips" role="group" aria-label="Catégories">
+    <button
+      type="button"
+      class="cat"
+      aria-pressed={allOn}
+      onclick={() => onSetCategories(allOn ? [] : [...POI_CATEGORIES])}>Tous</button
+    >
     {#each POI_CATEGORIES as category (category)}
       {@const on = categories.includes(category)}
       <button
@@ -104,21 +116,39 @@
 
   {#if pois.length > 0}
     <p class="total">{plural(pois.length, 'lieu', 'lieux')} dans la zone</p>
-    <ul class="list" aria-label="Lieux trouvés">
-      {#each pois as poi (poi.id)}
-        <PoiCard
-          {poi}
-          selected={poi.id === selectedId}
-          added={poi.osmRef !== null && addedRefs.has(poi.osmRef)}
-          {dayLabel}
-          {canEdit}
-          {onAdd}
-          {onSelect}
-          {onHover}
-          {loadWiki}
-        />
+    <!-- Groupés par catégorie : un titre (icône, libellé, nombre) et un filet, puis la liste des
+         lieux de la catégorie, nommée par son titre. -->
+    <div class="results" role="group" aria-label="Lieux trouvés">
+      {#each groups as group (group.category)}
+        {@const info = POI_CATEGORY_INFO[group.category]}
+        {@const Icon = STEP_ICONS[info.stepType]}
+        <section class="group">
+          <h3 id={`poi-group-${group.category}`}>
+            <Icon size={14} aria-hidden="true" />{info.label}
+            <span class="group-count"
+              >{group.pois.length}<span class="visually-hidden"
+                >{group.pois.length > 1 ? ' lieux' : ' lieu'}</span
+              ></span
+            >
+          </h3>
+          <ul class="list" aria-labelledby={`poi-group-${group.category}`}>
+            {#each group.pois as poi (poi.id)}
+              <PoiCard
+                {poi}
+                selected={poi.id === selectedId}
+                added={poi.osmRef !== null && addedRefs.has(poi.osmRef)}
+                {dayLabel}
+                {canEdit}
+                {onAdd}
+                {onSelect}
+                {onHover}
+                {loadWiki}
+              />
+            {/each}
+          </ul>
+        </section>
       {/each}
-    </ul>
+    </div>
   {/if}
 </section>
 
@@ -201,6 +231,37 @@
     margin: 0;
     font-size: 12px;
     color: var(--muted);
+  }
+
+  /* Groupes de résultats : titre (petite icône, libellé, nombre) avec un filet, puis la liste. */
+  .results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .group h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    padding-bottom: var(--space-1);
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font: 700 12px var(--font-display);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .group-count {
+    margin-left: auto;
+    font-weight: 600;
   }
 
   .list {
