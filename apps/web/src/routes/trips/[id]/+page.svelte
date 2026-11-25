@@ -1296,7 +1296,6 @@
           onAddGroup={() => (adding = { kind: 'group', dayId: null })}
           onEdit={openStep}
           onContextMenu={openContextMenu}
-          onHover={(k) => (highlighted = k)}
           onDrop={drop}
         />
       </div>
@@ -1359,7 +1358,6 @@
                         onEdit={openStep}
                         onEditStay={editStay}
                         onContextMenu={openContextMenu}
-                        onHover={(k) => (highlighted = k)}
                         onDrop={drop}
                         after={legAfter}
                         {times}
@@ -1402,7 +1400,6 @@
                       onEdit={(s) => (editingStepId = s.id)}
                       onEditStay={editStay}
                       onContextMenu={openContextMenu}
-                      onHover={(k) => (highlighted = k)}
                       onDrop={drop}
                       after={metroLegAfter}
                       {times}
@@ -1463,7 +1460,6 @@
                         onEdit={(s) => (editingStepId = s.id)}
                         onEditStay={editStay}
                         onContextMenu={openContextMenu}
-                        onHover={(k) => (highlighted = k)}
                         onDrop={(id, target) => drop(id, { ...target, dayId: v.day.id })}
                         after={legAfter}
                         times={v.times}

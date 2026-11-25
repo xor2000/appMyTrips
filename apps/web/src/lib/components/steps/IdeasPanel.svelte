@@ -17,12 +17,10 @@
     onAddGroup: () => void;
     onEdit: (step: Step) => void;
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
   }
 
-  let { ideas, canEdit, highlighted, onAddGroup, onEdit, onContextMenu, onHover, onDrop }: Props =
-    $props();
+  let { ideas, canEdit, highlighted, onAddGroup, onEdit, onContextMenu, onDrop }: Props = $props();
 
   /** Racines triées ; un dossier porte ses idées, triées elles aussi. */
   const roots = $derived(
@@ -82,7 +80,6 @@
           {highlighted}
           {onEdit}
           {onContextMenu}
-          {onHover}
           dense
           onDropInto={(id, index) => onDrop(id, { dayId: null, parentId: root.group.id, index })}
         />
@@ -94,7 +91,6 @@
           highlighted={highlighted === root.id}
           {onEdit}
           {onContextMenu}
-          {onHover}
         />
       {/if}
     {/each}

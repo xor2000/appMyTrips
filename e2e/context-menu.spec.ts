@@ -44,15 +44,59 @@ const timelineCard = (page: Page, name: string) =>
 const ideas = (page: Page) => page.getByRole('region', { name: 'Idées' });
 const menuOf = (page: Page, name: string) => page.getByRole('menu', { name, exact: true });
 
-test('survol d’un lieu de la colonne : son marqueur est mis en évidence sur la carte', async ({
+test('survol d’un lieu ou d’un séjour (jour, idées, métro) : rien n’est mis en évidence', async ({
   page,
 }) => {
   await tripWithTwoPlaces(page);
-  const marker = page.locator('.map-marker', { hasText: '2' });
-  await timelineCard(page, 'Musée d’Orsay').hover();
-  await expect(marker).toHaveClass(/highlighted/);
+  const louvre = timelineCard(page, 'Musée du Louvre');
+  const orsay = timelineCard(page, 'Musée d’Orsay');
+  const louvreMarker = page.locator('.map-marker', { hasText: '1' });
+  const orsayMarker = page.locator('.map-marker', { hasText: '2' });
+
+  // Le survol d'un marqueur met toujours le lieu en évidence dans la liste (sens carte → liste).
+  await orsayMarker.hover();
+  await expect(orsay).toHaveClass(/highlighted/);
   await page.mouse.move(5, 5);
-  await expect(marker).not.toHaveClass(/highlighted/);
+  await expect(orsay).not.toHaveClass(/highlighted/);
+
+  // Lieu d'un jour : ni la carte du lieu ni son marqueur ne sont mis en évidence.
+  await orsay.hover();
+  await expect(orsay).not.toHaveClass(/highlighted/);
+  await expect(orsayMarker).not.toHaveClass(/highlighted/);
+
+  // Séjour d'un jour.
+  await page.getByRole('button', { name: 'Lieu', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
+  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Hôtel des Arts');
+  await dialog.getByRole('button', { name: /Hôtel des Arts/ }).click();
+  const form = page.getByRole('dialog', { name: 'Nouveau lieu' });
+  await form.getByText('Séjour', { exact: true }).click();
+  await form.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  const stay = page.getByTestId('day-timeline').getByTestId('stay-card');
+  await expect(stay).toHaveCount(1);
+  await stay.hover();
+  await expect(stay).not.toHaveClass(/highlighted/);
+
+  // Idée.
+  await orsay.click({ button: 'right' });
+  await menuOf(page, 'Musée d’Orsay').getByRole('menuitem', { name: 'Déplacer vers' }).click();
+  await page
+    .getByRole('menu', { name: 'Déplacer vers' })
+    .getByRole('menuitem', { name: /^Idées/ })
+    .click();
+  const idea = ideas(page).getByTestId('step-card').filter({ hasText: 'Musée d’Orsay' });
+  await idea.hover();
+  await expect(idea).not.toHaveClass(/highlighted/);
+  await expect(page.locator('.map-marker.idea')).not.toHaveClass(/highlighted/);
+
+  // Station de la ligne de métro.
+  await page.mouse.move(5, 5);
+  await expect(louvre).toBeVisible();
+  await page.getByRole('button', { name: 'Ligne de métro' }).click();
+  const stop = page.getByTestId('metro-stop').filter({ hasText: 'Musée du Louvre' });
+  await stop.hover();
+  await expect(stop).not.toHaveClass(/highlighted/);
+  await expect(louvreMarker).not.toHaveClass(/highlighted/);
 });
 
 test('clic droit sur un lieu : menu contextuel, déplacement vers les idées et annulation', async ({

@@ -42,7 +42,6 @@ function setup(overrides: Record<string, unknown> = {}) {
     onEdit: vi.fn(),
     onEditStay: vi.fn(),
     onContextMenu: vi.fn(),
-    onHover: vi.fn(),
     onDrop: vi.fn(),
     after: createRawSnippet((key: () => string) => ({
       render: () => `<div data-testid="after-${key()}"></div>`,

@@ -13,7 +13,6 @@ function setup(items: ReturnType<typeof dayTimeline>, overrides: Record<string, 
     highlighted: null,
     onEdit: vi.fn(),
     onContextMenu: vi.fn(),
-    onHover: vi.fn(),
     onDrop: vi.fn(),
     ...overrides,
   };

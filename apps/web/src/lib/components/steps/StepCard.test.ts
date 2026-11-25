@@ -11,7 +11,6 @@ function setup(overrides: Record<string, unknown> = {}) {
     highlighted: false,
     onEdit: vi.fn(),
     onContextMenu: vi.fn(),
-    onHover: vi.fn(),
     ...overrides,
   };
   render(StepCard, { props });
@@ -173,13 +172,5 @@ describe('StepCard', () => {
   it('en lecture seule, n’est pas déplaçable', () => {
     setup({ canEdit: false });
     expect(screen.getByTestId('step-card').getAttribute('draggable')).toBe('false');
-  });
-
-  it('signale le survol (synchronisation avec la carte)', async () => {
-    const props = setup();
-    await fireEvent.mouseEnter(screen.getByTestId('step-card'));
-    expect(props.onHover).toHaveBeenLastCalledWith('s1');
-    await fireEvent.mouseLeave(screen.getByTestId('step-card'));
-    expect(props.onHover).toHaveBeenLastCalledWith(null);
   });
 });

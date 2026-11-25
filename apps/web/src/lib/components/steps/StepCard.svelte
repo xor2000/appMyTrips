@@ -16,7 +16,6 @@
     onEdit: (step: Step) => void;
     /** Clic droit, touche Menu ou Maj+F10 : menu contextuel (Modifier, Supprimer, Déplacer…). */
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
     /** Horaires calculés par le moteur (absents hors d'un jour). */
     time?: ScheduledItem | null;
     /** Variante compacte (colonne des idées) : moins haute. */
@@ -30,7 +29,6 @@
     highlighted,
     onEdit,
     onContextMenu,
-    onHover,
     time = null,
     dense = false,
   }: Props = $props();
@@ -68,8 +66,6 @@
   style={`--c: var(${info?.color ?? '--type-transport'})`}
   ondragstart={(e) => startDrag(e, step.id, step.kind)}
   ondragend={endDrag}
-  onmouseenter={() => onHover(step.id)}
-  onmouseleave={() => onHover(null)}
   oncontextmenu={(e) => {
     e.preventDefault();
     onContextMenu(step, { x: e.clientX, y: e.clientY });

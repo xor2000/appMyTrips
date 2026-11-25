@@ -15,7 +15,6 @@
     time?: ScheduledItem | null;
     onEdit: (step: Step) => void;
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
   }
 
   let {
@@ -26,7 +25,6 @@
     time = null,
     onEdit,
     onContextMenu,
-    onHover,
   }: Props = $props();
 
   const info = $derived(step.type ? STEP_TYPE_INFO[step.type] : null);
@@ -51,8 +49,6 @@
   style={`--c: var(${info?.color ?? '--type-transport'})`}
   ondragstart={(e) => startDrag(e, step.id, step.kind)}
   ondragend={endDrag}
-  onmouseenter={() => onHover(step.id)}
-  onmouseleave={() => onHover(null)}
   oncontextmenu={(e) => {
     e.preventDefault();
     onContextMenu(step, { x: e.clientX, y: e.clientY });

@@ -28,7 +28,6 @@
     onEdit: (step: Step) => void;
     onEditStay?: (item: StayItem) => void;
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
     /** Trajet après un point de passage (MetroLeg : compact, mêmes actions que la liste). */
     after?: Snippet<[string]>;
@@ -43,7 +42,6 @@
     onEdit,
     onEditStay = () => {},
     onContextMenu,
-    onHover,
     onDrop,
     after,
     times = new Map(),
@@ -83,13 +81,7 @@
 </script>
 
 {#snippet stay(item: StayItem)}
-  <div
-    class="stay"
-    data-testid="metro-stay"
-    role="listitem"
-    onmouseenter={() => onHover(item.key)}
-    onmouseleave={() => onHover(null)}
-  >
+  <div class="stay" data-testid="metro-stay" role="listitem">
     <div class="top">
       <span class="start"
         >{item.edge === 'start' ? item.stay.checkOutTime : item.stay.checkInTime}</span
@@ -159,7 +151,6 @@
             time={times.get(item.step.id) ?? null}
             {onEdit}
             {onContextMenu}
-            {onHover}
           />
           {@render slot(item.step.id)}
         {:else}
@@ -196,7 +187,6 @@
                     time={times.get(child.id) ?? null}
                     {onEdit}
                     {onContextMenu}
-                    {onHover}
                   />
                   <!-- Le trajet qui suit la dernière étape sort du dossier (comme dans la liste). -->
                   {#if i < item.children.length - 1}{@render slot(child.id)}{/if}
