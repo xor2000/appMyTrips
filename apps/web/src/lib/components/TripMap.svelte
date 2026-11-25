@@ -11,6 +11,7 @@
   } from '@mytrips/core';
   import CloudDownload from 'lucide-svelte/icons/cloud-download';
   import Compass from 'lucide-svelte/icons/compass';
+  import MapPin from 'lucide-svelte/icons/map-pin';
   import Search from 'lucide-svelte/icons/search';
   import type { Map as MapLibreMap, Marker, Popup } from 'maplibre-gl';
   import type { MapView } from '#lib/api.ts';
@@ -77,6 +78,11 @@
     onOffline?: () => void;
     /** Champ « Rechercher un lieu » flottant : ouvre l'ajout de lieu (absent si non fourni). */
     onSearch?: () => void;
+    /**
+     * Outil « Lieu » (icône et libellé de la maquette de référence) : ouvre l'ajout d'un lieu par
+     * recherche, clic sur la carte ou coordonnées ; absent si non fourni (lecture seule).
+     */
+    onAddPlace?: () => void;
     /** Tracés des trajets du jour, colorés par mode ; `highlighted` met en évidence leur clé. */
     lines?: LegLine[];
     /**
@@ -122,6 +128,7 @@
     onToggleExplore,
     onOffline,
     onSearch,
+    onAddPlace,
     lines = [],
     popupFor = () => null,
     focus = null,
@@ -791,9 +798,14 @@
       <Search size={15} />Rechercher un lieu, une adresse…
     </button>
   {/if}
-  {#if onToggleExplore || onOffline}
+  {#if onAddPlace || onToggleExplore || onOffline}
     <!-- Outils regroupés dans une seule pilule, comme sur la maquette. -->
     <div class="tools">
+      {#if onAddPlace && !placing}
+        <button type="button" class="tool" onclick={onAddPlace}>
+          <MapPin size={15} />Lieu
+        </button>
+      {/if}
       {#if onToggleExplore}
         <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
           <Compass size={15} />Explorer

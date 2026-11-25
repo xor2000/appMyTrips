@@ -19,37 +19,29 @@
   import PlaceSearch from './PlaceSearch.svelte';
 
   interface Props {
-    /** Séjour existant (modification), ou absent (création). */
-    stay?: Stay;
-    /** Date d'arrivée proposée en création (jour affiché). */
-    defaultDate: string;
+    /** Séjour modifié (la création passe par « Nouveau lieu », catégorie « Séjour »). */
+    stay: Stay;
     search: (q: string) => Promise<Place[]>;
     onSave: (values: StayValues) => Promise<void>;
     onDelete?: () => void;
     onClose: () => void;
   }
 
-  let { stay, defaultDate, search, onSave, onDelete, onClose }: Props = $props();
+  let { stay, search, onSave, onDelete, onClose }: Props = $props();
 
-  const nextDay = (date: string) =>
-    new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
-  const start = untrack(() => ({ stay, defaultDate }));
-  let place = $state<{ name: string; lat: number; lng: number; address: string | null } | null>(
-    start.stay
-      ? {
-          name: start.stay.name,
-          lat: start.stay.lat,
-          lng: start.stay.lng,
-          address: start.stay.address,
-        }
-      : null,
-  );
-  let checkInDate = $state(start.stay?.checkInDate ?? start.defaultDate);
-  let checkInTime = $state(start.stay?.checkInTime ?? '17:00');
-  let checkOutDate = $state(start.stay?.checkOutDate ?? nextDay(start.defaultDate));
-  let checkOutTime = $state(start.stay?.checkOutTime ?? '10:00');
-  let bookingRef = $state(start.stay?.bookingRef ?? '');
+  // Valeurs de départ, lues une seule fois à l'ouverture.
+  const start = untrack(() => ({ stay }));
+  let place = $state<{ name: string; lat: number; lng: number; address: string | null } | null>({
+    name: start.stay.name,
+    lat: start.stay.lat,
+    lng: start.stay.lng,
+    address: start.stay.address,
+  });
+  let checkInDate = $state(start.stay.checkInDate);
+  let checkInTime = $state(start.stay.checkInTime);
+  let checkOutDate = $state(start.stay.checkOutDate);
+  let checkOutTime = $state(start.stay.checkOutTime);
+  let bookingRef = $state(start.stay.bookingRef ?? '');
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -82,7 +74,7 @@
   }
 </script>
 
-<Modal title={stay ? 'Modifier le séjour' : 'Nouveau séjour'} {onClose}>
+<Modal title="Modifier le séjour" {onClose}>
   {#if place}
     <div class="chosen">
       <span class="name">{place.name}</span>
@@ -135,7 +127,7 @@
     {/if}
     <button type="button" class="btn btn-ghost" onclick={onClose}>Annuler</button>
     <button type="submit" form="stay-form" class="btn btn-primary" disabled={busy}>
-      {stay ? 'Enregistrer' : 'Ajouter le séjour'}
+      Enregistrer
     </button>
   {/snippet}
 </Modal>

@@ -109,6 +109,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
     les tests contre son serveur (page `{"error":"not_found"}`, setup en échec) ; choisir d'autres
     ports avec `E2E_PORT` et `E2E_MOCK_PORT` ;
   - tuiles de carte interceptées (style vide) ;
+  - **ajouter un lieu** : `addPlaceViaMap(page, requête, résultat, { day })` (`e2e/place-helpers.ts`) :
+    bouton « Lieu » de la carte, fenêtre « Ajouter un lieu » (recherche), puis « Nouveau lieu »
+    et « Ajouter » (jour affiché par défaut, `day: 2` ou `'idées'` sinon). Il n'y a plus de bouton
+    d'ajout sous les jours ; en « Plein écran », passer en mode Carte ;
   - compte principal `dev@example.test` connecté par le projet `setup` (`e2e/auth.setup.ts`), session
     réutilisée par `storageState` (`e2e/.auth/`, ignoré par git) ;
   - autre utilisateur : `anonymousContext(browser)` puis `signupViaUi` (`e2e/auth-helpers.ts`) ; un

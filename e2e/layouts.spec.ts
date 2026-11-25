@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -31,20 +32,6 @@ async function createTrip(page: Page) {
   return name;
 }
 
-/** Ajoute un lieu par le bouton « Ajouter un lieu » donné (celui d'un jour ou d'une colonne). */
-async function addPlace(
-  page: Page,
-  button: ReturnType<Page['getByRole']>,
-  query: string,
-  result: string,
-) {
-  await button.click();
-  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill(query);
-  await dialog.getByRole('button', { name: new RegExp(result) }).click();
-  await expect(dialog).toHaveCount(0);
-}
-
 const stopNames = (page: Page) => page.getByTestId('metro-stop').locator('.name').allTextContents();
 
 test('choisir l’affichage sur Mon compte, puis basculer depuis la page du voyage', async ({
@@ -54,12 +41,7 @@ test('choisir l’affichage sur Mon compte, puis basculer depuis la page du voya
   await page.getByRole('radio', { name: /Ligne de métro/ }).check();
   const name = await createTrip(page);
   await page.getByRole('tab', { name: /J1/ }).click();
-  await addPlace(
-    page,
-    page.getByRole('button', { name: 'Ajouter un lieu' }),
-    'Louvre',
-    'Musée du Louvre',
-  );
+  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre');
 
   // Ligne de métro (choix de Mon compte).
   await expect(page.getByTestId('metro-stop')).toHaveCount(1);
@@ -93,9 +75,8 @@ test('ligne de métro : ajouter, relier par un trajet, réordonner et glisser', 
   await createTrip(page);
   await page.getByRole('button', { name: 'Ligne de métro' }).click();
   await page.getByRole('tab', { name: /J1/ }).click();
-  const add = page.getByRole('button', { name: 'Ajouter un lieu' });
-  await addPlace(page, add, 'Louvre', 'Musée du Louvre');
-  await addPlace(page, add, 'Orsay', 'Musée d’Orsay');
+  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre');
+  await addPlaceViaMap(page, 'Orsay', 'Musée d’Orsay');
   await expect.poll(() => stopNames(page)).toEqual(['Musée du Louvre', 'Musée d’Orsay']);
 
   // Trajet entre les deux stations : « + » compact qui se déplie pour choisir le mode.
@@ -118,25 +99,18 @@ test('ligne de métro : ajouter, relier par un trajet, réordonner et glisser', 
   await expect(page.getByRole('dialog', { name: 'Modifier l’étape' })).toBeVisible();
 });
 
-test('plein écran : ajouter dans une colonne et glisser une étape d’un jour à l’autre', async ({
+test('plein écran : ajouter depuis la carte dans un jour choisi, glisser d’un jour à l’autre', async ({
   page,
 }) => {
   await createTrip(page);
   await page.getByRole('button', { name: 'Plein écran' }).click();
+  // Plus de boutons d'ajout dans les colonnes : le bouton « Lieu » de la carte, jour choisi.
+  await page.getByRole('button', { name: 'Carte', exact: true }).click();
+  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre', { day: 1 });
+  await addPlaceViaMap(page, 'Orsay', 'Musée d’Orsay', { day: 2 });
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
   const j1 = page.getByRole('region', { name: 'J1', exact: true });
   const j2 = page.getByRole('region', { name: 'J2', exact: true });
-  await addPlace(
-    page,
-    j1.getByRole('button', { name: 'Ajouter un lieu' }),
-    'Louvre',
-    'Musée du Louvre',
-  );
-  await addPlace(
-    page,
-    j2.getByRole('button', { name: 'Ajouter un lieu' }),
-    'Orsay',
-    'Musée d’Orsay',
-  );
   await expect(j1.getByTestId('step-card')).toHaveCount(1);
   await expect(j2.getByTestId('step-card').filter({ hasText: 'Musée d’Orsay' })).toBeVisible();
 

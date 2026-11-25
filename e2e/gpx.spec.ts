@@ -83,16 +83,3 @@ test('cocher le dénivelé : la durée et les horaires du jour se mettent à jou
   await expect(card).toContainText('Randonnée · 4 h 35 sur place');
   await expect(card).toContainText('08:00 → 12:35');
 });
-
-test('randonnée linéaire importée par le bouton : marqueur d’arrivée distinct sur la carte', async ({
-  page,
-}) => {
-  await tripOnDay1(page);
-  await page.getByLabel('Importer une randonnée (GPX)').setInputFiles({
-    name: 'crete.gpx',
-    mimeType: 'application/gpx+xml',
-    buffer: Buffer.from(fixture('linear.gpx')),
-  });
-  await expect(page.getByTestId('step-card').filter({ hasText: 'Tour test' })).toContainText('GPX');
-  await expect(page.locator('.map-marker', { hasText: '⚑' })).toHaveCount(1);
-});

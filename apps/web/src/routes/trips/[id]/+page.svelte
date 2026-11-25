@@ -24,7 +24,6 @@
     type ScheduledItem,
     type Step,
     type StepPatch,
-    type StepType,
     type StayItem,
     type TripSnapshot,
   } from '@mytrips/core';
@@ -57,7 +56,6 @@
     searchCovers,
     updateTrip,
     type MapView,
-    type StepInput,
   } from '#lib/api.ts';
   import { dayHoursLabel, dayTitle, formatPeriod, plural } from '#lib/format.ts';
   import { mapPoints, type MapPoint } from '#lib/map/points.ts';
@@ -81,6 +79,7 @@
     type DayPair,
   } from '#lib/legs/legs.ts';
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
+  import { samePoint } from '#lib/steps/coords.ts';
   import { positionAt } from '#lib/steps/moves.ts';
   import { moveToEndOp, stepMenuEntries, type MenuPoint } from '#lib/steps/contextMenu.ts';
   import { createSerialQueue } from '#lib/serial.ts';
@@ -112,12 +111,12 @@
   import ExplorePanel from '#lib/components/poi/ExplorePanel.svelte';
   import LegEditor from '#lib/components/legs/LegEditor.svelte';
   import LegTile from '#lib/components/legs/LegTile.svelte';
-  import AddPlaceDialog from '#lib/components/steps/AddPlaceDialog.svelte';
+  import NewPlaceDialog, { type NewPlaceTab } from '#lib/components/steps/NewPlaceDialog.svelte';
   import DeleteGroupDialog from '#lib/components/steps/DeleteGroupDialog.svelte';
   import GroupDialog, { type GroupValues } from '#lib/components/steps/GroupDialog.svelte';
   import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
-  import StepEditor from '#lib/components/steps/StepEditor.svelte';
+  import StepEditor, { type NewPlaceResult } from '#lib/components/steps/StepEditor.svelte';
   import MetroLeg from '#lib/components/legs/MetroLeg.svelte';
   import MetroLine from '#lib/components/steps/MetroLine.svelte';
   import Timeline from '#lib/components/steps/Timeline.svelte';
@@ -146,13 +145,15 @@
   let deletingTrip = $state(false);
   /** Modification de période en attente de confirmation (jours non vides à supprimer). */
   let pendingPeriod = $state<{ values: TripFormValues; dates: string[] } | null>(null);
-  /** Fenêtre d'ajout ouverte : lieu du jour, idée, dossier ou séjour. */
+  /**
+   * Fenêtre d'ajout ouverte : choix d'un nouveau lieu (bouton « Lieu » de la carte, onglet de
+   * départ), ou dossier (jour de l'en-tête, ou idées).
+   */
   let adding = $state<
-    | { kind: 'place' | 'idea'; type: StepType | null }
-    | { kind: 'group'; dayId: string | null }
-    | { kind: 'stay' }
-    | null
+    { kind: 'place'; tab: NewPlaceTab } | { kind: 'group'; dayId: string | null } | null
   >(null);
+  /** Lieu choisi, à compléter dans la fenêtre « Nouveau lieu » (étape, idée ou séjour). */
+  let newPlace = $state<Place | null>(null);
   let editingStepId = $state<string | null>(null);
   let editingStayId = $state<string | null>(null);
   let deletingGroup = $state<Step | null>(null);
@@ -431,18 +432,79 @@
   /** Recherche biaisée vers le centre de la carte. */
   const search = (q: string) => searchPlaces(q, mapCenter);
 
-  async function addPlace(place: Place, type: StepType, dayId: string | null) {
-    const input: StepInput = {
-      dayId,
-      type,
-      name: place.name,
+  /** La carte est affichée (pas en « Plein écran » sur la timeline) : choix d'un point possible. */
+  const mapVisible = $derived(layout !== 'board' || boardMode === 'map');
+
+  /** Bouton « Lieu » ou recherche de la carte : choix du lieu (recherche, carte, coordonnées). */
+  function openNewPlace(tab: NewPlaceTab = 'search') {
+    adding = { kind: 'place', tab };
+  }
+
+  /**
+   * Lieu choisi : la fenêtre « Nouveau lieu » prend le relais pour le compléter. Ignoré si la
+   * fenêtre de choix a été fermée entre-temps (réponse tardive du géocodage inverse).
+   */
+  function chooseNewPlace(place: Place) {
+    if (adding?.kind !== 'place') return;
+    adding = null;
+    newPlace = place;
+  }
+
+  /** Brouillon d'étape tiré du lieu choisi, pour la fenêtre « Nouveau lieu ». */
+  function placeDraft(place: Place): Step {
+    return {
+      id: '',
+      dayId: selectedDay,
+      parentId: null,
+      position: '',
+      kind: 'step',
+      type: place.type,
+      name: place.name.slice(0, 200),
       lat: place.lat,
       lng: place.lng,
       address: place.address,
+      exitLat: null,
+      exitLng: null,
+      durationMin: 0,
+      fixedStart: null,
+      timezone: null,
+      openingHours: null,
       osmRef: place.osmRef,
+      bookingRef: null,
+      bookingUrl: null,
+      notes: '',
+      gpx: null,
+      useElevation: false,
+      durationManual: false,
+      icon: null,
+      color: null,
     };
-    await apply(() => createStep(id, version(), input));
-    adding = null;
+  }
+
+  /**
+   * « Ajouter » de la fenêtre « Nouveau lieu » : une étape (jour ou idées) ou un séjour. Point
+   * déplacé dans la fenêtre (ou randonnée placée au début de son tracé GPX) : l'adresse devient
+   * celle du lieu le plus proche, comme à l'édition, et l'étape n'est plus ce lieu OSM.
+   */
+  async function createNewPlace(result: NewPlaceResult) {
+    const place = newPlace;
+    if (!place) return;
+    const first = result.kind === 'step' ? result.input.gpx?.track[0] : undefined;
+    const point = first
+      ? { lat: first[0], lng: first[1] }
+      : result.kind === 'step'
+        ? { lat: result.input.lat!, lng: result.input.lng! }
+        : { lat: result.values.lat, lng: result.values.lng };
+    const moved = !samePoint(place, point);
+    let address = place.address;
+    if (moved) address = (await reversePlace(point).catch(() => null))?.address ?? null;
+    if (result.kind === 'step') {
+      const osmRef = moved ? null : (result.input.osmRef ?? null);
+      await apply(() => createStep(id, version(), { ...result.input, address, osmRef }));
+    } else {
+      await apply(() => createStay(id, version(), { ...result.values, address }));
+    }
+    newPlace = null;
   }
 
   /** Randonnée créée depuis un fichier GPX (analysé dans le navigateur), dans le jour affiché. */
@@ -460,13 +522,6 @@
     } catch (e) {
       notice = e instanceof Error ? e.message : String(e);
     }
-  }
-
-  function pickHikeFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (file) addHikeFromFile(file);
   }
 
   /** Fichiers GPX glissés depuis l'ordinateur sur la timeline (pas les étapes déplacées). */
@@ -520,9 +575,8 @@
 
   async function saveStay(values: StayValues) {
     const stayId = editingStayId;
-    if (stayId) await apply(() => updateStay(id, stayId, version(), values));
-    else await apply(() => createStay(id, version(), values));
-    adding = null;
+    if (!stayId) return;
+    await apply(() => updateStay(id, stayId, version(), values));
     editingStayId = null;
   }
 
@@ -624,7 +678,9 @@
 
   // Fenêtre du lieu disparue pendant le choix (lieu supprimé par une autre écriture…) : abandon.
   $effect(() => {
-    if (!editingStep && placing) untrack(() => endPlacing(null));
+    if (!editingStep && !newPlace && adding?.kind !== 'place' && placing) {
+      untrack(() => endPlacing(null));
+    }
   });
 
   /**
@@ -1197,45 +1253,6 @@
       </div>
     {/snippet}
 
-    {#snippet addBar(dayId: string)}
-      {#if canEdit}
-        <!-- Les ajouts visent ce jour (utile en plein écran, où tous les jours sont visibles). -->
-        <div class="add-bar">
-          <button
-            type="button"
-            class="add-main"
-            onclick={() => {
-              selectedDay = dayId;
-              adding = { kind: 'place', type: null };
-            }}><span aria-hidden="true">+</span> Ajouter un lieu</button
-          >
-          <div class="add-more">
-            <button
-              type="button"
-              class="btn btn-soft"
-              onclick={() => {
-                selectedDay = dayId;
-                adding = { kind: 'stay' };
-              }}
-            >
-              Ajouter un séjour
-            </button>
-            <label class="btn btn-soft file">
-              Importer une randonnée (GPX)
-              <input
-                type="file"
-                accept=".gpx,application/gpx+xml"
-                onchange={(e) => {
-                  selectedDay = dayId;
-                  pickHikeFile(e);
-                }}
-              />
-            </label>
-          </div>
-        </div>
-      {/if}
-    {/snippet}
-
     {#snippet allDays()}
       <div class="block">
         <h2>Tout le voyage</h2>
@@ -1291,9 +1308,8 @@
         {exploring}
         onToggleExplore={online ? toggleExplore : undefined}
         onOffline={online ? openOffline : undefined}
-        onSearch={canEdit
-          ? () => (adding = { kind: selectedDay ? 'place' : 'idea', type: null })
-          : undefined}
+        onSearch={canEdit ? () => openNewPlace('search') : undefined}
+        onAddPlace={canEdit ? () => openNewPlace('search') : undefined}
         lines={legLines}
         placing={placing
           ? { label: placing.label, onPlace: endPlacing, onCancel: () => endPlacing(null) }
@@ -1333,7 +1349,6 @@
                         {times}
                       />
                     </div>
-                    {@render addBar(day.id)}
                   </div>
                 {:else}
                   {@render allDays()}
@@ -1377,7 +1392,6 @@
                       {times}
                     />
                   </div>
-                  <div class="block">{@render addBar(day.id)}</div>
                 {:else}
                   {@render allDays()}
                 {/if}
@@ -1439,7 +1453,6 @@
                         times={v.times}
                       />
                     </div>
-                    {@render addBar(v.day.id)}
                   </div>
                 </section>
               {/each}
@@ -1501,14 +1514,27 @@
     />
   {/if}
 
-  {#if adding?.kind === 'place' || adding?.kind === 'idea'}
-    {@const forIdea = adding.kind === 'idea'}
-    <AddPlaceDialog
-      title={forIdea ? 'Ajouter une idée' : 'Ajouter un lieu'}
+  {#if adding?.kind === 'place'}
+    <NewPlaceDialog
       {search}
-      initialType={adding.type}
-      onPick={(place, type) => addPlace(place, type, forIdea ? null : selectedDay)}
+      locate={findPlaceAt}
+      initialTab={adding.tab}
+      onPickOnMap={mapVisible ? () => pickOnMap('le nouveau lieu') : undefined}
+      onChoose={chooseNewPlace}
       onClose={() => (adding = null)}
+    />
+  {/if}
+
+  {#if newPlace}
+    {@const draft = placeDraft(newPlace)}
+    <StepEditor
+      step={draft}
+      days={snapshot.days}
+      mode="create"
+      stayDate={day?.date ?? trip.startDate}
+      onCreate={createNewPlace}
+      onPickOnMap={mapVisible ? () => pickOnMap(draft.name) : undefined}
+      onClose={() => (newPlace = null)}
     />
   {/if}
 
@@ -1516,17 +1542,13 @@
     <GroupDialog onSave={addGroup} onClose={() => (adding = null)} />
   {/if}
 
-  {#if adding?.kind === 'stay' || editingStay}
+  {#if editingStay}
     <StayDialog
-      stay={editingStay ?? undefined}
-      defaultDate={day?.date ?? trip.startDate}
+      stay={editingStay}
       {search}
       onSave={saveStay}
-      onDelete={editingStay ? removeStay : undefined}
-      onClose={() => {
-        adding = null;
-        editingStayId = null;
-      }}
+      onDelete={removeStay}
+      onClose={() => (editingStayId = null)}
     />
   {/if}
 
@@ -1682,18 +1704,6 @@
     color: var(--warn);
   }
 
-  .file {
-    position: relative;
-    cursor: pointer;
-  }
-
-  .file input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-
   .tools {
     display: flex;
     flex: none;
@@ -1785,40 +1795,6 @@
     margin: 0;
     font-size: 13px;
     white-space: pre-wrap;
-  }
-
-  .add-bar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .add-main {
-    min-height: 32px;
-    border: 1.5px dashed var(--accent);
-    border-radius: var(--radius-pill);
-    background: transparent;
-    color: var(--accent-strong);
-    font: 600 13px var(--font-display);
-    cursor: pointer;
-    transition: background-color 0.15s;
-  }
-
-  .add-main:hover {
-    background: var(--accent-soft);
-  }
-
-  .add-more {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--space-1);
-  }
-
-  .add-more .btn {
-    min-height: 26px;
-    padding: 0 var(--space-3);
-    font-size: 12px;
   }
 
   /* Ligne de métro : carte en haut, journée en ligne dessous, idées à droite. */
