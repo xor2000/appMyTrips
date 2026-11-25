@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <circle cx="24" cy="30" r="13" fill="var(--illu-sun)"/>
+  <path d="M0 38 Q24 33 48 38 V48 H0Z" fill="var(--illu-sand)"/>
+  <path d="M24 42 L25 22 M25 25 L18 18 M25 27 L32 19" fill="none" stroke="var(--illu-ink)" stroke-width="2.4" stroke-linecap="round"/>
+  <ellipse cx="24.5" cy="16" rx="20" ry="5" fill="var(--illu-tree)"/>
+</svg>

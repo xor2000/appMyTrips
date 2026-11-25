@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="118" cy="28" r="14" fill="var(--illu-sun)"/>
+  <path d="M92 66 L110 44 L128 66Z" fill="var(--illu-sand)"/>
+  <path d="M110 44 L128 66 H116Z" fill="var(--illu-ink)" fill-opacity=".15"/>
+  <path d="M120 66 L132 52 L144 66Z" fill="var(--illu-sand)"/>
+  <path d="M132 52 L144 66 H136Z" fill="var(--illu-ink)" fill-opacity=".15"/>
+  <path d="M0 70 Q40 54 84 66 T160 64 V100 H0Z" fill="var(--illu-sand)"/>
+  <path d="M0 70 Q40 54 84 66 T160 64 V100 H0Z" fill="var(--illu-sun)" fill-opacity=".25"/>
+  <path d="M0 84 Q50 70 100 82 T160 80 V100 H0Z" fill="var(--illu-sand)"/>
+  <path d="M40 92 V58 M40 74 H30 V64 M40 70 H50 V60" fill="none" stroke="var(--illu-tree)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M140 92 V78 M140 84 H134 V78" fill="none" stroke="var(--illu-tree)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M66 92 H82" stroke="var(--illu-rock)" stroke-width="3" stroke-linecap="round"/>
+</svg>

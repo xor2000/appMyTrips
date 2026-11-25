@@ -1,31 +1,30 @@
 <script module lang="ts">
-  import type { TripCover } from '@mytrips/core';
+  import type { IllustrationId } from '@mytrips/core';
 
   export interface TripFormValues {
     name: string;
     startDate: string;
     endDate: string;
     defaultTimezone?: string;
-    /** Nouvelle photo (présente seulement si elle a changé ; null : la retirer). */
-    cover?: TripCover | null;
+    /** Nouvelle illustration (présente seulement si elle a changé ; null : automatique). */
+    illustration?: IllustrationId | null;
   }
 </script>
 
 <script lang="ts">
-  import { coverQuery } from '@mytrips/core';
+  import { illustrationLabel, suggestIllustration } from '@mytrips/core';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import { untrack } from 'svelte';
-  import CoverPicker from './CoverPicker.svelte';
+  import Illustration from '#lib/illustrations/Illustration.svelte';
+  import IllustrationPicker from './IllustrationPicker.svelte';
   import Modal from './Modal.svelte';
 
   interface Props {
     /** Valeurs actuelles en modification ; absent en création. */
     initial?: { name: string; startDate: string; endDate: string };
-    /** Photo actuelle (modification). */
-    cover?: TripCover | null;
-    /** Recherche de photos : sans elle, pas de section « Photo du voyage ». */
-    searchCovers?: (query: string) => Promise<TripCover[]>;
-    /** Lieux du voyage, pour les mots-clés quand le nom ne dit rien. */
+    /** Illustration choisie (modification) ; null : suggérée d'après le nom et les lieux. */
+    illustration?: IllustrationId | null;
+    /** Lieux du voyage, pour la suggestion quand le nom ne dit rien. */
     places?: string[];
     onSubmit: (values: TripFormValues) => Promise<void>;
     onClose: () => void;
@@ -33,15 +32,7 @@
     onDelete?: () => void;
   }
 
-  let {
-    initial,
-    cover = null,
-    searchCovers,
-    places = [],
-    onSubmit,
-    onClose,
-    onDelete,
-  }: Props = $props();
+  let { initial, illustration = null, places = [], onSubmit, onClose, onDelete }: Props = $props();
 
   // Valeurs de départ du formulaire, lues une seule fois à l'ouverture.
   const start = untrack(() => initial);
@@ -52,9 +43,13 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
   let picking = $state(false);
-  /** Photo choisie ; `undefined` tant qu'elle n'a pas changé. */
-  let chosenCover = $state<TripCover | null | undefined>(undefined);
-  const shownCover = $derived(chosenCover === undefined ? cover : chosenCover);
+  /** Illustration choisie ; `undefined` tant qu'elle n'a pas changé. */
+  let chosenIllustration = $state<IllustrationId | null | undefined>(undefined);
+  const selectedIllustration = $derived(
+    chosenIllustration === undefined ? illustration : chosenIllustration,
+  );
+  const suggestion = $derived(suggestIllustration(name, places));
+  const shownIllustration = $derived(selectedIllustration ?? suggestion);
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -76,7 +71,9 @@
     try {
       const values: TripFormValues = { name: trimmed, startDate, endDate };
       if (!editing) values.defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (chosenCover !== undefined) values.cover = chosenCover;
+      if (chosenIllustration !== undefined && chosenIllustration !== illustration) {
+        values.illustration = chosenIllustration;
+      }
       await onSubmit(values);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -102,30 +99,35 @@
         <input type="date" bind:value={endDate} min={startDate || undefined} />
       </label>
     </div>
-    {#if editing && searchCovers}
-      <section class="cover" aria-labelledby="cover-title">
-        <div class="cover-head">
-          <h3 id="cover-title">Photo du voyage</h3>
+    {#if editing}
+      <section class="illustration" aria-labelledby="illustration-title">
+        <div class="illustration-head">
+          <h3 id="illustration-title">Illustration du voyage</h3>
           {#if !picking}
             <button type="button" class="btn btn-soft" onclick={() => (picking = true)}>
-              Changer la photo
+              Changer l’illustration
             </button>
           {/if}
         </div>
         {#if picking}
-          <CoverPicker
-            query={coverQuery(name, places) || name}
-            selected={cover}
-            search={searchCovers}
-            onSelect={(c) => (chosenCover = c)}
+          <IllustrationPicker
+            selected={illustration}
+            {suggestion}
+            onSelect={(id) => (chosenIllustration = id)}
           />
-        {:else if shownCover}
+        {:else if shownIllustration}
           <div class="current">
-            <img src={shownCover.thumbUrl} alt="" />
-            <span>Photo : {shownCover.author} · {shownCover.license}</span>
+            <span class="preview">
+              <Illustration id={shownIllustration} variant="scene" decorative />
+            </span>
+            <span>
+              {selectedIllustration
+                ? illustrationLabel(selectedIllustration)
+                : `Automatique : ${illustrationLabel(shownIllustration)}`}
+            </span>
           </div>
         {:else}
-          <p class="muted">Aucune photo pour l’instant.</p>
+          <p class="muted">Automatique : aucune illustration ne correspond au nom du voyage.</p>
         {/if}
       </section>
     {/if}
@@ -161,20 +163,20 @@
     gap: var(--space-3);
   }
 
-  .cover {
+  .illustration {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
   }
 
-  .cover-head {
+  .illustration-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
   }
 
-  .cover h3 {
+  .illustration h3 {
     font-size: 14px;
   }
 
@@ -186,11 +188,11 @@
     color: var(--muted);
   }
 
-  .current img {
+  .preview {
     width: 120px;
-    aspect-ratio: 16 / 10;
+    flex: none;
     border-radius: var(--radius-sm);
-    object-fit: cover;
+    overflow: hidden;
   }
 
   .spacer {

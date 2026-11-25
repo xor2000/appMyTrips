@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="40" cy="44" r="16" fill="var(--illu-sun)"/>
+  <path d="M0 66 Q40 58 80 64 T160 62 V100 H0Z" fill="var(--illu-sand)"/>
+  <path d="M0 80 Q20 76 36 80 M90 86 Q110 80 130 86" fill="none" stroke="var(--illu-ground)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M44 92 L46 62 M46 66 L36 56 M46 68 L58 56" fill="none" stroke="var(--illu-ink)" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="46" cy="54" rx="28" ry="6.5" fill="var(--illu-tree)"/>
+  <path d="M92 76 V92 M97 77 V92 M106 77 V92 M111 76 V92" stroke="var(--illu-sun)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M106 70 L118 36 L125 38 L114 72Z" fill="var(--illu-sun)"/>
+  <ellipse cx="101" cy="72" rx="14" ry="7.5" fill="var(--illu-sun)"/>
+  <ellipse cx="124" cy="34" rx="7" ry="3.6" fill="var(--illu-sun)" transform="rotate(12 124 34)"/>
+  <path d="M119 31 V26 M122 30 V25" stroke="var(--illu-ink)" stroke-width="1.6" stroke-linecap="round"/>
+  <g fill="var(--illu-accent)" fill-opacity=".55">
+  <circle cx="95" cy="70" r="2.2"/><circle cx="103" cy="68" r="2"/><circle cx="108" cy="74" r="2.2"/><circle cx="99" cy="75" r="1.8"/>
+  <circle cx="114" cy="62" r="1.8"/><circle cx="117" cy="52" r="1.7"/><circle cx="119" cy="44" r="1.5"/>
+  </g>
+  <circle cx="126" cy="33" r="1" fill="var(--illu-ink)"/>
+</svg>

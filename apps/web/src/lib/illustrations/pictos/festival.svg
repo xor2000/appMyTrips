@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <path d="M0 42 Q24 38 48 42 V48 H0Z" fill="var(--illu-ground)"/>
+  <rect x="9" y="22" width="30" height="20" fill="var(--illu-cream)"/>
+  <path d="M5 24 L24 9 L43 24Z" fill="var(--illu-accent)"/>
+  <path d="M24 9 L18 24 H22Z M24 9 L26 24 H30Z" fill="var(--illu-cream)"/>
+  <path d="M24 9 V3" stroke="var(--illu-ink)" stroke-width="1.4"/>
+  <path d="M24 3 L30 5 L24 7Z" fill="var(--illu-accent-2)"/>
+  <path d="M19 42 V33 Q24 27 29 33 V42Z" fill="var(--illu-ink)" fill-opacity=".35"/>
+  <g fill="var(--illu-accent-2)"><circle cx="6" cy="12" r="1.4"/><circle cx="42" cy="32" r="1.4"/></g>
+  <g fill="var(--illu-accent)"><circle cx="40" cy="12" r="1.4"/><circle cx="5" cy="34" r="1.4"/></g>
+</svg>

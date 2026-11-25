@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="30" cy="22" r="10" fill="var(--illu-sun)"/>
+  <ellipse cx="120" cy="20" rx="13" ry="4" fill="var(--illu-light)"/>
+  <path d="M0 68 Q36 46 70 62 T130 54 T160 60 V100 H0Z" fill="var(--illu-far)"/>
+  <path d="M0 76 Q80 66 160 76 V88 H0Z" fill="var(--illu-ground)"/>
+  <path d="M16 62 L24.1 80 H7.9Z" fill="var(--illu-tree)"/>
+  <rect y="86" width="160" height="14" fill="var(--illu-road)"/>
+  <path d="M6 93 H20 M38 93 H52 M70 93 H84 M102 93 H116 M134 93 H148" stroke="var(--illu-light)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M141 86 V60" stroke="var(--illu-ink)" stroke-width="2"/>
+  <rect x="131" y="50" width="20" height="11" rx="2" fill="var(--illu-accent)"/>
+  <path d="M136 55.5 H145 M142 52.5 L145 55.5 L142 58.5" fill="none" stroke="var(--illu-light)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M88 44 V50 M102 44 V50" stroke="var(--illu-ink)" stroke-width="2"/>
+  <rect x="82" y="40" width="26" height="7" rx="2.5" fill="var(--illu-accent)"/>
+  <path d="M46 70 Q46 64 52 63 L64 62 L76 52 Q78 50 82 50 H104 Q108 50 110 53 L117 62 L124 63 Q128 64 128 70 V76 Q128 80 124 80 H50 Q46 80 46 76Z" fill="var(--illu-accent-2)"/>
+  <path d="M80 54 H93 V62 H71Z" fill="var(--illu-glass)"/>
+  <path d="M97 54 H104 Q106 54 107 56 L112 62 H97Z" fill="var(--illu-glass)"/>
+  <rect x="123" y="66" width="5" height="4" rx="1" fill="var(--illu-sun)"/>
+  <circle cx="64" cy="80" r="7" fill="var(--illu-ink)"/><circle cx="64" cy="80" r="2.94" fill="var(--illu-light)"/>
+  <circle cx="110" cy="80" r="7" fill="var(--illu-ink)"/><circle cx="110" cy="80" r="2.94" fill="var(--illu-light)"/>
+</svg>

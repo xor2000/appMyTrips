@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="132" cy="22" r="10" fill="var(--illu-sun)"/>
+  <ellipse cx="30" cy="24" rx="14" ry="4.5" fill="var(--illu-light)"/>
+  <ellipse cx="96" cy="82" rx="18" ry="5" fill="var(--illu-light)"/>
+  <path d="M0 88 Q40 80 80 86 T160 84 V100 H0Z" fill="var(--illu-far)"/>
+  <path d="M4 58 H26 M10 52 H30" stroke="var(--illu-light)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M34 54 L28 34 H40 L54 50Z" fill="var(--illu-accent)"/>
+  <path d="M30 56 Q30 49 40 49 H112 Q128 49 136 56 Q128 63 112 63 H40 Q30 63 30 56Z" fill="var(--illu-cream)" stroke="var(--illu-ink)" stroke-opacity=".25" stroke-width="1"/>
+  <path d="M120 51 Q129 52 132 56 H120Z" fill="var(--illu-ink)" fill-opacity=".55"/>
+  <path d="M30 56 H136" stroke="var(--illu-accent-2)" stroke-width="1.6"/>
+  <path d="M70 59 L56 78 H68 L92 59Z" fill="var(--illu-accent-2)"/>
+  <path d="M64 53 L56 44 H64 L78 53Z" fill="var(--illu-accent-2)" fill-opacity=".7"/>
+  <g fill="var(--illu-glass)">
+  <circle cx="50" cy="53" r="1.6"/><circle cx="58" cy="53" r="1.6"/><circle cx="66" cy="53" r="1.6"/>
+  <circle cx="82" cy="53" r="1.6"/><circle cx="90" cy="53" r="1.6"/><circle cx="98" cy="53" r="1.6"/><circle cx="106" cy="53" r="1.6"/>
+  </g>
+</svg>

@@ -1,6 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import { makeCover } from '#lib/test/fixtures.ts';
 import TripFormDialog from './TripFormDialog.svelte';
 
 async function fill(name: string, start: string, end: string) {
@@ -60,35 +59,77 @@ describe('TripFormDialog', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Serveur indisponible');
   });
 
-  it('modification : changer la photo du voyage', async () => {
-    const current = makeCover({ author: 'Anne' });
-    const other = makeCover({
-      url: 'https://x/2.jpg',
-      thumbUrl: 'https://x/2-640.jpg',
-      author: 'Bruno',
+  it('modification : illustration suggérée par le nom tant qu’aucune n’est choisie', () => {
+    render(TripFormDialog, {
+      props: {
+        initial: { name: 'Randonnée GR20', startDate: '2026-07-10', endDate: '2026-07-12' },
+        illustration: null,
+        onSubmit: vi.fn(),
+        onClose: vi.fn(),
+      },
     });
-    const searchCovers = vi.fn().mockResolvedValue([other]);
+    const section = screen.getByRole('region', { name: 'Illustration du voyage' });
+    expect(section.querySelector('[data-illustration="randonnee"]')).not.toBeNull();
+    expect(section.textContent).toContain('Automatique : Randonnée');
+  });
+
+  it('modification : choisir une illustration l’envoie avec le voyage', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(TripFormDialog, {
       props: {
         initial: { name: 'Voyage test Alpes', startDate: '2026-07-10', endDate: '2026-07-12' },
-        cover: current,
-        searchCovers,
+        illustration: null,
         onSubmit,
         onClose: vi.fn(),
       },
     });
-    expect(screen.getByText(/Anne/)).toBeTruthy();
-    await fireEvent.click(screen.getByRole('button', { name: 'Changer la photo' }));
-    expect(searchCovers).toHaveBeenCalledWith('Alpes');
-    await fireEvent.click(await screen.findByRole('radio', { name: 'Photo 1 : Bruno' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Changer l’illustration' }));
+    const group = screen.getByRole('group', { name: 'Illustration' });
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(25);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Van' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(onSubmit).toHaveBeenCalledWith({
       name: 'Voyage test Alpes',
       startDate: '2026-07-10',
       endDate: '2026-07-12',
-      cover: other,
+      illustration: 'van',
     });
+  });
+
+  it('modification : « Automatique » retire l’illustration choisie', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(TripFormDialog, {
+      props: {
+        initial: { name: 'Alpes', startDate: '2026-07-10', endDate: '2026-07-12' },
+        illustration: 'van',
+        onSubmit,
+        onClose: vi.fn(),
+      },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Changer l’illustration' }));
+    expect((screen.getByRole('radio', { name: 'Van' }) as HTMLInputElement).checked).toBe(true);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Automatique' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ illustration: null });
+  });
+
+  it('modification sans changer l’illustration : elle n’est pas envoyée', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(TripFormDialog, {
+      props: {
+        initial: { name: 'Alpes', startDate: '2026-07-10', endDate: '2026-07-12' },
+        illustration: 'van',
+        onSubmit,
+        onClose: vi.fn(),
+      },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('illustration');
+  });
+
+  it('création : pas de choix d’illustration', () => {
+    render(TripFormDialog, { props: { onSubmit: vi.fn(), onClose: vi.fn() } });
+    expect(screen.queryByRole('region', { name: 'Illustration du voyage' })).toBeNull();
   });
 
   it('paramètres : « Supprimer le voyage » seulement quand la suppression est permise', async () => {

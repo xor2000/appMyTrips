@@ -1,13 +1,18 @@
 <script lang="ts">
-  import { legColorVar, LEG_COLOR_COUNT, type TripSummary } from '@mytrips/core';
+  import {
+    legColorVar,
+    LEG_COLOR_COUNT,
+    suggestIllustration,
+    type TripSummary,
+  } from '@mytrips/core';
   import Check from 'lucide-svelte/icons/check';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import Plus from 'lucide-svelte/icons/plus';
   import Settings from 'lucide-svelte/icons/settings';
   import { tick } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
   import { formatPeriod, todayIso } from '#lib/format.ts';
   import { groupTrips } from '#lib/home.ts';
+  import Illustration from '#lib/illustrations/Illustration.svelte';
 
   interface Props {
     trips: TripSummary[];
@@ -49,13 +54,9 @@
   let root: HTMLElement | undefined = $state();
   let trigger: HTMLButtonElement | undefined = $state();
   let list: HTMLElement | undefined = $state();
-  /** Vignettes qui n'ont pas pu être chargées (hors ligne, fichier retiré) : initiale à la place. */
-  const brokenThumbs = new SvelteSet<string>();
-
-  const thumbOf = (trip: TripSummary) => {
-    const url = trip.cover?.thumbUrl;
-    return url && !brokenThumbs.has(url) ? url : null;
-  };
+  /** Illustration choisie, sinon suggérée par le nom et les lieux ; null : initiale du voyage. */
+  const illustrationOf = (trip: TripSummary) =>
+    trip.illustration ?? suggestIllustration(trip.name, trip.places);
 
   /** Couleur de l'initiale, stable pour un voyage : une des couleurs des trajets du thème. */
   function tintOf(trip: TripSummary) {
@@ -153,21 +154,14 @@
 <svelte:window onpointerdown={onWindowPointerdown} />
 
 {#snippet thumb(trip: TripSummary | null, size: 'sm' | 'md')}
-  {@const url = trip ? thumbOf(trip) : null}
+  {@const illustration = trip ? illustrationOf(trip) : null}
   <span
     class="thumb {size}"
-    style={trip && !url ? `--tint: ${tintOf(trip)}` : undefined}
+    style={trip && !illustration ? `--tint: ${tintOf(trip)}` : undefined}
     aria-hidden="true"
   >
-    {#if url}
-      <img
-        src={url}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-        onerror={() => brokenThumbs.add(url)}
-      />
+    {#if illustration}
+      <Illustration id={illustration} variant="picto" decorative />
     {:else if trip}
       {initialOf(trip)}
     {/if}
@@ -335,7 +329,7 @@
     transform: rotate(180deg);
   }
 
-  /* Vignette : photo de couverture, sinon initiale sur une couleur du thème. */
+  /* Vignette : pictogramme de l'illustration, sinon initiale sur une couleur du thème. */
   .thumb {
     display: grid;
     flex: none;
@@ -359,12 +353,6 @@
     height: 44px;
     border-radius: 10px;
     font-size: 17px;
-  }
-
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
   }
 
   .panel {

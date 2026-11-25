@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="30" cy="22" r="9" fill="var(--illu-sun)"/>
+  <ellipse cx="132" cy="18" rx="12" ry="3.5" fill="var(--illu-light)"/>
+  <path d="M0 64 L24 46 L40 56 L62 38 L82 58 L104 42 L130 60 L160 48 V100 H0Z" fill="var(--illu-far)"/>
+  <path d="M90 86 L122 38 L154 86Z" fill="var(--illu-rock)"/>
+  <path d="M122 38 L154 86 H134Z" fill="var(--illu-ink)" fill-opacity=".14"/>
+  <path d="M122 38 L130 50 L126 48 L122 52 L118 48 L114 50Z" fill="var(--illu-light)"/>
+  <path d="M18 86 L70 18 L122 86Z" fill="var(--illu-rock)"/>
+  <path d="M70 18 L122 86 H86Z" fill="var(--illu-ink)" fill-opacity=".14"/>
+  <path d="M70 18 L82.2 34 L76 31 L70 36 L64 31 L57.8 34Z" fill="var(--illu-light)"/>
+  <path d="M0 80 Q50 72 90 80 T160 78 V100 H0Z" fill="var(--illu-ground)"/>
+  <path d="M14 64 L22 82 H6Z" fill="var(--illu-tree)"/>
+  <path d="M28 70 L34 84 H22Z" fill="var(--illu-tree)"/>
+  <path d="M138 66 L145 82 H131Z" fill="var(--illu-tree)"/>
+  <path d="M150 62 L158 80 H142Z" fill="var(--illu-tree)"/>
+</svg>

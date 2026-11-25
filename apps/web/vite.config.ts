@@ -99,8 +99,8 @@ export default defineConfig({
               },
             },
             {
-              // Vignettes Wikipédia (découverte de lieux) et photos de couverture des voyages
-              // (Commons sert ses vignettes depuis upload. ou thumb.wikimedia.org).
+              // Vignettes des résumés Wikipédia (découverte de lieux), servies depuis upload. ou
+              // thumb.wikimedia.org.
               urlPattern: /^https:\/\/(upload|thumb)\.wikimedia\.org\//,
               handler: 'CacheFirst',
               options: {

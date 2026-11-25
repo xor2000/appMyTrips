@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <path d="M0 42 Q24 38 48 42 V48 H0Z" fill="var(--illu-ground)"/>
+  <circle cx="12" cy="31" r="8.5" fill="none" stroke="var(--illu-rock)" stroke-width="2.6"/>
+  <circle cx="36" cy="31" r="8.5" fill="none" stroke="var(--illu-rock)" stroke-width="2.6"/>
+  <path d="M12 31 L19 19 H31 L36 31 M19 19 L24 31 L31 19 M12 31 H24" fill="none" stroke="var(--illu-accent)" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M15 15.5 H22" stroke="var(--illu-ink)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M19 19 L18.5 16" stroke="var(--illu-ink)" stroke-width="2"/>
+  <path d="M31 19 L32.5 13 H37" fill="none" stroke="var(--illu-ink)" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

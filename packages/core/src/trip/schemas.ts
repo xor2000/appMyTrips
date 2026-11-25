@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Stay, Step } from '../step/schemas';
 import type { Leg } from '../leg/schemas';
-import { TripCover } from '../cover/cover';
+import { IllustrationId } from '../illustration/illustration';
 import { toDayNumber } from './days';
 
 /** Durée maximale d'un voyage, en jours. */
@@ -81,8 +81,8 @@ export const TripPatch = z
     dayEnd: TimeOfDay,
     defaultTimezone: TimeZone,
     hikeSpeedKmh: HikeSpeed,
-    /** Photo de couverture (null : aucune). */
-    cover: TripCover.nullable(),
+    /** Illustration choisie (null : suggérée à l'affichage). */
+    illustration: IllustrationId.nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Aucune modification')
@@ -121,8 +121,8 @@ export interface Trip {
   dayEnd: string;
   defaultTimezone: string;
   hikeSpeedKmh: number;
-  /** Photo de couverture (Wikimedia Commons), ou null. */
-  cover: TripCover | null;
+  /** Illustration choisie, ou null (suggérée à l'affichage d'après le nom et les lieux). */
+  illustration: IllustrationId | null;
   version: number;
   createdAt: string;
   updatedAt: string;

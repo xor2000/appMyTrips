@@ -85,6 +85,24 @@
   --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
   --group-radius: var(--radius-xl);
 
+  /* Illustrations des voyages (lib/illustrations) : aplats du décor et des sujets. */
+  --illu-sky: #d6eef0;
+  --illu-sun: #f7c35c;
+  --illu-far: #a6d3cd;
+  --illu-ground: #84c79f;
+  --illu-tree: #3f9a62;
+  --illu-rock: #8fa7aa;
+  --illu-water: #63b5d3;
+  --illu-sand: #f2dcab;
+  --illu-road: #9aa7a9;
+  --illu-glass: #bfe3ef;
+  --illu-cream: #fff8ec;
+  --illu-accent: #ef7f5c;
+  --illu-accent-2: #0b8f94;
+  --illu-ink: #1f3a3e;
+  --illu-light: #ffffff;
+  --illu-skin: #f1c7a3;
+
   color-scheme: light;
 }
 
@@ -118,6 +136,23 @@
     --shadow-modal: 0 18px 50px rgb(0 0 0 / 60%);
     --leg-base: var(--surface);
     --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
+    /* Illustrations des voyages : décor assombri, sujets lumineux. */
+    --illu-sky: #1b3538;
+    --illu-sun: #f0b347;
+    --illu-far: #2c514f;
+    --illu-ground: #3c7d5a;
+    --illu-tree: #2a6446;
+    --illu-rock: #5b7578;
+    --illu-water: #2f7d99;
+    --illu-sand: #b89a66;
+    --illu-road: #3b4d50;
+    --illu-glass: #6fa9bb;
+    --illu-cream: #e9dfcc;
+    --illu-accent: #ff8f6b;
+    --illu-accent-2: #33c1c6;
+    --illu-ink: #08191b;
+    --illu-light: #e4efef;
+    --illu-skin: #d9ab86;
     color-scheme: dark;
   }
 }
@@ -151,5 +186,22 @@
   --shadow-modal: 0 18px 50px rgb(0 0 0 / 60%);
   --leg-base: var(--surface);
   --group-edge: color-mix(in srgb, var(--accent) 40%, var(--line));
+  /* Illustrations des voyages : décor assombri, sujets lumineux. */
+  --illu-sky: #1b3538;
+  --illu-sun: #f0b347;
+  --illu-far: #2c514f;
+  --illu-ground: #3c7d5a;
+  --illu-tree: #2a6446;
+  --illu-rock: #5b7578;
+  --illu-water: #2f7d99;
+  --illu-sand: #b89a66;
+  --illu-road: #3b4d50;
+  --illu-glass: #6fa9bb;
+  --illu-cream: #e9dfcc;
+  --illu-accent: #ff8f6b;
+  --illu-accent-2: #33c1c6;
+  --illu-ink: #08191b;
+  --illu-light: #e4efef;
+  --illu-skin: #d9ab86;
   color-scheme: dark;
 }
