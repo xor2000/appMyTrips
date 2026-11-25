@@ -5,81 +5,79 @@ description: Prépare avec l'utilisateur un plan d'implémentation pour une tâc
 
 # Plan
 
-Cette skill construit **avec l'utilisateur** un plan d'implémentation concret pour une tâche de ce projet, **sans rien implémenter**. Le plan validé est enregistré dans une issue GitHub, qui sert ensuite d'entrée à la skill `project-execute`.
+Cette skill construit **avec l'utilisateur** un plan d'implémentation concret, **sans rien implémenter**. Le plan validé est enregistré dans une issue GitHub, qui sert d'entrée à `project-execute`.
 
 Déroulé : **Entrée → Contexte → Analyse → Plan et doutes (itératif) → Validation → Issue GitHub → Proposer l'exécution**.
 
 ## Règle absolue : lecture seule
 
-Tant que la skill tourne, **ne rien modifier dans le dépôt** : ni code, ni test, ni documentation, ni fiche `docs/tasks/`, ni branche, ni commit, ni installation de dépendance. Seules écritures permises : sur GitHub, l'issue du plan (étape « Issue GitHub »), après accord de l'utilisateur.
+Tant que la skill tourne, **ne rien modifier dans le dépôt** : ni code, ni test, ni documentation, ni fiche `docs/tasks/`, ni branche, ni commit, ni dépendance. Seule écriture permise : sur GitHub, l'issue du plan (étape 6), après accord de l'utilisateur.
 
-Ne pas passer en mode plan (`EnterPlanMode` / `ExitPlanMode`) : la validation se fait par des questions à l'utilisateur, et la fin de la skill doit pouvoir écrire l'issue GitHub puis lancer `project-execute`.
+Ne pas passer en mode plan (`EnterPlanMode` / `ExitPlanMode`) : la validation se fait par des questions, et la fin de la skill doit pouvoir écrire l'issue puis lancer `project-execute`.
 
-## Choix du modèle selon le type de tâche
+## Modèles, effort et délégation
 
-Cette règle s'applique à toutes les étapes de la skill.
-
-- **Tâches de type script** : exécution de commandes sans réflexion de fond, comme les commandes `git` (`remote`, `status`, `log`, `branch`), les commandes PowerShell ou shell, et les opérations GitHub (outils MCP `github`, CLI `gh` : lecture des issues et commentaires, mise à jour ou création de l'issue avec un titre et un corps déjà rédigés et validés). L'agent **peut** les confier à un modèle plus bas, via un sous-agent (`Agent`) avec `model: "sonnet"` et `effort: "high"`, ou `model: "opus"` et `effort: "medium"`.
-  - Le brief du sous-agent donne les opérations exactes (commandes, valeurs, textes déjà rédigés) et le retour attendu (sortie brute, état vérifié), et rappelle la règle de lecture seule ci-dessus. Le sous-agent n'analyse pas et ne décide rien : sur un résultat inattendu (erreur, droit insuffisant, issue fermée), il s'arrête et le rapporte à l'agent principal, qui décide de la suite.
-  - Pour une commande unique et courte, l'exécuter directement reste possible : la délégation coûte un aller-retour.
-- **Toutes les autres tâches** : analyse de la demande et du code, conception, design, élaboration du plan, formulation des doutes et des options, rédaction du titre et du corps de l'issue. Elles se font **toujours avec Opus en effort high** : par l'agent principal, ou par un sous-agent lancé avec `model: "opus"` et `effort: "high"`, jamais avec un modèle plus bas.
-- Une skill ne peut pas changer le modèle de la session. Si la session ne tourne pas sur Opus (ou si son effort connu est inférieur à high), le signaler à l'utilisateur en une ligne dès le lancement et lui proposer de changer de modèle ou d'effort avant l'analyse.
+Appliquer **[`../project-execute/references/modeles.md`](../project-execute/references/modeles.md)** à toutes les étapes ; le lire au lancement s'il n'est pas déjà dans la conversation. Les codes entre crochets (ex. [E1]) renvoient à ses catégories de travail. Contrôler dès le lancement le modèle de la session, comme indiqué dans ce fichier. Tout brief de sous-agent rappelle la règle de lecture seule.
 
 ## 1. Entrée
 
-La skill reçoit l'une de ces entrées, dans ses arguments ou dans la demande de l'utilisateur :
+Dans les arguments ou la demande :
 
 - **une demande libre** (correction, fonctionnalité, évolution) ;
-- **un numéro d'issue** : `#12`, `12`, « issue 12 », « l'issue n°12 », « ticket 12 » ;
+- **un numéro d'issue** : `#12`, `12`, « issue 12 », « ticket 12 » ;
 - **un lien d'issue** : `https://github.com/<owner>/<repo>/issues/12`.
 
 Pour une issue :
 
-1. Identifier owner, repo et numéro : depuis l'URL pour un lien, sinon via `git remote get-url origin`. Si le lien désigne un autre dépôt que celui du projet, le signaler et demander confirmation.
-2. Lire l'issue et tous ses commentaires (`issue_read`). C'est la demande à planifier, avec les précisions apportées dans les commentaires. Noter aussi ses labels, son titre et un éventuel plan déjà présent (plan précédent à reprendre plutôt qu'à ignorer).
-3. Si l'issue est fermée, demander à l'utilisateur s'il faut continuer (et la rouvrir à la fin) ou s'arrêter.
-4. **Ne pas changer le statut de l'issue** : le passage à « In Progress » est fait par `project-execute` au moment de l'exécution, pas pendant la planification.
+1. Owner, repo et numéro : depuis l'URL pour un lien, sinon via `git remote get-url origin`. Autre dépôt que celui du projet : le signaler et demander confirmation.
+2. Lire l'issue et tous ses commentaires [G2] (`issue_read`) : c'est la demande à planifier. Noter ses labels, son titre et un éventuel plan déjà présent (à reprendre plutôt qu'à ignorer).
+3. Issue fermée : demander s'il faut continuer (et la rouvrir à la fin) ou s'arrêter.
+4. **Ne pas changer son statut** : le passage à « In Progress » est fait par `project-execute`.
 
-Si l'entrée est vide ou trop vague pour être analysée, demander à l'utilisateur de préciser avant d'aller plus loin.
+Entrée vide ou trop vague : demander de préciser avant d'aller plus loin.
 
-## 2. Contexte : tout ce que connaît `project-execute`
+## 2. Contexte
 
-Lire **[`.claude/skills/project-execute/SKILL.md`](../project-execute/SKILL.md)** avec l'outil de lecture, **sans invoquer la skill** : l'invoquer déclencherait ses actions (passage de l'issue en « In Progress », proposition de branche), qui n'ont pas lieu d'être pendant la planification.
+Ne pas lire ni invoquer `project-execute` : l'invoquer déclencherait ses actions (statut de l'issue, choix de branche). Charger directement le contexte du projet, par lectures ciblées :
 
-Appliquer ensuite ses lectures de contexte (section « Avant de commencer ») :
-
-- `docs/specification.md`, en particulier les limites connues, le reste à faire et les décisions d'architecture ;
-- les entrées récentes de `docs/tasks/` et celles qui touchent la zone concernée (recherche par mots-clés) ;
-- les conventions et pièges de `CLAUDE.md` pour les fichiers qui seront touchés ;
+- `docs/specification.md`, par sections : limites connues, reste à faire, décisions d'architecture, et les parties touchées par la demande ;
+- `docs/tasks/` : la ou les fiches les plus récentes, et les pièges connus de la zone concernée par mots-clés [E2] ;
+- `CLAUDE.md` : conventions et pièges des fichiers qui seront touchés ;
 - `README.md` et la configuration du projet (scripts, outillage de test, build).
 
-Le plan doit respecter **toutes les règles de `project-execute`**, pour pouvoir être exécuté tel quel : TDD (tests unitaires et e2e écrits d'abord, et décision sur l'outillage de test s'il manque), vérifications et build, revue finale, mises à jour de la documentation, fiche `docs/tasks/`.
+Le plan doit pouvoir être exécuté tel quel par `project-execute`, qui impose :
+
+- **TDD** : tests unitaires et e2e écrits et vus en échec avant le code ; si l'outillage manque, une décision sur sa mise en place ;
+- **vérifications** : suites unitaires et e2e complètes, build de production (typecheck, lint), vérification dans l'application réelle pour un changement visible ;
+- **revue finale** du diff (auto-revue puis revue indépendante par un sous-agent relecteur : bugs, régressions, conventions, sécurité, performance), avec correction des points relevés ;
+- **documentation** : fiche `docs/tasks/` toujours, `docs/specification.md`, `README.md` et `CLAUDE.md` si besoin ;
+- **périmètre strict**, compatibilité avec l'existant, pas de dépendance sans nécessité ; branche ou worktree choisi par l'utilisateur au moment de l'exécution.
 
 ## 3. Analyse
 
-Explorer le code concerné (lecture seule) pour que le plan repose sur l'existant réel et non sur des suppositions :
+Explorer le code concerné [E1] puis lire les extraits utiles [R1], pour que le plan repose sur l'existant réel :
 
 - fichiers, fonctions et composants concernés, et leurs appelants ;
-- fonctions et utilitaires existants à réutiliser ;
+- utilitaires existants à réutiliser ;
 - décisions déjà prises (spécification, `docs/tasks/`) qui contraignent l'approche ;
 - pour un bug : cause racine probable, et comment la reproduire dans un test ;
-- risques de régression : autres modes, écrans, formats ou données existantes, comportement en build de production ;
-- ce qui est hors périmètre.
+- risques de régression : autres modes, écrans, formats ou données, build de production ;
+- hors périmètre.
 
-Relever au passage tous les **points de doute** : comportement attendu pas clair, plusieurs approches possibles, compromis (simplicité, performance, compatibilité), dépendance à ajouter, outillage de test absent, impact sur la documentation ou le format existant.
+Relever au passage tous les **points de doute** : comportement attendu flou, plusieurs approches, compromis (simplicité, performance, compatibilité), dépendance à ajouter, outillage de test absent, impact sur la documentation ou les formats.
 
 ## 4. Plan et doutes (itératif)
 
-1. **Présenter un premier plan** (format ci-dessous) en indiquant clairement les points encore ouverts.
-2. **Lever chaque doute avec `AskUserQuestion`**, en proposant des solutions concrètes plutôt qu'une question ouverte :
-   - 2 à 4 options par question, la solution recommandée en premier avec « (Recommandé) » dans son libellé ;
-   - pour chaque option, sa conséquence sur le plan (effort, risque, compatibilité) dans la description ;
-   - regrouper les doutes indépendants dans un même appel (jusqu'à 4 questions) ;
-   - l'utilisateur peut toujours choisir « Other » pour **proposer une autre solution** ou **poser une question** : dans ce cas, répondre à sa question ou analyser sa solution (faisabilité, conséquences, en relisant le code si besoin), puis reposer la question si le point reste ouvert.
-3. **Mettre à jour le plan** avec chaque décision prise, et le représenter quand il a changé de façon notable.
-4. Recommencer tant qu'il reste des doutes qui changent réellement l'implémentation. Un choix qui a une réponse conventionnelle évidente n'a pas besoin de question : le trancher et l'indiquer dans le plan.
+1. **Présenter un premier plan** (format ci-dessous) avec les points encore ouverts.
+2. **Lever chaque doute avec `AskUserQuestion`**, par des solutions concrètes plutôt qu'une question ouverte :
+   - 2 à 4 options, la recommandée en premier avec « (Recommandé) » dans son libellé ;
+   - pour chaque option, sa conséquence (effort, risque, compatibilité) dans la description ;
+   - doutes indépendants groupés dans un même appel (jusqu'à 4 questions) ;
+   - réponse « Other » (autre solution ou question) : y répondre ou analyser la solution (faisabilité, conséquences, en relisant le code si besoin), puis reposer la question si le point reste ouvert.
+3. **Mettre à jour le plan** avec chaque décision ; ne le représenter que s'il a changé de façon notable.
+4. Recommencer tant qu'il reste des doutes qui changent l'implémentation. Un choix à réponse conventionnelle évidente : le trancher et l'indiquer dans le plan.
 
-L'utilisateur peut aussi, à tout moment, poser une question libre sur le plan ou demander un changement : y répondre, ajuster le plan, et reprendre là où on en était.
+L'utilisateur peut à tout moment poser une question ou demander un changement : répondre, ajuster, reprendre où on en était.
 
 ### Format du plan
 
@@ -109,7 +107,7 @@ Suites de tests, build, vérifications manuelles (formats d'écran, modes) prév
 Mises à jour prévues : `docs/specification.md`, `README.md`, `CLAUDE.md`, fiche `docs/tasks/`.
 
 ## Risques et points d'attention
-Régressions possibles, zones sensibles.
+Régressions possibles, zones sensibles ; points de sécurité (entrées externes, autorisations, données sensibles, dépendances) et de performance (boucles, rendu, chargement, mobile) à surveiller à la revue.
 
 ## Hors périmètre
 Ce qui ne sera pas fait dans cette tâche.
@@ -117,19 +115,21 @@ Ce qui ne sera pas fait dans cette tâche.
 
 ## 5. Validation
 
-Quand il ne reste plus de doute, présenter le **plan complet final**, puis demander la validation avec `AskUserQuestion` :
+Sans doute restant, présenter le **plan complet final**, puis demander la validation (`AskUserQuestion`) :
 
-- **Valider le plan** : passer à l'étape « Issue GitHub ».
-- **Modifier le plan** : l'utilisateur précise ce qu'il veut changer (via « Other » ou à la réponse suivante) ; ajuster et redemander la validation.
-- **Poser une question** : y répondre, puis redemander la validation.
+- **Valider le plan** : passer à l'étape 6.
+- **Modifier le plan** : l'utilisateur précise le changement (« Other » ou réponse suivante) ; ajuster et redemander.
+- **Poser une question** : y répondre, puis redemander.
 
-Ne passer à la suite qu'après une validation explicite.
+Ne continuer qu'après une validation explicite.
 
 ## 6. Issue GitHub
 
-### Si une issue était référencée : la reformuler et la compléter avec le plan
+Écritures en direct [G3] : le titre et le corps sont déjà rédigés.
 
-1. Préparer le **nouveau titre** (court et précis, reformulé si besoin) et le **nouveau corps** :
+### Si une issue était référencée : la reformuler et la compléter
+
+1. Préparer le **nouveau titre** (court, précis) et le **nouveau corps** [R5] :
 
    ```markdown
    ## Description
@@ -146,24 +146,24 @@ Ne passer à la suite qu'après une validation explicite.
    </details>
    ```
 
-   Garder toujours la description d'origine dans la section repliable : rien de ce qu'a écrit l'auteur ne doit être perdu.
-2. Montrer le titre et le corps à l'utilisateur et lui demander confirmation (`AskUserQuestion` : « Mettre à jour l'issue » / « Modifier le texte » / « Ne pas mettre à jour »).
-3. Après accord, mettre à jour l'issue via `issue_write` (titre et corps). Ne pas toucher à son statut, à son assignation ni à ses labels existants. Si elle avait été fermée et que l'utilisateur a demandé de continuer, la rouvrir.
-4. Relire l'issue (`issue_read`) pour vérifier la mise à jour, et le confirmer en une ligne avec le lien.
+   Toujours garder la description d'origine dans la section repliable : rien de ce qu'a écrit l'auteur ne doit être perdu.
+2. Montrer titre et corps, puis demander confirmation (`AskUserQuestion` : « Mettre à jour l'issue » / « Modifier le texte » / « Ne pas mettre à jour »).
+3. Après accord, `issue_write` (titre et corps). Ne toucher ni au statut, ni à l'assignation, ni aux labels. Si elle était fermée et que l'utilisateur a demandé de continuer, la rouvrir.
+4. Relire l'issue pour vérifier, et le confirmer en une ligne avec le lien.
 
 ### Si aucune issue n'était référencée : proposer de la créer
 
-1. Préparer un **titre** et un **corps** sur le même modèle (sections « Description » et « Plan », sans « Description d'origine »).
-2. Proposer la création avec `AskUserQuestion` : « Créer l'issue » / « Modifier le texte » / « Ne pas créer ».
-3. Après accord, créer l'issue via `issue_write` (dépôt de `git remote get-url origin`). Si le dépôt a déjà des labels de type (ex. `bug`, `enhancement`), appliquer celui qui correspond ; ne pas en créer de nouveaux.
-4. Donner à l'utilisateur le numéro et le lien de l'issue créée.
+1. Préparer un **titre** et un **corps** sur le même modèle (« Description » et « Plan », sans « Description d'origine »).
+2. Proposer la création (`AskUserQuestion` : « Créer l'issue » / « Modifier le texte » / « Ne pas créer »).
+3. Après accord, `issue_write` sur le dépôt de `git remote get-url origin`. Appliquer le label de type existant qui correspond (ex. `bug`, `enhancement`) ; ne pas en créer.
+4. Donner le numéro et le lien de l'issue créée.
 
-En cas d'échec d'écriture sur GitHub (droits, outil indisponible), le signaler avec la cause, sans prétendre que l'issue a été mise à jour ou créée, et donner le titre et le corps en texte pour que l'utilisateur puisse les coller lui-même.
+Échec d'écriture (droits, outil indisponible) : donner la cause sans prétendre que l'issue a été modifiée ou créée, et fournir le titre et le corps en texte à coller.
 
 ## 7. Proposer l'exécution
 
-Terminer en proposant avec `AskUserQuestion` de lancer l'implémentation :
+Terminer en proposant de lancer l'implémentation (`AskUserQuestion`) :
 
-- **Lancer `project-execute` avec l'issue `#NN`** (recommandé quand une issue porte le plan) : invoquer la skill `project-execute` (`Skill`, `skill: "project-execute"`, `args: "#NN"`). Elle passera l'issue en « In Progress » et suivra le plan qu'elle contient.
-- **Lancer `project-execute` sans issue** (si l'utilisateur n'a pas voulu d'issue) : invoquer `project-execute` en lui passant le plan validé, qui reste dans la conversation.
-- **Plus tard** : ne rien lancer. Rappeler que le plan est dans l'issue `#NN` (ou, sans issue, donner le plan complet dans la réponse pour qu'il ne soit pas perdu), et qu'il suffira de lancer `project-execute #NN`.
+- **Lancer `project-execute` avec l'issue `#NN`** (recommandé quand une issue porte le plan) : `Skill`, `skill: "project-execute"`, `args: "#NN"`. Elle passera l'issue en « In Progress » et suivra le plan ; le contexte déjà chargé ici ne sera pas relu.
+- **Lancer `project-execute` sans issue** (si l'utilisateur n'en a pas voulu) : l'invoquer avec le plan validé, qui reste dans la conversation.
+- **Plus tard** : ne rien lancer. Rappeler que le plan est dans l'issue `#NN` (sans issue, donner le plan complet pour qu'il ne soit pas perdu) et qu'il suffira de lancer `project-execute #NN`.

@@ -5,6 +5,10 @@ description: Crée une pull request GitHub pour la branche courante de ce projet
 
 # Pull request
 
+## Économie de tokens : rtk et caveman
+
+Si rtk ou caveman est actif dans la session, appliquer la section « Outils d'économie, si disponibles » de [`../project-execute/references/modeles.md`](../project-execute/references/modeles.md) (sans les sous-agents : voir les règles générales plus bas). Le titre et la description de la PR restent en phrases complètes.
+
 ## Garde-fou : branche courante (à vérifier en premier)
 
 Avant toute autre étape, vérifier la branche courante : `git branch --show-current`.
@@ -18,7 +22,7 @@ La branche cible d'une pull request dans ce dépôt est toujours **`main`** (`gh
 ## Étapes
 
 1. **État de la branche** (en parallèle) : `git status` (fichiers non trackés inclus, jamais `-uall`), `git diff` (indexé et non indexé), et l'historique divergé depuis `main` — `git log main..HEAD` + `git diff main...HEAD` — pour analyser **tous** les commits qui partiront dans la PR, pas seulement le dernier. Si des changements non commités existent encore, demander à l'utilisateur s'ils doivent être inclus avant de continuer (ne pas les committer d'office).
-2. **Vérifications avant publication** : lint, typecheck, tests unitaires et e2e des parties du projet touchées par la branche (voir `CLAUDE.md` / `README.md` et la skill `project-execute` pour le détail des commandes) — ne pas ouvrir de PR sur une régression connue ou un état non vérifié.
+2. **Vérifications avant publication** : lint, typecheck, tests unitaires et e2e des parties du projet touchées par la branche (commandes exactes : voir `CLAUDE.md`, `README.md`, `package.json` ou équivalent ; ne pas lire ni invoquer la skill `project-execute` pour les trouver) — ne pas ouvrir de PR sur une régression connue ou un état non vérifié.
 3. **Chercher un template de PR** : `pull_request_template.md` à la racine ou `.github/PULL_REQUEST_TEMPLATE/` — l'utiliser pour structurer la description s'il est présent ; sinon, repli sur le format Résumé (bullet points, le « pourquoi » plutôt que le « quoi ») + Plan de test (checklist markdown).
 4. **Issues liées** : repérer les issues GitHub traitées par la branche, dans cet ordre de sources :
    - la demande de l'utilisateur et la conversation (issue référencée lors de la skill `project-execute` ou `project-plan`) ;
