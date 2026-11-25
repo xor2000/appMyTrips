@@ -53,7 +53,6 @@
     searchPlaces,
     updateLeg,
     updateStay,
-    searchCovers,
     updateTrip,
     type MapView,
   } from '#lib/api.ts';
@@ -1534,9 +1533,8 @@
   {#if editing}
     <TripFormDialog
       initial={{ name: trip.name, startDate: trip.startDate, endDate: trip.endDate }}
-      cover={trip.cover}
-      searchCovers={online ? (query) => searchCovers(query) : undefined}
-      places={steps.filter((s) => s.kind === 'step' && s.dayId).map((s) => s.name)}
+      illustration={trip.illustration}
+      places={snapshot ? summaryFromSnapshot(snapshot).places : []}
       onSubmit={(values) => saveTrip(values)}
       onClose={() => (editing = false)}
       onDelete={isOwner

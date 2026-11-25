@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <rect y="35" width="48" height="13" fill="var(--illu-water)"/>
+  <path d="M24 5 V36" stroke="var(--illu-ink)" stroke-width="1.6"/>
+  <path d="M26 7 Q38 18 41 33 H26Z" fill="var(--illu-cream)" stroke="var(--illu-ink)" stroke-opacity=".25" stroke-width=".8"/>
+  <path d="M22 10 Q12 21 9 33 H22Z" fill="var(--illu-accent-2)"/>
+  <path d="M6 35 H43 L38 42 H11Z" fill="var(--illu-accent)"/>
+</svg>

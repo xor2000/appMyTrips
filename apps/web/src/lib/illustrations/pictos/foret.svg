@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <circle cx="40" cy="9" r="4" fill="var(--illu-sun)"/>
+  <path d="M0 40 Q24 36 48 40 V48 H0Z" fill="var(--illu-ground)"/>
+  <path d="M34 16 L42 40 H26Z" fill="var(--illu-far)"/>
+  <path d="M13 10 L23 42 H3Z" fill="var(--illu-tree)"/>
+  <path d="M29 18 L38 44 H20Z" fill="var(--illu-tree)"/>
+</svg>

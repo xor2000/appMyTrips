@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <rect y="38" width="48" height="10" fill="var(--illu-road)"/>
+  <g stroke="var(--illu-ink)" stroke-opacity=".3" stroke-width=".8">
+    <rect x="3" y="11" width="29" height="26" rx="2.5" fill="var(--illu-cream)"/>
+    <path d="M29 11 H38 Q42 11 42 15.5 Q42 20 38 20 H29Z" fill="var(--illu-cream)"/>
+    <path d="M29 20 H36 Q39 20 40.5 23 L44 29.5 Q45 31 45 33 V35 Q45 37 43 37 H29Z" fill="var(--illu-cream)"/>
+  </g>
+  <path d="M3.4 27 H42.4 L43.5 30 H3.4Z" fill="var(--illu-accent)"/>
+  <rect x="7" y="15" width="9" height="7" rx="1.2" fill="var(--illu-glass)"/>
+  <rect x="18.5" y="15" width="7" height="7" rx="1.2" fill="var(--illu-glass)"/>
+  <path d="M31 22.5 H35.5 Q37.5 22.5 38.5 24.5 L39.5 26 H31Z" fill="var(--illu-glass)"/>
+  <circle cx="12" cy="37" r="5" fill="var(--illu-ink)"/>
+  <circle cx="12" cy="37" r="2" fill="var(--illu-light)"/>
+  <circle cx="37" cy="37" r="5" fill="var(--illu-ink)"/>
+  <circle cx="37" cy="37" r="2" fill="var(--illu-light)"/>
+</svg>

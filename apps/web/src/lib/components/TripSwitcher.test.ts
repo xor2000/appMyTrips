@@ -4,13 +4,6 @@ import { makeTripSummary } from '#lib/test/fixtures.ts';
 import TripSwitcher from './TripSwitcher.svelte';
 
 const today = '2026-11-17';
-const cover = {
-  url: 'https://upload.wikimedia.org/1280px-alpes.jpg',
-  thumbUrl: 'https://upload.wikimedia.org/500px-alpes.jpg',
-  author: 'Auteur',
-  license: 'CC BY-SA 4.0',
-  sourceUrl: 'https://commons.wikimedia.org/wiki/File:Alpes.jpg',
-};
 const trips = [
   makeTripSummary({ id: 'p', name: 'Lisbonne', startDate: '2026-03-01', endDate: '2026-03-05' }),
   makeTripSummary({
@@ -18,7 +11,7 @@ const trips = [
     name: 'Alpes',
     startDate: '2027-02-20',
     endDate: '2027-02-24',
-    cover,
+    illustration: 'van',
   }),
   makeTripSummary({ id: 'c', name: 'Marseille', startDate: '2026-11-15', endDate: '2026-11-18' }),
 ];
@@ -39,28 +32,27 @@ function setup(props: Partial<Parameters<typeof render<typeof TripSwitcher>>[1]>
 }
 
 describe('TripSwitcher', () => {
-  it('montre le voyage ouvert avec la vignette de sa photo, liste fermée', () => {
+  it('montre le voyage ouvert avec le pictogramme de son illustration, liste fermée', () => {
     setup();
     const box = combobox();
     expect(box.textContent).toContain('Alpes');
     expect(box.getAttribute('aria-expanded')).toBe('false');
-    expect(box.querySelector('img')?.getAttribute('src')).toBe(cover.thumbUrl);
+    // L'illustration choisie (van) passe avant la suggestion tirée du nom (montagne).
+    expect(box.querySelector('[data-illustration="van"] svg')).not.toBeNull();
+    expect(box.querySelector('img')).toBeNull();
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
-  it('sans photo : initiale du voyage à la place de la vignette', () => {
+  it('sans illustration choisie : celle suggérée par le nom du voyage', () => {
     setup({ currentId: 'p' });
-    const box = combobox();
-    expect(box.querySelector('img')).toBeNull();
-    expect(box.querySelector('.thumb')?.textContent?.trim()).toBe('L');
+    expect(combobox().querySelector('[data-illustration="ville"]')).not.toBeNull();
   });
 
-  it('photo introuvable (hors ligne) : retour à l’initiale', async () => {
-    setup();
-    const img = combobox().querySelector('img')!;
-    await fireEvent.error(img);
-    expect(combobox().querySelector('img')).toBeNull();
-    expect(combobox().querySelector('.thumb')?.textContent?.trim()).toBe('A');
+  it('sans illustration ni suggestion : initiale du voyage', () => {
+    setup({ currentId: 'c' });
+    const box = combobox();
+    expect(box.querySelector('[data-illustration]')).toBeNull();
+    expect(box.querySelector('.thumb')?.textContent?.trim()).toBe('M');
   });
 
   it('ouverte : voyages à venir puis souvenirs, avec vignettes, dates et voyage coché', async () => {
@@ -74,7 +66,7 @@ describe('TripSwitcher', () => {
 
     const alpes = screen.getByRole('option', { name: 'Alpes' });
     expect(alpes.getAttribute('aria-selected')).toBe('true');
-    expect(alpes.querySelector('img')?.getAttribute('src')).toBe(cover.thumbUrl);
+    expect(alpes.querySelector('[data-illustration="van"]')).not.toBeNull();
     expect(alpes.textContent).toContain('20 – 24 février 2027');
     expect(screen.getByRole('option', { name: 'Marseille' }).getAttribute('aria-selected')).toBe(
       'false',

@@ -1,4 +1,4 @@
-import type { TripSnapshot, TripSummary } from '@mytrips/core';
+import { parseIllustration, type TripSnapshot, type TripSummary } from '@mytrips/core';
 import { tripPhase } from '#lib/format.ts';
 
 /** Voyages classés : le prochain (ou en cours), les autres à venir, les souvenirs. */
@@ -28,13 +28,15 @@ export function groupTrips(trips: TripSummary[], today: string): TripGroups {
 }
 
 /**
- * Ligne de liste complète : une copie hors ligne enregistrée avant l'ajout des photos et des
- * chiffres n'a pas ces champs.
+ * Ligne de liste complète : une copie hors ligne enregistrée avant l'ajout des illustrations et des
+ * chiffres n'a pas ces champs, et peut encore porter une ancienne photo (`cover`), oubliée.
  */
 export function normalizeTripSummary(trip: TripSummary): TripSummary {
+  const copy: TripSummary & { cover?: unknown } = { ...trip };
+  delete copy.cover;
   return {
-    ...trip,
-    cover: trip.cover ?? null,
+    ...copy,
+    illustration: parseIllustration(trip.illustration),
     stepCount: trip.stepCount ?? 0,
     distanceM: trip.distanceM ?? 0,
     places: trip.places ?? [],

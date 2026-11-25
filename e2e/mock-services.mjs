@@ -1,7 +1,6 @@
-// Services externes factices pour les e2e (Photon, Overpass, OSRM, Transitous,
-// Wikimedia Commons) :
-// réponses déterministes, sans
-// dépendre des services réels. Ils sont appelés par le Worker, pas par le navigateur.
+// Services externes factices pour les e2e (Photon, Overpass, OSRM, Transitous) :
+// réponses déterministes, sans dépendre des services réels. Ils sont appelés par le Worker, pas
+// par le navigateur.
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.MOCK_SERVICES_PORT ?? 8798);
@@ -212,38 +211,6 @@ createServer(async (req, res) => {
     const found = PLACES.map((p, i) => [p, i]).filter(([p]) => norm(p.name).includes(q));
     return res.end(
       JSON.stringify({ type: 'FeatureCollection', features: found.map(([p, i]) => feature(p, i)) }),
-    );
-  }
-  // Wikimedia Commons : trois photos en paysage, servies ensuite par ce même serveur.
-  if (url.pathname === '/commons/w/api.php') {
-    const pages = [1, 2, 3].map((i) => ({
-      index: i,
-      title: `File:Photo factice ${i}.jpg`,
-      imageinfo: [
-        {
-          url: `http://localhost:${PORT}/commons-img/${i}.jpg`,
-          thumburl: `http://localhost:${PORT}/commons-img/${i}.jpg/1280px-${i}.jpg`,
-          descriptionurl: `http://localhost:${PORT}/commons-file/${i}`,
-          width: 4000,
-          height: 2600,
-          mime: 'image/jpeg',
-          extmetadata: {
-            Artist: { value: 'Photographe factice' },
-            LicenseShortName: { value: 'CC BY-SA 4.0' },
-          },
-        },
-      ],
-    }));
-    return res.end(JSON.stringify({ query: { pages } }));
-  }
-  if (url.pathname.startsWith('/commons-img/')) {
-    // Image PNG de 1 × 1 pixel.
-    res.setHeader('content-type', 'image/png');
-    return res.end(
-      Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        'base64',
-      ),
     );
   }
   if (url.pathname === '/reverse') {

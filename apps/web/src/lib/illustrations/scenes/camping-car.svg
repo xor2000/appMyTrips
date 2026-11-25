@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="30" cy="22" r="9" fill="var(--illu-sun)"/>
+  <path d="M0 64 L28 40 L50 56 L80 30 L110 54 L134 38 L160 56 V100 H0Z" fill="var(--illu-far)"/>
+  <path d="M80 30 L88 37 L84 36 L80 39 L76 36 L72 37Z" fill="var(--illu-light)"/>
+  <path d="M0 76 Q80 66 160 76 V88 H0Z" fill="var(--illu-ground)"/>
+  <path d="M146 58 L154 76 H138Z" fill="var(--illu-tree)"/>
+  <path d="M14 60 L21 76 H7Z" fill="var(--illu-tree)"/>
+  <rect y="86" width="160" height="14" fill="var(--illu-road)"/>
+  <path d="M6 93 H20 M38 93 H52 M70 93 H84 M102 93 H116 M134 93 H148" stroke="var(--illu-light)" stroke-width="2" stroke-linecap="round"/>
+  <g stroke="var(--illu-ink)" stroke-opacity=".3" stroke-width="1">
+    <rect x="36" y="36" width="68" height="46" rx="4" fill="var(--illu-cream)"/>
+    <path d="M100 36 H114 Q122 36 122 43 Q122 50 114 50 H100Z" fill="var(--illu-cream)"/>
+    <path d="M100 50 H112 Q118 50 121 56 L127 68 Q128 70 128 73 V78 Q128 82 124 82 H100Z" fill="var(--illu-cream)"/>
+  </g>
+  <path d="M36.5 63 H124.5 L127 68 H36.5Z" fill="var(--illu-accent)"/>
+  <path d="M36.5 70 H128 V72.5 H36.5Z" fill="var(--illu-accent-2)"/>
+  <rect x="44" y="42" width="18" height="11" rx="2" fill="var(--illu-glass)"/>
+  <rect x="66" y="42" width="12" height="11" rx="2" fill="var(--illu-glass)"/>
+  <rect x="86" y="44" width="10" height="17" rx="1.5" fill="var(--illu-ink)" fill-opacity=".12"/>
+  <rect x="104" y="40" width="12" height="5" rx="2" fill="var(--illu-glass)"/>
+  <path d="M104 53 H111 Q115 53 117 57 L120 62 H104Z" fill="var(--illu-glass)"/>
+  <circle cx="56" cy="82" r="7" fill="var(--illu-ink)"/>
+  <circle cx="56" cy="82" r="3" fill="var(--illu-light)"/>
+  <circle cx="112" cy="82" r="7" fill="var(--illu-ink)"/>
+  <circle cx="112" cy="82" r="3" fill="var(--illu-light)"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <circle cx="39" cy="9" r="4" fill="var(--illu-sun)"/>
+  <path d="M0 41 Q24 37 48 41 V48 H0Z" fill="var(--illu-ground)"/>
+  <path d="M41 26 L46 40 H36Z" fill="var(--illu-tree)"/>
+  <path d="M4 42 L22 11 L40 42Z" fill="var(--illu-accent)"/>
+  <path d="M22 11 L40 42 H31Z" fill="var(--illu-ink)" fill-opacity=".14"/>
+  <path d="M22 22 L28.5 42 H15.5Z" fill="var(--illu-ink)" fill-opacity=".35"/>
+</svg>

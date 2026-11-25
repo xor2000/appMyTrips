@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="34" cy="24" r="11" fill="var(--illu-sun)"/>
+  <ellipse cx="116" cy="20" rx="13" ry="4" fill="var(--illu-light)"/>
+  <ellipse cx="138" cy="28" rx="9" ry="3" fill="var(--illu-light)"/>
+  <rect y="52" width="160" height="24" fill="var(--illu-water)"/>
+  <path d="M10 60 q4 -3 8 0 t8 0 M66 64 q4 -3 8 0 t8 0 M104 58 q4 -3 8 0 t8 0" fill="none" stroke="var(--illu-light)" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M134 50 V35 L145 50Z" fill="var(--illu-light)"/>
+  <path d="M127 50 H147 L143 55 H131Z" fill="var(--illu-accent-2)"/>
+  <path d="M0 72 Q80 62 160 74 V100 H0Z" fill="var(--illu-sand)"/>
+  <path d="M68 42 L76 92" stroke="var(--illu-ink)" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M40 54 Q60 18 98 38Z" fill="var(--illu-accent)"/>
+  <path d="M60 49 Q66 28 78 44Z" fill="var(--illu-light)"/>
+  <path d="M90 84 L120 81 L121 92 L91 95Z" fill="var(--illu-accent-2)"/>
+  <path d="M98 83.2 L99 94.2 M106 82.4 L107 93.4" stroke="var(--illu-light)" stroke-width="1.6"/>
+  <circle cx="46" cy="88" r="5" fill="var(--illu-light)"/>
+  <path d="M41 88 H51" stroke="var(--illu-accent)" stroke-width="2"/>
+  <path d="M138 88 l4 -4 l4 4 l-4 4Z" fill="var(--illu-accent)"/>
+</svg>

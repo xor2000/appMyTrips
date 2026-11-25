@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <rect x="3" y="20" width="13" height="24" fill="var(--illu-accent-2)"/>
+  <rect x="17" y="10" width="14" height="34" fill="var(--illu-accent)"/>
+  <path d="M17 10 L24 3 L31 10Z" fill="var(--illu-accent)"/>
+  <rect x="32" y="17" width="13" height="27" fill="var(--illu-sand)"/>
+  <g fill="var(--illu-light)">
+    <rect x="6" y="24" width="3" height="3.5"/><rect x="10.5" y="24" width="3" height="3.5"/>
+    <rect x="6" y="31" width="3" height="3.5"/><rect x="10.5" y="31" width="3" height="3.5"/>
+    <rect x="20" y="14" width="3" height="3.5"/><rect x="25" y="14" width="3" height="3.5"/>
+    <rect x="20" y="21" width="3" height="3.5"/><rect x="25" y="21" width="3" height="3.5"/>
+    <rect x="20" y="28" width="3" height="3.5"/><rect x="25" y="28" width="3" height="3.5"/>
+    <rect x="35" y="21" width="3" height="3.5"/><rect x="39.5" y="21" width="3" height="3.5"/>
+    <rect x="35" y="28" width="3" height="3.5"/><rect x="39.5" y="28" width="3" height="3.5"/>
+  </g>
+  <rect y="44" width="48" height="4" fill="var(--illu-road)"/>
+</svg>

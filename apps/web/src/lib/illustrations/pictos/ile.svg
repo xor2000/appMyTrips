@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" fill="var(--illu-sky)"/>
+  <circle cx="39" cy="9" r="4.5" fill="var(--illu-sun)"/>
+  <rect y="32" width="48" height="16" fill="var(--illu-water)"/>
+  <ellipse cx="22" cy="37" rx="18" ry="5" fill="var(--illu-sand)"/>
+  <path d="M24 36 Q25 24 20 14" fill="none" stroke="var(--illu-rock)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M20 14 Q10 10 4 17 Q12 14 20 16Z" fill="var(--illu-tree)"/>
+  <path d="M20 14 Q28 8 37 13 Q28 13 20.5 16.5Z" fill="var(--illu-tree)"/>
+  <path d="M20 14 Q16 5 9 6 Q16 9 19.5 16Z" fill="var(--illu-tree)"/>
+  <path d="M20 14 Q31 17 32 25 Q26 18 20 16.5Z" fill="var(--illu-tree)"/>
+</svg>

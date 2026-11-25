@@ -76,5 +76,23 @@
   --group-edge: var(--line);
   --group-radius: 14px;
 
+  /* Illustrations des voyages (lib/illustrations) : aplats plus doux que le pastel. */
+  --illu-sky: #e4eff0;
+  --illu-sun: #f2c063;
+  --illu-far: #b9d4cf;
+  --illu-ground: #97c7a8;
+  --illu-tree: #4a9466;
+  --illu-rock: #9aabad;
+  --illu-water: #78b6cd;
+  --illu-sand: #eedfba;
+  --illu-road: #a3adaf;
+  --illu-glass: #cbe5ee;
+  --illu-cream: #fffaf1;
+  --illu-accent: #e2805f;
+  --illu-accent-2: #0b8f94;
+  --illu-ink: #17262a;
+  --illu-light: #ffffff;
+  --illu-skin: #efc8a6;
+
   color-scheme: light;
 }

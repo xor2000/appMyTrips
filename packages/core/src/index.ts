@@ -2,7 +2,7 @@ export * from './common';
 
 export * from './trip/days';
 export * from './trip/schemas';
-export * from './cover/cover';
+export * from './illustration/illustration';
 export * from './step/order';
 export * from './step/schemas';
 export * from './step/timeline';

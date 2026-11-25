@@ -19,7 +19,6 @@ import type {
   TripSnapshot,
   TripSummary,
   WikiSummary,
-  TripCover,
 } from '@mytrips/core';
 
 import type { z } from 'zod';
@@ -414,12 +413,6 @@ export async function poiWiki(ref: string, fetcher: Fetcher = fetch): Promise<Wi
   const params = new URLSearchParams({ ref });
   return (await request<{ summary: WikiSummary | null }>(fetcher, `/api/poi/wiki?${params}`))
     .summary;
-}
-
-/** Photos de couverture proposées par Wikimedia Commons pour ces mots-clés. */
-export async function searchCovers(query: string, fetcher: Fetcher = fetch): Promise<TripCover[]> {
-  const params = new URLSearchParams({ q: query });
-  return (await request<{ covers: TripCover[] }>(fetcher, `/api/covers?${params}`)).covers;
 }
 
 /** Crée (ou remplace) le trajet d'une paire d'étapes consécutives. */

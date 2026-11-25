@@ -1,6 +1,5 @@
 import {
-  TripCover,
-  fixCoverThumb,
+  parseIllustration,
   type Day,
   type Member,
   type Role,
@@ -22,7 +21,7 @@ interface TripRow {
   day_end: string;
   default_timezone: string;
   hike_speed_kmh: number;
-  cover: string | null;
+  illustration: string | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -47,25 +46,11 @@ function toTrip(r: TripRow): Trip {
     dayEnd: r.day_end,
     defaultTimezone: r.default_timezone,
     hikeSpeedKmh: r.hike_speed_kmh,
-    cover: parseCover(r.cover),
+    illustration: parseIllustration(r.illustration),
     version: r.version,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
-}
-
-/** Photo enregistrée (JSON) ; null si absente ou illisible. */
-function parseCover(raw: string | null): TripCover | null {
-  if (!raw) return null;
-  try {
-    const parsed = TripCover.safeParse(JSON.parse(raw));
-    // Vignette 640 px enregistrée avant le passage aux largeurs standard de Wikimedia.
-    return parsed.success
-      ? { ...parsed.data, thumbUrl: fixCoverThumb(parsed.data.thumbUrl) }
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function toDay(r: DayRow): Day {

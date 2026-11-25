@@ -24,7 +24,6 @@ import { registerBatchRoute } from './batch';
 import { registerInvitationRoutes } from './invitations';
 import { dayBoundsOk, invalidDayBoundsBody, planDayUpdate } from './plans';
 import { registerStepRoutes } from './steps';
-import { coverIsAllowed } from './covers';
 
 function invalidDayBounds(c: Context) {
   return c.json(invalidDayBoundsBody, 400);
@@ -100,9 +99,6 @@ trips.patch('/:id', access('write'), async (c) => {
   if (current.version !== expected) return versionConflict(c, id);
 
   const p = body.data;
-  if (p.cover && !coverIsAllowed(p.cover, c.env.COMMONS_URL)) {
-    return c.json({ error: 'invalid_cover' }, 400);
-  }
   if (!dayBoundsOk(p.dayStart ?? current.dayStart, p.dayEnd ?? current.dayEnd)) {
     return invalidDayBounds(c);
   }
@@ -114,12 +110,9 @@ trips.patch('/:id', access('write'), async (c) => {
     dayEnd: 'day_end',
     defaultTimezone: 'default_timezone',
     hikeSpeedKmh: 'hike_speed_kmh',
-    cover: 'cover',
+    illustration: 'illustration',
   };
-  // La photo est stockée en JSON (null l'efface).
-  const entries = (Object.keys(p) as (keyof typeof p)[]).map(
-    (k) => [columns[k], k === 'cover' ? (p.cover ? JSON.stringify(p.cover) : null) : p[k]] as const,
-  );
+  const entries = (Object.keys(p) as (keyof typeof p)[]).map((k) => [columns[k], p[k]] as const);
   const tripSet = {
     sql: entries.map(([col]) => `${col} = ?`).join(', '),
     values: entries.map(([, v]) => v),

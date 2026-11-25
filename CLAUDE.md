@@ -183,5 +183,10 @@ true })`, `getByTitle('Rose')` pour une pastille) : un clic direct sur le bouton
 - **`.dev.vars` et tests** : `@cloudflare/vitest-plugin` charge `apps/api/.dev.vars`. Un test ne doit
   jamais dépendre de ce fichier local : fixer explicitement les bindings concernés
   (ex. `AUTH_SECRET` et `ADMIN_EMAILS` dans `vitest.config.ts`).
+- **Illustrations des voyages** (`apps/web/src/lib/illustrations/`) : SVG dessinés pour le projet,
+  couleurs uniquement `var(--illu-*)` (définies dans chaque fichier de thème), sans attribut `id`.
+  Un nouveau thème demande son identifiant dans `core/illustration` et ses deux fichiers (`scenes/`
+  160 × 100, `pictos/` 48 × 48) ; `illustrations.test.ts` le vérifie. En test, Vitest ne charge pas
+  le CSS (`?raw` vide) : lire les fichiers de thème avec `readFileSync`.
 - **Versions** : TypeScript reste en 6.x (`typescript-eslint` n'accepte pas TS 7), Vitest en 4.x
   (exigé par le plugin Cloudflare).

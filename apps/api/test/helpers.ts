@@ -34,6 +34,16 @@ export type Caller = <T = any>(
  * Appelant de l'API (vraie base D1 du runtime de test). `outboundFetch` remplace le fetch utilisé
  * pour les services externes (géocodage…) ; `bindings` complète ou remplace les bindings.
  */
+/** Corps JSON, ou texte brut (route inconnue : « 404 Not Found » de Hono). */
+function parseBody(text: string) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 export function makeCaller(
   outboundFetch?: typeof fetch,
   bindings: Partial<typeof env> = {},
@@ -56,7 +66,7 @@ export function makeCaller(
       { ...env, ...bindings },
     );
     const text = await res.text();
-    return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers };
+    return { status: res.status, body: parseBody(text), headers: res.headers };
   };
 }
 

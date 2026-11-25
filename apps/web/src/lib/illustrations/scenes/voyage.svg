@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100">
+  <rect width="160" height="100" fill="var(--illu-sky)"/>
+  <circle cx="32" cy="22" r="9" fill="var(--illu-sun)"/>
+  <path d="M98 30 Q114 18 132 26 Q140 30 150 24" fill="none" stroke="var(--illu-light)" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round"/>
+  <path d="M150 24 L158 18 L156 26 L150 28Z" fill="var(--illu-accent-2)"/>
+  <path d="M0 70 Q40 56 80 66 T160 62 V100 H0Z" fill="var(--illu-far)"/>
+  <path d="M0 82 Q80 74 160 82 V100 H0Z" fill="var(--illu-ground)"/>
+  <path d="M66 40 V30 H90 V40" fill="none" stroke="var(--illu-ink)" stroke-width="3.6" stroke-linejoin="round"/>
+  <rect x="52" y="38" width="52" height="46" rx="7" fill="var(--illu-accent)"/>
+  <rect x="62" y="38" width="5" height="46" fill="var(--illu-cream)"/>
+  <rect x="89" y="38" width="5" height="46" fill="var(--illu-cream)"/>
+  <circle cx="78" cy="54" r="6" fill="var(--illu-accent-2)"/>
+  <rect x="72" y="66" width="12" height="8" rx="2" fill="var(--illu-sun)"/>
+  <circle cx="62" cy="88" r="3" fill="var(--illu-ink)"/><circle cx="94" cy="88" r="3" fill="var(--illu-ink)"/>
+  <path d="M132 88 C126 80 122 75 122 70 A10 10 0 0 1 142 70 C142 75 138 80 132 88Z" fill="var(--illu-accent-2)"/>
+  <circle cx="132" cy="70" r="4" fill="var(--illu-light)"/>
+</svg>

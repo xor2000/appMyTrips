@@ -59,7 +59,7 @@ export default defineConfig({
         // point de dépasser les délais d'attente des tests.
         `node -e "require('node:fs').rmSync('apps/api/.wrangler/e2e', { recursive: true, force: true })"`,
         'pnpm --filter @mytrips/api exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e',
-        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var AUTH_SECRET:secret-e2e --var ADMIN_EMAILS:admin@example.test --var PHOTON_URL:http://localhost:${MOCK_PORT} --var OVERPASS_URLS:http://localhost:${MOCK_PORT}/overpass/api/interpreter --var OSRM_URL:http://localhost:${MOCK_PORT}/osrm --var TRANSITOUS_URL:http://localhost:${MOCK_PORT}/transitous --var COMMONS_URL:http://localhost:${MOCK_PORT}/commons`,
+        `pnpm --filter @mytrips/api exec wrangler dev --port ${PORT} --persist-to .wrangler/e2e --var AUTH_SECRET:secret-e2e --var ADMIN_EMAILS:admin@example.test --var PHOTON_URL:http://localhost:${MOCK_PORT} --var OVERPASS_URLS:http://localhost:${MOCK_PORT}/overpass/api/interpreter --var OSRM_URL:http://localhost:${MOCK_PORT}/osrm --var TRANSITOUS_URL:http://localhost:${MOCK_PORT}/transitous`,
       ].join(' && '),
       url: `http://localhost:${PORT}/api/health`,
       reuseExistingServer: !process.env.CI,

@@ -51,17 +51,31 @@ describe('groupTrips', () => {
 });
 
 describe('normalizeTripSummary', () => {
-  it('complète une copie hors ligne enregistrée avant les photos et les chiffres', () => {
-    const old = { ...makeTripSummary() } as Partial<ReturnType<typeof makeTripSummary>>;
-    delete old.cover;
+  it('complète une copie hors ligne enregistrée avant les illustrations et les chiffres', () => {
+    const old = {
+      ...makeTripSummary(),
+      // Ancienne photo Wikimedia Commons, oubliée.
+      cover: { url: 'https://upload.wikimedia.org/x.jpg' },
+    } as Partial<ReturnType<typeof makeTripSummary>> & { cover?: unknown };
+    delete old.illustration;
     delete old.stepCount;
     delete old.distanceM;
     delete old.places;
     const t = normalizeTripSummary(old as ReturnType<typeof makeTripSummary>);
-    expect(t.cover).toBeNull();
+    expect(t.illustration).toBeNull();
+    expect(t).not.toHaveProperty('cover');
     expect(t.stepCount).toBe(0);
     expect(t.distanceM).toBe(0);
     expect(t.places).toEqual([]);
+  });
+
+  it('lit comme null une illustration inconnue (retirée de la liste)', () => {
+    const t = normalizeTripSummary({
+      ...makeTripSummary(),
+      illustration: 'licorne' as never,
+    });
+    expect(t.illustration).toBeNull();
+    expect(normalizeTripSummary(makeTripSummary({ illustration: 'van' })).illustration).toBe('van');
   });
 });
 

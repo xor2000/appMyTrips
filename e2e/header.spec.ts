@@ -94,7 +94,8 @@ test('changer de voyage depuis la liste déroulante de l’en-tête', async ({ p
   const firstUrl = page.url();
   await createTrip(page, second);
 
-  // Liste personnalisée : vignette (initiale sans photo), nom et dates ; voyage ouvert coché.
+  // Liste personnalisée : vignette (initiale : nom sans illustration suggérée), nom et dates ;
+  // voyage ouvert coché.
   await tripSelect(page).click();
   const list = tripList(page);
   await expect(list).toBeVisible();
@@ -102,6 +103,7 @@ test('changer de voyage depuis la liste déroulante de l’en-tête', async ({ p
   await expect(current).toHaveAttribute('aria-selected', 'true');
   await expect(current).toContainText('10 – 12 juillet 2026');
   await expect(current.locator('.thumb')).toBeVisible();
+  await expect(current.locator('.thumb [data-illustration]')).toHaveCount(0);
   // La liste s'ouvre sous le bouton, par-dessus la page.
   const boxTop = (await tripSelect(page).boundingBox())!;
   expect((await list.boundingBox())!.y).toBeGreaterThanOrEqual(boxTop.y + boxTop.height - 1);

@@ -58,26 +58,37 @@ test('sans voyage : invitation à créer le premier', async ({ browser }) => {
   await context.close();
 });
 
-test('photo de couverture changée depuis les paramètres du voyage', async ({ page }) => {
+test('illustration choisie depuis les paramètres du voyage', async ({ page }) => {
   const name = uniqueName('Escapade Alpes');
   await createTrip(page, name);
   await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier le voyage' });
-  await dialog.getByRole('button', { name: 'Changer la photo' }).click();
-  await dialog.getByRole('radio', { name: 'Photo 2 : Photographe factice' }).check();
+  // Sans choix, l'illustration est suggérée par le nom (« Alpes » : montagne).
+  await expect(dialog.getByText('Automatique : Montagne')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Changer l’illustration' }).click();
+  // Bouton radio masqué dans son libellé : cliquer le libellé.
+  await dialog.getByText('Van', { exact: true }).click();
+  await expect(dialog.getByRole('radio', { name: 'Van' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toHaveCount(0);
 
-  // La vignette de la photo s'affiche dans la liste des voyages de l'en-tête.
+  // Le pictogramme s'affiche dans la liste des voyages de l'en-tête.
   const switcher = page.getByRole('combobox', { name: 'Choisir un voyage' });
-  await expect(switcher.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);
+  await expect(switcher.locator('[data-illustration="van"] svg')).toBeVisible();
   await switcher.click();
-  await expect(page.getByRole('option', { name, exact: true }).locator('img')).toHaveAttribute(
-    'src',
-    /commons-img\/2\.jpg/,
-  );
+  await expect(
+    page.getByRole('option', { name, exact: true }).locator('[data-illustration="van"]'),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
 
+  // Choix conservé : aperçu de la scène dans les paramètres, après rechargement.
+  await page.reload();
   await page.getByRole('button', { name: 'Paramètres du voyage' }).click();
-  await expect(dialog.locator('img')).toHaveAttribute('src', /commons-img\/2\.jpg/);
+  await expect(dialog.locator('[data-illustration="van"] svg')).toBeVisible();
+});
+
+test('illustration suggérée par le nom du voyage, sans rien choisir', async ({ page }) => {
+  await createTrip(page, uniqueName('Randonnée'));
+  const switcher = page.getByRole('combobox', { name: 'Choisir un voyage' });
+  await expect(switcher.locator('[data-illustration="randonnee"] svg')).toBeVisible();
 });

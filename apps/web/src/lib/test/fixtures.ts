@@ -1,4 +1,4 @@
-import type { Day, Leg, Poi, Stay, Step, TripCover, TripSummary } from '@mytrips/core';
+import type { Day, Leg, Poi, Stay, Step, TripSummary } from '@mytrips/core';
 
 /** Données de test partagées par les tests de composants. */
 export const days: Day[] = [
@@ -100,17 +100,6 @@ export function makeDay(overrides: Partial<Day> = {}): Day {
   return { id: 'd1', date: '2026-07-10', dayStart: null, dayEnd: null, notes: '', ...overrides };
 }
 
-export function makeCover(overrides: Partial<TripCover> = {}): TripCover {
-  return {
-    url: 'https://upload.wikimedia.org/thumb/a/1.jpg/1280px-1.jpg',
-    thumbUrl: 'https://upload.wikimedia.org/thumb/a/1.jpg/640px-1.jpg',
-    author: 'Jean Dupont',
-    license: 'CC BY-SA 4.0',
-    sourceUrl: 'https://commons.wikimedia.org/wiki/File:1.jpg',
-    ...overrides,
-  };
-}
-
 export function makeTripSummary(overrides: Partial<TripSummary> = {}): TripSummary {
   return {
     id: '3f0fa7bf-e95b-4fee-ab08-b30a6385734f',
@@ -122,7 +111,7 @@ export function makeTripSummary(overrides: Partial<TripSummary> = {}): TripSumma
     dayEnd: '22:00',
     defaultTimezone: 'Europe/Paris',
     hikeSpeedKmh: 3.5,
-    cover: null,
+    illustration: null,
     version: 1,
     createdAt: '2026-06-01T00:00:00Z',
     updatedAt: '2026-06-01T00:00:00Z',
