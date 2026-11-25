@@ -6,10 +6,9 @@
     item: StayItem;
     highlighted: boolean;
     onEdit: (item: StayItem) => void;
-    onHover: (key: string | null) => void;
   }
 
-  let { item, highlighted, onEdit, onHover }: Props = $props();
+  let { item, highlighted, onEdit }: Props = $props();
 
   const labels = {
     'check-in': 'Check-in',
@@ -27,8 +26,6 @@
   class:highlighted
   data-testid="stay-card"
   onclick={() => onEdit(item)}
-  onmouseenter={() => onHover(item.key)}
-  onmouseleave={() => onHover(null)}
 >
   <span class="icon"><Icon size={16} /></span>
   <span class="text">

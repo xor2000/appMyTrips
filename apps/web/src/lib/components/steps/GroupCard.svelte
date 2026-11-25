@@ -17,7 +17,6 @@
     onEdit: (step: Step) => void;
     /** Menu contextuel d'une étape du dossier ou du dossier lui-même (en-tête). */
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
     /** Dépôt dans le dossier, à l'index donné parmi ses étapes (sans l'élément déplacé). */
     onDropInto: (stepId: string, index: number) => void;
     /** Rendu après chaque étape du dossier sauf la dernière : tuile de trajet. */
@@ -34,7 +33,6 @@
     highlighted,
     onEdit,
     onContextMenu,
-    onHover,
     onDropInto,
     after,
     times = new Map(),
@@ -127,7 +125,6 @@
             time={times.get(child.id) ?? null}
             {onEdit}
             {onContextMenu}
-            {onHover}
           />
           <!-- Le trajet qui suit la dernière étape sort du dossier (rendu par la timeline). -->
           {#if i < item.children.length - 1}

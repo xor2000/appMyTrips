@@ -17,7 +17,6 @@
     onEdit: (step: Step) => void;
     onEditStay?: (item: StayItem) => void;
     onContextMenu: (step: Step, point: MenuPoint) => void;
-    onHover: (key: string | null) => void;
     onDrop: (stepId: string, target: DropTarget) => void;
     /** Rendu après chaque point de passage (clé d'étape ou de séjour) : tuile de trajet. */
     after?: Snippet<[string]>;
@@ -33,7 +32,6 @@
     onEdit,
     onEditStay = () => {},
     onContextMenu,
-    onHover,
     onDrop,
     after,
     times = new Map(),
@@ -78,7 +76,7 @@
             onDrop={(id) => onDrop(id, { parentId: null, index: rootIndex(id, roots.length) })}
           />
         {/if}
-        <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} {onHover} />
+        <StayCard {item} highlighted={highlighted === item.key} onEdit={onEditStay} />
         {@render after?.(item.key)}
       {:else}
         {#if canEdit}
@@ -97,7 +95,6 @@
             time={times.get(item.step.id) ?? null}
             {onEdit}
             {onContextMenu}
-            {onHover}
           />
           {@render after?.(item.step.id)}
         {:else}
@@ -108,7 +105,6 @@
             {highlighted}
             {onEdit}
             {onContextMenu}
-            {onHover}
             {after}
             {times}
             onDropInto={(id, index) => onDrop(id, { parentId: item.group.id, index })}

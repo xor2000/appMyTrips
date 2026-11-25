@@ -27,7 +27,6 @@ function setup(overrides: Record<string, unknown> = {}, groupOverrides = {}) {
     highlighted: null,
     onEdit: vi.fn(),
     onContextMenu: vi.fn(),
-    onHover: vi.fn(),
     onDropInto: vi.fn(),
     ...overrides,
   };
