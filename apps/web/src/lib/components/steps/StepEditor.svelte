@@ -1,17 +1,47 @@
+<script module lang="ts">
+  import type { StepInput } from '#lib/api.ts';
+  import type { StayValues } from './StayDialog.svelte';
+
+  /** Lieu créé par la fenêtre « Nouveau lieu » : une étape (ou idée), ou un séjour. */
+  export type NewPlaceResult =
+    { kind: 'step'; input: StepInput } | { kind: 'stay'; values: StayValues };
+</script>
+
 <script lang="ts">
-  import { STEP_TYPES, STEP_TYPE_INFO, type Day, type Step, type StepPatch } from '@mytrips/core';
+  import {
+    STEP_TYPES,
+    STEP_TYPE_INFO,
+    defaultDuration,
+    type Day,
+    type GpxData,
+    type Step,
+    type StepPatch,
+    type StepType,
+  } from '@mytrips/core';
+  import CalendarRange from 'lucide-svelte/icons/calendar-range';
   import MapPin from 'lucide-svelte/icons/map-pin';
   import { untrack } from 'svelte';
   import { dayTitle, formatKm } from '#lib/format.ts';
+  import { readGpxFile } from '#lib/gpx/import.ts';
   import { STEP_ICONS } from '#lib/steps/icons.ts';
   import ElevationProfile from '../gpx/ElevationProfile.svelte';
   import Modal from '../Modal.svelte';
 
   interface Props {
+    /** Étape modifiée ; en création, brouillon tiré du lieu choisi (sans identifiant). */
     step: Step;
     days: Day[];
-    onSave: (patch: StepPatch) => Promise<void>;
-    onDelete: () => void;
+    /** `create` : fenêtre « Nouveau lieu » (bouton « Lieu » de la carte). */
+    mode?: 'edit' | 'create';
+    /** Modification : les champs changés (obligatoire hors création). */
+    onSave?: (patch: StepPatch) => Promise<void>;
+    /** Création : l'étape complète, ou un séjour (catégorie « Séjour »). */
+    onCreate?: (result: NewPlaceResult) => Promise<void>;
+    /** Création d'un séjour : date d'arrivée proposée (jour affiché). */
+    stayDate?: string;
+    /** Création : lecture d'un fichier GPX (analysé dans le navigateur). */
+    readGpx?: (file: File) => Promise<{ name: string; gpx: GpxData }>;
+    onDelete?: () => void;
     onClose: () => void;
     /**
      * Choix d'une nouvelle position en cliquant sur la carte (fenêtre masquée le temps du choix) :
@@ -23,15 +53,46 @@
     onRemoveGpx?: () => Promise<void>;
   }
 
-  let { step, days, onSave, onDelete, onClose, onPickOnMap, onImportGpx, onRemoveGpx }: Props =
-    $props();
+  let {
+    step,
+    days,
+    mode = 'edit',
+    onSave,
+    onCreate,
+    stayDate,
+    readGpx = readGpxFile,
+    onDelete,
+    onClose,
+    onPickOnMap,
+    onImportGpx,
+    onRemoveGpx,
+  }: Props = $props();
 
   // Valeurs de départ, lues une seule fois à l'ouverture.
   const start = untrack(() => step);
+  const creating = untrack(() => mode === 'create');
 
   let name = $state(start.name);
-  let type = $state(start.type ?? 'other');
+  /** Catégorie ; « Séjour » (`stay`) n'existe qu'en création. */
+  let type = $state<StepType | 'stay'>(start.type ?? 'other');
   let durationMin = $state(start.durationMin);
+  /** Création : durée saisie ; sinon, elle suit la catégorie (durée par défaut). */
+  let durationTouched = $state(false);
+  $effect(() => {
+    const t = type;
+    if (creating && t !== 'stay' && !untrack(() => durationTouched)) {
+      durationMin = defaultDuration(t);
+    }
+  });
+  const isStay = $derived(type === 'stay');
+  // Séjour (création) : arrivée le jour affiché à 17:00, départ le lendemain à 10:00.
+  const nextDay = (date: string) =>
+    new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const firstStayDate = untrack(() => stayDate ?? days[0]?.date ?? '');
+  let checkInDate = $state(firstStayDate);
+  let checkInTime = $state('17:00');
+  let checkOutDate = $state(firstStayDate ? nextDay(firstStayDate) : '');
+  let checkOutTime = $state('10:00');
   let hasFixed = $state(start.fixedStart !== null);
   let fixedStart = $state(start.fixedStart ?? '09:00');
   let bookingRef = $state(start.bookingRef ?? '');
@@ -60,8 +121,10 @@
       picking = false;
     }
   }
+  /** Création : tracé lu dans le navigateur, envoyé avec l'étape. */
+  let draftGpx = $state<GpxData | null>(null);
   /** Tracé à jour (un import pendant l'édition met l'étape à jour). */
-  const gpx = $derived(step.gpx);
+  const gpx = $derived(creating ? draftGpx : step.gpx);
   const isHike = $derived(type === 'hike');
   const gpxSummary = $derived(
     gpx
@@ -92,7 +155,18 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (file && onImportGpx) runGpx(() => onImportGpx(file));
+    if (!file) return;
+    if (creating) {
+      runGpx(async () => {
+        draftGpx = (await readGpx(file)).gpx;
+      });
+    } else if (onImportGpx) runGpx(() => onImportGpx(file));
+  }
+
+  /** Retrait du tracé : celui du brouillon en création, celui de l'étape sinon. */
+  function removeGpx() {
+    if (creating) draftGpx = null;
+    else if (onRemoveGpx) runGpx(onRemoveGpx);
   }
   let notes = $state(start.notes);
   /** '' = liste d'idées. */
@@ -108,8 +182,17 @@
       error = 'Le nom est obligatoire.';
       return;
     }
-    if (bookingUrl.trim() && !/^https?:\/\/[^\s/?#]+\S*$/i.test(bookingUrl.trim())) {
+    // Le lien n'existe pas pour un séjour (champ masqué) : pas de contrôle.
+    if (
+      type !== 'stay' &&
+      bookingUrl.trim() &&
+      !/^https?:\/\/[^\s/?#]+\S*$/i.test(bookingUrl.trim())
+    ) {
       error = 'Le lien de réservation doit commencer par http:// ou https://.';
+      return;
+    }
+    if (creating) {
+      await create();
       return;
     }
     const patch: StepPatch = {};
@@ -132,7 +215,7 @@
     if (notes !== start.notes) patch.notes = notes;
     const nextDay = dayId === '' ? null : dayId;
     if (nextDay !== start.dayId) patch.dayId = nextDay;
-    if (type !== start.type) patch.type = type;
+    if (type !== start.type && type !== 'stay') patch.type = type;
     if (durationMin !== start.durationMin) patch.durationMin = durationMin;
     const fixed = hasFixed ? fixedStart : null;
     if (fixed !== start.fixedStart) patch.fixedStart = fixed;
@@ -147,7 +230,77 @@
     error = null;
     busy = true;
     try {
-      await onSave(patch);
+      await onSave?.(patch);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Point saisi (bornes vérifiées) ; message d'erreur sinon. */
+  function readPoint(): { lat: number; lng: number } | string {
+    const la = Number(lat);
+    const ln = Number(lng);
+    if (String(lat).trim() === '' || !Number.isFinite(la) || la < -90 || la > 90) {
+      return 'La latitude doit être comprise entre -90 et 90.';
+    }
+    if (String(lng).trim() === '' || !Number.isFinite(ln) || ln < -180 || ln > 180) {
+      return 'La longitude doit être comprise entre -180 et 180.';
+    }
+    return { lat: la, lng: ln };
+  }
+
+  /** Création : l'étape complète (durée seulement si saisie), ou le séjour. */
+  async function create() {
+    const point = readPoint();
+    if (typeof point === 'string') {
+      error = point;
+      return;
+    }
+    let result: NewPlaceResult;
+    if (type === 'stay') {
+      if (!checkInDate || !checkOutDate || checkOutDate <= checkInDate) {
+        error = 'Le départ doit être au moins le lendemain de l’arrivée.';
+        return;
+      }
+      result = {
+        kind: 'stay',
+        values: {
+          name: name.trim(),
+          ...point,
+          address: start.address,
+          checkInDate,
+          checkInTime,
+          checkOutDate,
+          checkOutTime,
+          bookingRef: orNull(bookingRef),
+        },
+      };
+    } else {
+      result = {
+        kind: 'step',
+        input: {
+          dayId: dayId === '' ? null : dayId,
+          type,
+          name: name.trim(),
+          ...point,
+          address: start.address,
+          osmRef: start.osmRef,
+          fixedStart: hasFixed ? fixedStart : null,
+          notes,
+          bookingRef: orNull(bookingRef),
+          bookingUrl: orNull(bookingUrl),
+          openingHours: orNull(openingHours),
+          ...(durationTouched ? { durationMin } : {}),
+          ...(draftGpx && type === 'hike' ? { gpx: draftGpx, useElevation } : {}),
+        },
+      };
+    }
+    error = null;
+    busy = true;
+    try {
+      await onCreate?.(result);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -157,8 +310,10 @@
 </script>
 
 <Modal
-  title="Modifier l’étape"
-  subtitle="Mettez à jour les informations de cette étape."
+  title={creating ? 'Nouveau lieu' : 'Modifier l’étape'}
+  subtitle={creating
+    ? 'Complétez les informations du lieu, puis ajoutez-le.'
+    : 'Mettez à jour les informations de cette étape.'}
   hidden={picking}
   {onClose}
 >
@@ -188,6 +343,20 @@
             <span>{STEP_TYPE_INFO[t].label}</span>
           </label>
         {/each}
+        {#if creating}
+          <!-- Séjour : hébergement sur plusieurs nuits (crée un séjour, pas une étape). -->
+          <label style="--c: var(--type-hotel)">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="step-type"
+              value="stay"
+              bind:group={type}
+            />
+            <CalendarRange size={18} aria-hidden="true" />
+            <span>Séjour</span>
+          </label>
+        {/if}
       </div>
     </fieldset>
     <div class="field-row">
@@ -205,102 +374,138 @@
         <MapPin size={15} aria-hidden="true" />Choisir sur la carte
       </button>
     {/if}
-    <div class="field-row">
-      <label class="field ref">
-        Durée sur place (min)
-        <input type="number" min="0" max="1440" step="5" bind:value={durationMin} />
-      </label>
-      <div class="fixed">
-        <label class="check">
-          <input type="checkbox" bind:checked={hasFixed} />
-          Heure fixe
+    {#if isStay}
+      <div class="field-row">
+        <label class="field ref">
+          Arrivée le
+          <input type="date" bind:value={checkInDate} />
         </label>
-        <label class="field ref" class:disabled={!hasFixed}>
-          <span class="visually-hidden">Heure</span>
-          <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
+        <label class="field ref">
+          Arrivée à
+          <input type="time" bind:value={checkInTime} />
         </label>
       </div>
-    </div>
-    <div class="field-row">
+      <div class="field-row">
+        <label class="field ref">
+          Départ le
+          <input type="date" bind:value={checkOutDate} min={checkInDate} />
+        </label>
+        <label class="field ref">
+          Départ à
+          <input type="time" bind:value={checkOutTime} />
+        </label>
+      </div>
       <label class="field ref">
         N° de réservation
         <input type="text" bind:value={bookingRef} maxlength="200" />
       </label>
-      <label class="field ref">
-        Lien de réservation
-        <input type="url" bind:value={bookingUrl} placeholder="https://…" />
-      </label>
-    </div>
-    <label class="field ref">
-      Horaires d’ouverture
-      <input
-        type="text"
-        bind:value={openingHours}
-        maxlength="500"
-        placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
-      />
-    </label>
-    {#if isHike}
-      <fieldset class="hike">
-        <legend>Randonnée</legend>
-        {#if gpx}
-          <p class="stats">{gpxSummary}</p>
-          <ElevationProfile track={gpx.track} />
-        {/if}
-        <label class="check">
+    {:else}
+      <div class="field-row">
+        <label class="field ref">
+          Durée sur place (min)
           <input
-            type="checkbox"
-            bind:checked={useElevation}
-            disabled={!gpx || gpx.stats.ascentM === null}
+            type="number"
+            min="0"
+            max="1440"
+            step="5"
+            bind:value={durationMin}
+            oninput={() => (durationTouched = true)}
           />
-          Inclure le dénivelé (+1 h / 600 m)
         </label>
-        <div class="gpx-actions">
-          {#if onImportGpx}
-            <label class="btn btn-soft file">
-              Importer un GPX
-              <input type="file" accept=".gpx,application/gpx+xml" onchange={importFile} />
-            </label>
-          {/if}
-          {#if gpx && onRemoveGpx}
-            <button
-              type="button"
-              class="btn btn-ghost"
-              disabled={busy}
-              onclick={() => runGpx(onRemoveGpx)}>Retirer le GPX</button
-            >
-          {/if}
+        <div class="fixed">
+          <label class="check">
+            <input type="checkbox" bind:checked={hasFixed} />
+            Heure fixe
+          </label>
+          <label class="field ref" class:disabled={!hasFixed}>
+            <span class="visually-hidden">Heure</span>
+            <input type="time" bind:value={fixedStart} disabled={!hasFixed} />
+          </label>
         </div>
-        <p class="hint">
-          La durée se calcule depuis le tracé, à la vitesse du voyage ; une durée saisie reste
-          manuelle jusqu’au prochain changement d’option.
-        </p>
-      </fieldset>
+      </div>
+      <div class="field-row">
+        <label class="field ref">
+          N° de réservation
+          <input type="text" bind:value={bookingRef} maxlength="200" />
+        </label>
+        <label class="field ref">
+          Lien de réservation
+          <input type="url" bind:value={bookingUrl} placeholder="https://…" />
+        </label>
+      </div>
+      <label class="field ref">
+        Horaires d’ouverture
+        <input
+          type="text"
+          bind:value={openingHours}
+          maxlength="500"
+          placeholder="Format OpenStreetMap, ex. Mo-Fr 09:00-18:00"
+        />
+      </label>
+      {#if isHike}
+        <fieldset class="hike">
+          <legend>Randonnée</legend>
+          {#if gpx}
+            <p class="stats">{gpxSummary}</p>
+            <ElevationProfile track={gpx.track} />
+          {/if}
+          <label class="check">
+            <input
+              type="checkbox"
+              bind:checked={useElevation}
+              disabled={!gpx || gpx.stats.ascentM === null}
+            />
+            Inclure le dénivelé (+1 h / 600 m)
+          </label>
+          <div class="gpx-actions">
+            {#if onImportGpx || creating}
+              <label class="btn btn-soft file">
+                Importer un GPX
+                <input type="file" accept=".gpx,application/gpx+xml" onchange={importFile} />
+              </label>
+            {/if}
+            {#if gpx && (onRemoveGpx || creating)}
+              <button type="button" class="btn btn-ghost" disabled={busy} onclick={removeGpx}
+                >Retirer le GPX</button
+              >
+            {/if}
+          </div>
+          <p class="hint">
+            La durée se calcule depuis le tracé, à la vitesse du voyage ; une durée saisie reste
+            manuelle jusqu’au prochain changement d’option.
+          </p>
+        </fieldset>
+      {/if}
+      <label class="field ref">
+        Jour
+        <select bind:value={dayId}>
+          {#each days as d, i (d.id)}
+            <option value={d.id}>J{i + 1} · {dayTitle(d.date)}</option>
+          {/each}
+          <option value="">Idées (pas encore placé)</option>
+        </select>
+      </label>
     {/if}
-    <label class="field ref">
-      Jour
-      <select bind:value={dayId}>
-        {#each days as d, i (d.id)}
-          <option value={d.id}>J{i + 1} · {dayTitle(d.date)}</option>
-        {/each}
-        <option value="">Idées (pas encore placé)</option>
-      </select>
-    </label>
-    <label class="field ref">
-      Notes
-      <textarea rows="3" bind:value={notes} maxlength="5000"></textarea>
-    </label>
+    {#if !isStay}
+      <!-- Pas de notes pour un séjour : sa fenêtre et sa carte ne les montrent pas. -->
+      <label class="field ref">
+        Notes
+        <textarea rows="3" bind:value={notes} maxlength="5000"></textarea>
+      </label>
+    {/if}
     {#if error}
       <p class="form-error" role="alert">{error}</p>
     {/if}
   </form>
 
   {#snippet actions()}
-    <button type="button" class="btn btn-danger-ghost" onclick={onDelete}>Supprimer</button>
-    <span class="spacer"></span>
+    {#if !creating && onDelete}
+      <button type="button" class="btn btn-danger-ghost" onclick={onDelete}>Supprimer</button>
+      <span class="spacer"></span>
+    {/if}
     <button type="button" class="btn btn-ghost" onclick={onClose}>Annuler</button>
     <button type="submit" form="step-form" class="btn btn-primary" disabled={busy}
-      >Enregistrer</button
+      >{creating ? 'Ajouter' : 'Enregistrer'}</button
     >
   {/snippet}
 </Modal>

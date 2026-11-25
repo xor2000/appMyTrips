@@ -58,7 +58,10 @@
   <div class="empty">
     <p>Aucune étape pour ce jour.</p>
     {#if canEdit}
-      <p class="muted">Ajoute un lieu, ou glisse ici une idée ou une étape d’un autre jour.</p>
+      <p class="muted">
+        Ajoute un lieu avec le bouton « Lieu » de la carte, ou glisse ici une idée, une étape d’un
+        autre jour ou un fichier GPX.
+      </p>
       <DropZone
         label="Déposer dans ce jour"
         onDrop={(id) => onDrop(id, { parentId: null, index: 0 })}

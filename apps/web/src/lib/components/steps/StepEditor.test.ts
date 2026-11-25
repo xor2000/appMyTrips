@@ -206,3 +206,132 @@ describe('StepEditor · randonnée', () => {
     expect(screen.queryByLabelText('Importer un GPX')).toBeNull();
   });
 });
+
+describe('StepEditor en création (bouton « Lieu » de la carte)', () => {
+  /** Lieu choisi à l'étape précédente, en brouillon d'étape (sans identifiant). */
+  const draft = () =>
+    makeStep({
+      id: '',
+      dayId: 'd2',
+      osmRef: 'W1',
+      durationMin: 120,
+      address: 'Rue de Rivoli, 75001 Paris',
+    });
+
+  function create(overrides: Record<string, unknown> = {}) {
+    const props = {
+      step: draft(),
+      days,
+      mode: 'create' as const,
+      stayDate: '2026-07-11',
+      onCreate: vi.fn().mockResolvedValue(undefined),
+      onSave: vi.fn(),
+      onClose: vi.fn(),
+      onPickOnMap: vi.fn().mockResolvedValue(null),
+      readGpx: vi.fn().mockResolvedValue({ name: 'Tournette', gpx: HIKE.gpx }),
+      ...overrides,
+    };
+    render(StepEditor, { props });
+    return props;
+  }
+
+  it('fenêtre « Nouveau lieu » : bouton « Ajouter », pas de « Supprimer », champs du lieu', () => {
+    create();
+    expect(screen.getByRole('dialog', { name: 'Nouveau lieu' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ajouter' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Supprimer' })).toBeNull();
+    expect((screen.getByLabelText('Nom du lieu') as HTMLInputElement).value).toBe(
+      'Musée du Louvre',
+    );
+    expect((screen.getByLabelText('Jour') as HTMLSelectElement).value).toBe('d2');
+    expect(screen.getByText('Rue de Rivoli, 75001 Paris')).toBeTruthy();
+  });
+
+  it('envoie l’étape complète ; la durée suit le type tant qu’elle n’est pas saisie', async () => {
+    const props = create();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Restaurant' }));
+    expect((screen.getByLabelText('Durée sur place (min)') as HTMLInputElement).value).toBe('90');
+    await fireEvent.change(screen.getByLabelText('Jour'), { target: { value: '' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(props.onCreate).toHaveBeenCalledWith({
+      kind: 'step',
+      input: expect.objectContaining({
+        dayId: null,
+        type: 'restaurant',
+        name: 'Musée du Louvre',
+        lat: 48.8606,
+        lng: 2.3376,
+        address: 'Rue de Rivoli, 75001 Paris',
+        osmRef: 'W1',
+        fixedStart: null,
+        notes: '',
+      }),
+    });
+    // Durée non saisie : celle du type, calculée par l'API.
+    expect(props.onCreate.mock.calls[0]![0].input.durationMin).toBeUndefined();
+  });
+
+  it('une durée saisie est envoyée telle quelle', async () => {
+    const props = create();
+    await fireEvent.input(screen.getByLabelText('Durée sur place (min)'), {
+      target: { value: '45' },
+    });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Parc' }));
+    expect((screen.getByLabelText('Durée sur place (min)') as HTMLInputElement).value).toBe('45');
+    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(props.onCreate.mock.calls[0]![0].input.durationMin).toBe(45);
+  });
+
+  it('catégorie « Séjour » : champs du séjour sur plusieurs jours, envoi d’un séjour', async () => {
+    const props = create();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Séjour' }));
+    expect(screen.queryByLabelText('Jour')).toBeNull();
+    expect(screen.queryByLabelText('Durée sur place (min)')).toBeNull();
+    expect((screen.getByLabelText('Arrivée le') as HTMLInputElement).value).toBe('2026-07-11');
+    expect((screen.getByLabelText('Départ le') as HTMLInputElement).value).toBe('2026-07-12');
+    await fireEvent.input(screen.getByLabelText('Départ le'), { target: { value: '2026-07-13' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(props.onCreate).toHaveBeenCalledWith({
+      kind: 'stay',
+      values: expect.objectContaining({
+        name: 'Musée du Louvre',
+        lat: 48.8606,
+        lng: 2.3376,
+        address: 'Rue de Rivoli, 75001 Paris',
+        checkInDate: '2026-07-11',
+        checkInTime: '17:00',
+        checkOutDate: '2026-07-13',
+        checkOutTime: '10:00',
+        bookingRef: null,
+      }),
+    });
+  });
+
+  it('séjour : le départ doit suivre l’arrivée', async () => {
+    const props = create();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Séjour' }));
+    await fireEvent.input(screen.getByLabelText('Départ le'), { target: { value: '2026-07-11' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(props.onCreate).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/départ/i);
+  });
+
+  it('randonnée : un GPX facultatif s’importe dès la création', async () => {
+    const props = create();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Randonnée' }));
+    const file = new File(['<gpx/>'], 'tournette.gpx', { type: 'application/gpx+xml' });
+    await fireEvent.change(screen.getByLabelText('Importer un GPX'), { target: { files: [file] } });
+    await screen.findByText(/12,4 km/);
+    expect(props.readGpx).toHaveBeenCalledWith(file);
+    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(props.onCreate).toHaveBeenCalledWith({
+      kind: 'step',
+      input: expect.objectContaining({ type: 'hike', gpx: HIKE.gpx }),
+    });
+  });
+
+  it('en modification, pas de catégorie « Séjour »', () => {
+    setup();
+    expect(screen.queryByRole('radio', { name: 'Séjour' })).toBeNull();
+  });
+});

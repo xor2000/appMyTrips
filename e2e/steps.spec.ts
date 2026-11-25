@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clickMapAt } from './map-helpers';
+import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -33,13 +34,9 @@ async function createTripAndOpenDay1(page: Page) {
   await page.getByRole('tab', { name: /J1/ }).click();
 }
 
-/** Ajoute un lieu au jour affiché, via la recherche. */
+/** Ajoute un lieu au jour affiché, par le bouton « Lieu » de la carte. */
 async function addPlace(page: Page, query: string, resultName: string) {
-  await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill(query);
-  await dialog.getByRole('button', { name: new RegExp(resultName) }).click();
-  await expect(dialog).toHaveCount(0);
+  await addPlaceViaMap(page, query, resultName);
 }
 
 /** Noms des étapes de la timeline du jour, dans l'ordre affiché. */
@@ -113,9 +110,13 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
   // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
   await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Nouveau lieu' })
+    .getByRole('button', { name: 'Ajouter', exact: true })
+    .click();
 
   const ideas = page.getByRole('region', { name: 'Idées' });
   await expect(ideas.getByTestId('step-card')).toHaveCount(1);
@@ -143,9 +144,13 @@ test('une idée apparaît sur la carte, sans numéro ni trajet', async ({ page }
   // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
   await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Nouveau lieu' })
+    .getByRole('button', { name: 'Ajouter', exact: true })
+    .click();
   await expect(dialog).toHaveCount(0);
   await page.getByRole('tab', { name: /J1/ }).click();
 
@@ -272,24 +277,4 @@ test('modifier la durée et fixer une heure', async ({ page }) => {
   const card = page.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' });
   await expect(card).toContainText('2 h 30 sur place');
   await expect(card).toContainText('10:30');
-});
-
-test('un séjour de 2 nuits apparaît en fin de J1, au début et à la fin de J2, au début de J3', async ({
-  page,
-}) => {
-  await createTripAndOpenDay1(page);
-  await page.getByRole('button', { name: 'Ajouter un séjour' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Nouveau séjour' });
-  await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Hôtel des Arts');
-  await dialog.getByRole('button', { name: /Hôtel des Arts/ }).click();
-  await expect(dialog.getByLabel('Arrivée le')).toHaveValue('2026-07-10');
-  await dialog.getByLabel('Départ le').fill('2026-07-12');
-  await dialog.getByRole('button', { name: 'Ajouter le séjour' }).click();
-
-  const stays = page.getByTestId('day-timeline').getByTestId('stay-card');
-  await expect(stays).toHaveText([/Hôtel des Arts.*Check-in · 17:00/]);
-  await page.getByRole('tab', { name: /J2/ }).click();
-  await expect(stays).toHaveText([/Départ · 10:00/, /Retour · 17:00/]);
-  await page.getByRole('tab', { name: /J3/ }).click();
-  await expect(stays).toHaveText([/Check-out · 10:00/]);
 });

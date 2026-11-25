@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clickMapAt } from './map-helpers';
+import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -35,11 +36,7 @@ async function tripWithTwoPlaces(page: Page) {
     ['Louvre', 'Musée du Louvre'],
     ['Orsay', 'Musée d’Orsay'],
   ] as const) {
-    await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
-    const add = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-    await add.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill(query);
-    await add.getByRole('button', { name: new RegExp(result) }).click();
-    await expect(add).toHaveCount(0);
+    await addPlaceViaMap(page, query, result);
   }
 }
 
@@ -160,9 +157,13 @@ test('clic sur une idée qui a un lieu : zoom et popup « … · Idée »', asyn
   // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
   await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Ajouter une idée' });
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Eiffel');
   await dialog.getByRole('button', { name: /Tour Eiffel/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Nouveau lieu' })
+    .getByRole('button', { name: 'Ajouter', exact: true })
+    .click();
   await expect(dialog).toHaveCount(0);
   await page.getByRole('tab', { name: /J1/ }).click();
 

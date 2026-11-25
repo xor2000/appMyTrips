@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { addPlaceViaMap } from './place-helpers';
 
 /**
  * Style minimal avec une source vectorielle, pour que « Préparer hors ligne » trouve le modèle
@@ -53,11 +54,7 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
   await dialog.getByRole('button', { name: 'Créer le voyage' }).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await page.getByRole('tab', { name: /J1/ }).click();
-  await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
-  const add = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-  await add.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Louvre');
-  await add.getByRole('button', { name: /Musée du Louvre/ }).click();
-  await expect(add).toHaveCount(0);
+  await addPlaceViaMap(page, 'Louvre', /Musée du Louvre/);
 
   // Préparer hors ligne : tuiles de la zone préchargées, instantané gardé.
   await page.getByRole('button', { name: 'Préparer hors ligne' }).click();
@@ -78,7 +75,7 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
   await expect(page.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' })).toContainText(
     '08:00 → 10:00',
   );
-  await expect(page.getByRole('button', { name: 'Ajouter un lieu' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Lieu', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Paramètres du voyage' })).toHaveCount(0);
 
   // « / » rouvre ce voyage depuis la copie ; la liste de l'en-tête le propose, sans création.
@@ -95,5 +92,5 @@ test('préparer un voyage hors ligne, le consulter sans réseau, puis retrouver 
   await context.setOffline(false);
   await expect(page.getByRole('button', { name: 'Nouveau voyage' })).toBeVisible();
   await page.getByRole('tab', { name: /J1/ }).click();
-  await expect(page.getByRole('button', { name: 'Ajouter un lieu' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lieu', exact: true })).toBeVisible();
 });

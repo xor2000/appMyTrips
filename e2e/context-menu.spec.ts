@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -34,11 +35,7 @@ async function tripWithTwoPlaces(page: Page) {
     ['Louvre', 'Musée du Louvre'],
     ['Orsay', 'Musée d’Orsay'],
   ] as const) {
-    await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
-    const add = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-    await add.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill(query);
-    await add.getByRole('button', { name: new RegExp(result) }).click();
-    await expect(add).toHaveCount(0);
+    await addPlaceViaMap(page, query, result);
   }
 }
 

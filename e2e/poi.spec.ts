@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clickMapAt, type MapTestWindow } from './map-helpers';
+import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
 const EMPTY_STYLE = {
@@ -54,10 +55,7 @@ async function tripCenteredOnLouvre(page: Page) {
   await dialog.getByRole('button', { name: 'Créer le voyage' }).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await page.getByRole('tab', { name: /J1/ }).click();
-  await page.getByRole('button', { name: 'Ajouter un lieu' }).click();
-  const add = page.getByRole('dialog', { name: 'Ajouter un lieu' });
-  await add.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Louvre');
-  await add.getByRole('button', { name: /Musée du Louvre/ }).click();
+  await addPlaceViaMap(page, 'Louvre', /Musée du Louvre/);
   await expect(page.locator('.map-marker', { hasText: '1' })).toBeVisible();
 }
 
