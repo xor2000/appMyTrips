@@ -62,7 +62,7 @@
     onViewChange?: (view: MapView) => void;
     /** Lieux de la découverte (marqueurs atténués, distincts des étapes). */
     pois?: Poi[];
-    selectedPoi?: string | null;
+    /** Lieu survolé sur la carte (la liste ne met plus les pastilles en évidence). */
     hoveredPoi?: string | null;
     onPickPoi?: (poi: Poi) => void;
     onHoverPoi?: (id: string | null) => void;
@@ -74,10 +74,11 @@
     /** Mode « Explorer » ; le bouton n'apparaît que si `onToggleExplore` est fourni. */
     exploring?: boolean;
     onToggleExplore?: () => void;
+    /** Panneau « Rechercher » ouvert ; le bouton n'apparaît que si `onToggleSearch` est fourni. */
+    searching?: boolean;
+    onToggleSearch?: () => void;
     /** « Préparer hors ligne » dans les outils de la carte (absent si non fourni). */
     onOffline?: () => void;
-    /** Champ « Rechercher un lieu » flottant : ouvre l'ajout de lieu (absent si non fourni). */
-    onSearch?: () => void;
     /**
      * Outil « Lieu » (icône et libellé de la maquette de référence) : ouvre l'ajout d'un lieu par
      * recherche, clic sur la carte ou coordonnées ; absent si non fourni (lecture seule).
@@ -91,8 +92,8 @@
      */
     popupFor?: (target: PopupTarget) => MapPopupContent | null;
     /**
-     * Demande venue de la colonne : cadrage (zoom 15 au moins sur un lieu, tracé entier pour un
-     * trajet) et popup. `seq` change à chaque demande.
+     * Demande venue de la colonne : cadrage (zoom 15 au moins sur un lieu ou un résultat de
+     * recherche, tracé entier pour un trajet) et popup. `seq` change à chaque demande.
      */
     focus?: { target: FocusTarget; seq: number } | null;
     /** La popup s'est fermée (croix, clic sur la carte, action). */
@@ -119,15 +120,15 @@
     findPlaceAt,
     onViewChange = () => {},
     pois = [],
-    selectedPoi = null,
     hoveredPoi = null,
     onPickPoi = () => {},
     onHoverPoi = () => {},
     findBasemapPois,
     exploring = false,
     onToggleExplore,
+    searching = false,
+    onToggleSearch,
     onOffline,
-    onSearch,
     onAddPlace,
     lines = [],
     popupFor = () => null,
@@ -507,6 +508,11 @@
         if (!poi) return;
         m.flyTo({ center: [poi.lng, poi.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
         openPopup({ kind: 'poi', poi }, [poi.lng, poi.lat]);
+      } else if (t.kind === 'place') {
+        // Résultat de « Rechercher » : même popup qu'un lieu sous un clic droit.
+        const place = t.place;
+        m.flyTo({ center: [place.lng, place.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
+        openPopup({ kind: 'place', place }, [place.lng, place.lat]);
       } else {
         const line = lines.find((l) => l.key === t.key);
         if (!line || line.coordinates.length === 0 || !LngLatBoundsClass) return;
@@ -662,13 +668,14 @@
     }
   }
 
-  /** Pose l'état `active` sur le lieu sélectionné et le lieu survolé, et seulement eux. */
+  /**
+   * Pose l'état `active` sur le lieu survolé sur la carte, et seulement lui. Un lieu choisi dans la
+   * liste n'est pas mis en évidence : sa popup le désigne, comme pour « Rechercher ».
+   */
   function applyActivePois(m: MapLibreMap) {
     if (!m.getSource(POI_SOURCE)) return;
     const known = new Set(pois.map((p) => p.id));
-    const wanted = [selectedPoi, hoveredPoi].filter(
-      (id): id is string => id !== null && known.has(id),
-    );
+    const wanted = [hoveredPoi].filter((id): id is string => id !== null && known.has(id));
     for (const id of activePois) {
       if (!wanted.includes(id)) m.setFeatureState({ source: POI_SOURCE, id }, { active: false });
     }
@@ -683,10 +690,9 @@
     if (m) syncPois(m);
   });
 
-  // Lieu de la découverte sélectionné ou survolé.
+  // Lieu de la découverte survolé.
   $effect(() => {
     const m = map;
-    void selectedPoi;
     void hoveredPoi;
     if (m) applyActivePois(m);
   });
@@ -803,13 +809,9 @@
       >
     </div>
   {/if}
-  {#if onSearch && !exploring && !placing}
-    <button type="button" class="search" onclick={onSearch}>
-      <Search size={15} />Rechercher un lieu, une adresse…
-    </button>
-  {/if}
-  {#if onAddPlace || onToggleExplore || onOffline}
-    <!-- Outils regroupés dans une seule pilule, comme sur la maquette. -->
+  {#if onAddPlace || onToggleExplore || onToggleSearch || onOffline}
+    <!-- Outils regroupés dans une seule pilule en haut à gauche : Lieu, Explorer la zone,
+         Rechercher, puis Préparer hors ligne. -->
     <div class="tools">
       {#if onAddPlace && !placing}
         <button type="button" class="tool" onclick={onAddPlace}>
@@ -819,6 +821,11 @@
       {#if onToggleExplore}
         <button type="button" class="tool" aria-pressed={exploring} onclick={onToggleExplore}>
           <Compass size={15} />Explorer la zone
+        </button>
+      {/if}
+      {#if onToggleSearch}
+        <button type="button" class="tool" aria-pressed={searching} onclick={onToggleSearch}>
+          <Search size={15} />Rechercher
         </button>
       {/if}
       {#if onOffline}
@@ -843,8 +850,6 @@
     position: relative;
     height: 100%;
     min-height: 0;
-    /* Largeur de la carte (et non de l'écran) pour placer la recherche (voir plus bas). */
-    container-type: inline-size;
   }
 
   .map {
@@ -885,10 +890,12 @@
     min-height: 30px;
   }
 
+  /* En haut à gauche ; `--map-tools-inset` les décale quand un panneau recouvre le bord gauche de
+     la carte (« Plein écran »). */
   .tools {
     position: absolute;
     top: 14px;
-    right: 14px;
+    left: calc(14px + var(--map-tools-inset, 0px));
     display: flex;
     align-items: center;
     gap: var(--space-1);
@@ -933,41 +940,6 @@
     width: 28px;
     justify-content: center;
     padding: 0;
-  }
-
-  .search {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    width: min(360px, calc(100% - 300px));
-    min-width: 160px;
-    padding: 9px 14px;
-    border: 0;
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    box-shadow: var(--shadow-float);
-    color: var(--muted);
-    font: 400 13px var(--font-body);
-    text-align: left;
-    cursor: text;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  /* Carte étroite (mobile) : la pilule d'outils occupe le haut, la recherche passe dessous. */
-  @container (max-width: 520px) {
-    .search {
-      top: 62px;
-      right: 14px;
-      width: auto;
-    }
-  }
-
-  .search:hover {
-    color: var(--fg);
   }
 
   /* Marqueurs créés par MapLibre hors du composant : styles globaux. */

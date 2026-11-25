@@ -1,7 +1,7 @@
 <script lang="ts">
   import { STEP_TYPE_INFO, type Place } from '@mytrips/core';
   import Search from 'lucide-svelte/icons/search';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, type Snippet } from 'svelte';
 
   interface Props {
     search: (q: string) => Promise<Place[]>;
@@ -11,6 +11,11 @@
     placeholder?: string;
     /** Champ qui reçoit le focus à l'ouverture de la fenêtre (voir `Modal`). */
     autofocus?: boolean;
+    /**
+     * Affichage des résultats à la place de la liste simple (panneau « Rechercher » : résultats
+     * groupés par type) ; `onPick` ne sert alors pas.
+     */
+    list?: Snippet<[Place[]]>;
   }
 
   let {
@@ -19,10 +24,12 @@
     delay = 300,
     placeholder = 'Musée, restaurant, adresse…',
     autofocus = false,
+    list,
   }: Props = $props();
 
   let query = $state('');
-  let results = $state<Place[] | null>(null);
+  // Remplacés d'un bloc : pas de proxy profond (un résultat garde son identité, voir `list`).
+  let results = $state.raw<Place[] | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -80,6 +87,8 @@
     <p class="form-error" role="alert">{error}</p>
   {:else if results && results.length === 0}
     <p class="hint">Aucun lieu trouvé.</p>
+  {:else if results && list}
+    {@render list(results)}
   {:else if results}
     <ul class="results">
       <!-- Clé par position : le géocodeur peut renvoyer deux fois le même lieu. -->

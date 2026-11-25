@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { days, makeStep } from '#lib/test/fixtures.ts';
-import { googleMapsUrl, moveTargets, moveToEndOp, stepMenuEntries } from './contextMenu';
+import {
+  googleMapsUrl,
+  moveTargets,
+  moveToEndOp,
+  placeMenuEntries,
+  stepMenuEntries,
+} from './contextMenu';
 
 describe('stepMenuEntries (menu contextuel d’un lieu ou d’un dossier)', () => {
   const handlers = () => ({ edit: vi.fn(), remove: vi.fn(), moveTo: vi.fn() });
@@ -100,5 +106,61 @@ describe('moveToEndOp (opération de lot du déplacement)', () => {
     const op = moveToEndOp(steps[3]!, 'd1', steps);
     expect(op).toMatchObject({ id: 'g', patch: { dayId: 'd1', parentId: null } });
     expect(op.kind === 'step' && op.patch.position! > 'a1').toBe(true);
+  });
+});
+
+describe('placeMenuEntries (menu commun des résultats de « Rechercher » et d’« Explorer la zone »)', () => {
+  const louvre = { lat: 48.8606, lng: 2.3376 };
+  const handlers = () => ({ addTo: vi.fn(), remove: vi.fn() });
+  const labels = (entries: { label: string }[]) => entries.map((e) => e.label);
+
+  it('lieu pas encore ajouté : Ajouter aux idées, Ajouter à un jour, Voir dans Google Maps', () => {
+    const h = handlers();
+    const entries = placeMenuEntries(louvre, days, true, false, h);
+    expect(labels(entries)).toEqual([
+      'Ajouter aux idées',
+      'Ajouter à un jour',
+      'Voir dans Google Maps',
+    ]);
+    expect(entries.every((e) => e.icon)).toBe(true);
+    const [ideas, toDay, maps] = entries;
+    if (ideas?.kind === 'action') ideas.run();
+    expect(h.addTo).toHaveBeenCalledWith(null);
+    // Tous les jours du voyage, avec leur date.
+    expect(toDay?.kind === 'submenu' && toDay.items.map((i) => [i.label, i.hint])).toEqual([
+      ['J1', 'ven. 10 juil.'],
+      ['J2', 'sam. 11 juil.'],
+    ]);
+    if (toDay?.kind === 'submenu') toDay.items[1]!.run();
+    expect(h.addTo).toHaveBeenLastCalledWith('d2');
+    expect(maps).toMatchObject({
+      kind: 'link',
+      href: 'https://www.google.com/maps/search/?api=1&query=48.8606,2.3376',
+    });
+  });
+
+  it('lieu déjà dans le voyage : Supprimer (comme sa popup) et Voir dans Google Maps', () => {
+    const h = handlers();
+    const entries = placeMenuEntries(louvre, days, true, true, h);
+    expect(labels(entries)).toEqual(['Supprimer', 'Voir dans Google Maps']);
+    expect(entries[0]).toMatchObject({ danger: true });
+    if (entries[0]?.kind === 'action') entries[0].run();
+    expect(h.remove).toHaveBeenCalled();
+  });
+
+  it('voyage sans jour : pas de sous-menu « Ajouter à un jour »', () => {
+    expect(labels(placeMenuEntries(louvre, [], true, false, handlers()))).toEqual([
+      'Ajouter aux idées',
+      'Voir dans Google Maps',
+    ]);
+  });
+
+  it('lecture seule : seulement Voir dans Google Maps', () => {
+    expect(labels(placeMenuEntries(louvre, days, false, false, handlers()))).toEqual([
+      'Voir dans Google Maps',
+    ]);
+    expect(labels(placeMenuEntries(louvre, days, false, true, handlers()))).toEqual([
+      'Voir dans Google Maps',
+    ]);
   });
 });

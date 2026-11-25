@@ -81,7 +81,12 @@
   import { endDrag, type DropTarget } from '#lib/steps/dnd.svelte.ts';
   import { samePoint } from '#lib/steps/coords.ts';
   import { positionAt } from '#lib/steps/moves.ts';
-  import { moveToEndOp, stepMenuEntries, type MenuPoint } from '#lib/steps/contextMenu.ts';
+  import {
+    moveToEndOp,
+    placeMenuEntries,
+    stepMenuEntries,
+    type MenuPoint,
+  } from '#lib/steps/contextMenu.ts';
   import { createSerialQueue } from '#lib/serial.ts';
   import { pageHeader } from '#lib/page-header.svelte.ts';
   import { createHistory, inverseOps } from '#lib/schedule/history.ts';
@@ -109,6 +114,7 @@
   import TripFormDialog, { type TripFormValues } from '#lib/components/TripFormDialog.svelte';
   import TripMap from '#lib/components/TripMap.svelte';
   import ExplorePanel from '#lib/components/poi/ExplorePanel.svelte';
+  import SearchPanel from '#lib/components/places/SearchPanel.svelte';
   import LegEditor from '#lib/components/legs/LegEditor.svelte';
   import LegTile from '#lib/components/legs/LegTile.svelte';
   import NewPlaceDialog, { type NewPlaceTab } from '#lib/components/steps/NewPlaceDialog.svelte';
@@ -163,11 +169,18 @@
   /** Lieu choisi dans la colonne ou sur la carte (popup ouverte) : reste mis en évidence. */
   let selectedKey = $state<string | null>(null);
   /** Demande de centrage et de popup pour la carte (`seq` change à chaque clic). */
-  let mapFocus = $state<{ target: FocusTarget; seq: number } | null>(null);
+  // Brut : remplacé d'un bloc, et un résultat de recherche (`place`) n'y devient pas un proxy.
+  let mapFocus = $state.raw<{ target: FocusTarget; seq: number } | null>(null);
   let mapView = $state<MapView | null>(null);
   const mapCenter = $derived(mapView ? bboxCenter(mapView.bbox) : null);
-  /** Découverte de lieux : panneau gauche et marqueurs dédiés. */
-  let exploring = $state(false);
+  /**
+   * Panneau gauche à la place de la journée, ouvert par les outils de la carte : découverte de lieux
+   * (« Explorer la zone », avec ses pastilles sur la carte) ou recherche (« Rechercher »).
+   */
+  let sidePanel = $state<'explore' | 'search' | null>(null);
+  const exploring = $derived(sidePanel === 'explore');
+  /** Résultat de « Rechercher » choisi (popup ouverte) ; brut : comparé par identité à la liste. */
+  let selectedPlace = $state.raw<Place | null>(null);
   let poiCategories = $state<PoiCategory[]>([]);
   let pois = $state<Poi[]>([]);
   let poiStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -721,6 +734,12 @@
     focusMap({ kind: 'poi', id: poi.id });
   }
 
+  /** Clic sur un résultat de « Rechercher » : même geste, zoom sur le lieu et popup. */
+  function openPlace(place: Place) {
+    selectedPlace = place;
+    focusMap({ kind: 'place', place });
+  }
+
   /** Nom d'un point du jour (étape ou séjour), pour le titre de la popup d'un trajet. */
   const pointName = (key: string) => points.find((p) => p.key === key)?.name ?? '?';
 
@@ -761,15 +780,16 @@
     const poi = target.poi;
     const step = poi.osmRef ? steps.find((x) => x.osmRef === poi.osmRef) : undefined;
     return poiPopupContent(poi, step !== undefined, dayLabel, canEdit, {
-      addToDay: () => addPoi(poi, true),
-      addToIdeas: () => addPoi(poi, false),
+      addToDay: () => addPoi(poi, selectedDay),
+      addToIdeas: () => addPoi(poi, null),
       remove: () => step && askDelete(step),
     });
   }
 
   function onPopupClose(kind: PopupTarget['kind']) {
     if (kind === 'poi') selectedPoi = null;
-    else if (kind !== 'place') selectedKey = null;
+    else if (kind === 'place') selectedPlace = null;
+    else selectedKey = null;
   }
 
   function askDeleteById(stepId: string) {
@@ -826,6 +846,30 @@
       (e) => (notice = e instanceof Error ? e.message : String(e)),
     );
   }
+
+  /**
+   * Menu contextuel commun des résultats de « Rechercher » et d'« Explorer la zone » : Ajouter aux
+   * idées, Ajouter à un jour, Voir dans Google Maps ; Supprimer si le lieu est déjà dans le voyage
+   * (même règle que sa popup).
+   */
+  function openPlaceMenu(
+    place: { name: string; lat: number; lng: number; osmRef: string | null },
+    point: MenuPoint,
+    addTo: (dayId: string | null) => void,
+  ) {
+    const step = place.osmRef ? steps.find((s) => s.osmRef === place.osmRef) : undefined;
+    const entries = placeMenuEntries(place, days, canEdit, step !== undefined, {
+      addTo,
+      remove: () => step && askDelete(step),
+    });
+    contextMenu = { label: place.name, point, entries };
+  }
+
+  const openPoiMenu = (poi: Poi, point: MenuPoint) =>
+    openPlaceMenu(poi, point, (dayId) => void addPoi(poi, dayId));
+
+  const openSearchMenu = (place: Place, point: MenuPoint) =>
+    openPlaceMenu(place, point, (dayId) => void addMapPlace(place, dayId));
 
   /** Clic droit sur le marqueur d'une étape ou d'une idée : même menu que dans la colonne. */
   function openMarkerMenu(point: MapPoint, at: MenuPoint) {
@@ -927,10 +971,9 @@
     searchPois();
   }
 
-  async function addPoi(poi: Poi, toDay: boolean) {
-    await applyQuietly(() =>
-      createStep(id, version(), poiStepInput(poi, toDay ? selectedDay : null)),
-    );
+  /** Lieu de la découverte ajouté au jour visé ou aux idées (`dayId` null). */
+  async function addPoi(poi: Poi, dayId: string | null) {
+    await applyQuietly(() => createStep(id, version(), poiStepInput(poi, dayId)));
   }
 
   /** Lieu de la découverte cliqué sur la carte (la carte ouvre sa popup) : sélection dans la liste. */
@@ -941,10 +984,12 @@
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function toggleExplore() {
-    exploring = !exploring;
+  /** Outil « Explorer la zone » ou « Rechercher » : ouvre son panneau, ou revient au jour. */
+  function toggleSidePanel(panel: 'explore' | 'search') {
+    sidePanel = sidePanel === panel ? null : panel;
     selectedPoi = null;
     hoveredPoi = null;
+    selectedPlace = null;
   }
 
   async function addLeg(
@@ -1206,28 +1251,36 @@
       </div>
     {/if}
 
-    {#snippet explorePanel()}
+    {#snippet sidePanelContent()}
       <div class="block">
-        <ExplorePanel
-          categories={poiCategories}
-          {pois}
-          status={poiStatus}
-          error={poiError}
-          {zoomTooLow}
-          stale={poiStale}
-          {dayLabel}
-          {canEdit}
-          {addedRefs}
-          selectedId={selectedPoi}
-          onToggleCategory={toggleCategory}
-          onSetCategories={setCategories}
-          onSearch={searchPois}
-          onAdd={addPoi}
-          onSelect={openPoi}
-          onHover={(poiId) => (hoveredPoi = poiId)}
-          onBack={toggleExplore}
-          loadWiki={(ref) => poiWiki(ref)}
-        />
+        {#if sidePanel === 'search'}
+          <SearchPanel
+            {search}
+            {addedRefs}
+            selected={selectedPlace}
+            onSelect={openPlace}
+            onContextMenu={openSearchMenu}
+            onBack={() => toggleSidePanel('search')}
+          />
+        {:else}
+          <ExplorePanel
+            categories={poiCategories}
+            {pois}
+            status={poiStatus}
+            error={poiError}
+            {zoomTooLow}
+            stale={poiStale}
+            {addedRefs}
+            selectedId={selectedPoi}
+            onToggleCategory={toggleCategory}
+            onSetCategories={setCategories}
+            onSearch={searchPois}
+            onSelect={openPoi}
+            onContextMenu={openPoiMenu}
+            onBack={() => toggleSidePanel('explore')}
+            loadWiki={(ref) => poiWiki(ref)}
+          />
+        {/if}
       </div>
     {/snippet}
 
@@ -1315,15 +1368,15 @@
         findPlaceAt={canEdit ? findPlaceAt : undefined}
         onViewChange={(v) => (mapView = v)}
         pois={exploring ? pois : []}
-        {selectedPoi}
         {hoveredPoi}
         onPickPoi={pickPoi}
         onHoverPoi={(poiId) => (hoveredPoi = poiId)}
         findBasemapPois={online ? findBasemapPois : undefined}
         {exploring}
-        onToggleExplore={online ? toggleExplore : undefined}
+        onToggleExplore={online ? () => toggleSidePanel('explore') : undefined}
+        searching={sidePanel === 'search'}
+        onToggleSearch={online ? () => toggleSidePanel('search') : undefined}
         onOffline={online ? openOffline : undefined}
-        onSearch={canEdit ? () => openNewPlace('search') : undefined}
         onAddPlace={canEdit ? () => openNewPlace('search') : undefined}
         lines={legLines}
         placing={placing
@@ -1338,8 +1391,8 @@
         <SplitPane>
           {#snippet left()}
             <section class="panel">
-              {#if exploring}
-                {@render explorePanel()}
+              {#if sidePanel}
+                {@render sidePanelContent()}
               {:else}
                 {#if day}
                   {@render dayHead(day)}
@@ -1379,8 +1432,8 @@
         <div class="metro-layout">
           <div class="metro-map">{@render tripMap()}</div>
           <section class="metro-panel" aria-label="Journée">
-            {#if exploring}
-              <div class="metro-main">{@render explorePanel()}</div>
+            {#if sidePanel}
+              <div class="metro-main">{@render sidePanelContent()}</div>
             {:else}
               <div class="metro-main">
                 {#if day}
@@ -1430,10 +1483,10 @@
             </div>
           </div>
           {#if boardMode === 'map'}
-            <div class="board-map">
+            <div class="board-map" class:with-panel={sidePanel !== null}>
               {@render tripMap()}
-              {#if exploring}
-                <aside class="board-explore">{@render explorePanel()}</aside>
+              {#if sidePanel}
+                <aside class="board-explore">{@render sidePanelContent()}</aside>
               {/if}
             </div>
           {:else}
@@ -1887,9 +1940,15 @@
   }
 
   .board-map {
+    --side-panel-width: 380px;
     position: relative;
     flex: 1;
     min-height: 0;
+  }
+
+  /* Le panneau recouvre le bord gauche de la carte : ses outils se décalent (TripMap). */
+  .board-map.with-panel {
+    --map-tools-inset: var(--side-panel-width);
   }
 
   .board-explore {
@@ -1897,7 +1956,7 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: 380px;
+    width: var(--side-panel-width);
     overflow: auto;
     background: var(--surface);
     box-shadow: var(--shadow-float);

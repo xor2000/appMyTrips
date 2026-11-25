@@ -1,5 +1,7 @@
 import type { BatchOp, Day, Step } from '@mytrips/core';
+import CalendarPlus from 'lucide-svelte/icons/calendar-plus';
 import ExternalLink from 'lucide-svelte/icons/external-link';
+import Lightbulb from 'lucide-svelte/icons/lightbulb';
 import MoveRight from 'lucide-svelte/icons/move-right';
 import Pencil from 'lucide-svelte/icons/pencil';
 import Trash2 from 'lucide-svelte/icons/trash-2';
@@ -40,16 +42,28 @@ export function moveTargets(step: Step, days: readonly Day[]): MoveTarget[] {
   const targets: MoveTarget[] = [];
   if (step.dayId !== null) targets.push({ dayId: null, label: 'Idées', hint: null });
   days.forEach((d, i) => {
-    if (d.id !== step.dayId) {
-      targets.push({ dayId: d.id, label: `J${i + 1}`, hint: dayTabLabel(d.date) });
-    }
+    if (d.id !== step.dayId) targets.push(dayTarget(d, i));
   });
   return targets;
+}
+
+/** Jour comme destination d'un sous-menu : « J2 », avec sa date en indice. */
+function dayTarget(day: Day, index: number): MoveTarget {
+  return { dayId: day.id, label: `J${index + 1}`, hint: dayTabLabel(day.date) };
 }
 
 /** Le point GPS dans Google Maps (recherche par coordonnées). */
 export function googleMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
+
+function googleMapsEntry(lat: number, lng: number): MenuEntry {
+  return {
+    kind: 'link',
+    label: 'Voir dans Google Maps',
+    icon: ExternalLink,
+    href: googleMapsUrl(lat, lng),
+  };
 }
 
 /**
@@ -109,12 +123,59 @@ export function stepMenuEntries(
     }
   }
   if (step.kind === 'step' && step.lat !== null && step.lng !== null) {
-    entries.push({
-      kind: 'link',
-      label: 'Voir dans Google Maps',
-      icon: ExternalLink,
-      href: googleMapsUrl(step.lat, step.lng),
-    });
+    entries.push(googleMapsEntry(step.lat, step.lng));
   }
+  return entries;
+}
+
+/** Actions du menu contextuel d'un résultat de recherche (lieu trouvé, pas encore une étape). */
+export interface PlaceMenuHandlers {
+  /** Ajout au jour visé, ou aux idées (`dayId` null). */
+  addTo: (dayId: string | null) => void;
+  /** Suppression de l'étape déjà créée depuis ce lieu (même référence OSM). */
+  remove: () => void;
+}
+
+/**
+ * Menu contextuel commun aux résultats de « Rechercher » et d'« Explorer la zone » : Ajouter aux
+ * idées, Ajouter à un jour (sous-menu de tous les jours), Voir dans Google Maps. Lieu déjà dans le
+ * voyage : Supprimer, comme sa popup. En lecture seule, Google Maps seul.
+ */
+export function placeMenuEntries(
+  place: { lat: number; lng: number },
+  days: readonly Day[],
+  canEdit: boolean,
+  added: boolean,
+  handlers: PlaceMenuHandlers,
+): MenuEntry[] {
+  const entries: MenuEntry[] = [];
+  if (canEdit && added) {
+    entries.push({
+      kind: 'action',
+      label: 'Supprimer',
+      icon: Trash2,
+      danger: true,
+      run: handlers.remove,
+    });
+  } else if (canEdit) {
+    entries.push({
+      kind: 'action',
+      label: 'Ajouter aux idées',
+      icon: Lightbulb,
+      run: () => handlers.addTo(null),
+    });
+    if (days.length > 0) {
+      entries.push({
+        kind: 'submenu',
+        label: 'Ajouter à un jour',
+        icon: CalendarPlus,
+        items: days.map((d, i) => {
+          const { label, hint } = dayTarget(d, i);
+          return { label, hint, run: () => handlers.addTo(d.id) };
+        }),
+      });
+    }
+  }
+  entries.push(googleMapsEntry(place.lat, place.lng));
   return entries;
 }
