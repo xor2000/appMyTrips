@@ -108,6 +108,28 @@ describe('ContextMenu', () => {
     expect(screen.getByRole('menu', { name: 'Déplacer vers' })).toBeTruthy();
   });
 
+  it('souris : le sous-menu reste ouvert le temps d’y aller (marge entre l’entrée et lui)', async () => {
+    vi.useFakeTimers();
+    try {
+      setup();
+      const wrap = screen.getByRole('menuitem', { name: 'Déplacer vers' }).parentElement!;
+      await fireEvent.mouseEnter(wrap);
+      // Le pointeur traverse la marge du menu, hors de l'entrée, puis entre dans le sous-menu.
+      await fireEvent.mouseLeave(wrap);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(screen.getByRole('menu', { name: 'Déplacer vers' })).toBeTruthy();
+      await fireEvent.mouseEnter(wrap);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(screen.getByRole('menu', { name: 'Déplacer vers' })).toBeTruthy();
+      // Parti pour de bon : le sous-menu se ferme après le délai.
+      await fireEvent.mouseLeave(wrap);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(screen.queryByRole('menu', { name: 'Déplacer vers' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('lien : nouvel onglet, sans accès à la page d’origine', () => {
     setup();
     const link = screen.getByRole('menuitem', { name: 'Voir dans Google Maps' });
