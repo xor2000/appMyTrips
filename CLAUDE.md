@@ -84,8 +84,10 @@ Vérifications attendues avant de rendre un travail : `pnpm lint`, `pnpm typeche
   (`apps/api/src/routes/trips.ts`) : version incrémentée et requêtes conditionnées dans un seul
   `db.batch`.
 - **Marqueurs HTML de MapLibre** : MapLibre les place par un `transform` en ligne. Jamais de
-  `transition` ni de `transform` en CSS sur l'élément du marqueur (il traîne derrière la carte) ;
-  mettre en évidence avec la propriété `scale`. Pour des points nombreux, préférer une couche
+  `transition`, de `transform` ni de `scale` en CSS sur l'élément du marqueur : une transition le
+  fait traîner derrière la carte, et `scale` s'applique aussi à la translation (le marqueur
+  s'éloigne de son lieu, d'autant plus qu'il est loin du coin de la carte). Le visuel et sa mise
+  en évidence (`scale`) vont sur un élément intérieur (`.pin` dans `TripMap.svelte`). Pour des points nombreux, préférer une couche
   WebGL (source GeoJSON, `setFeatureState`), comme les lieux de la découverte (`lib/map/pois.ts`).
 - **Effet Svelte et collection non réactive** : un `$effect` ne dépend que de ce qu'il lit à son
   premier passage. Une prop lue seulement dans une boucle sur une `Map` non réactive (marqueurs de

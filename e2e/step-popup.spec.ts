@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { clickMapAt } from './map-helpers';
+import { clickMapAt, type MapTestWindow } from './map-helpers';
 import { addPlaceViaMap } from './place-helpers';
 
 /** Style de carte minimal : les e2e ne dépendent pas des serveurs de tuiles. */
@@ -46,6 +46,49 @@ const cardButton = (page: Page, name: string) =>
     .getByTestId('step-card')
     .filter({ hasText: name })
     .getByRole('button', { name: new RegExp(`${name} Musée`) });
+
+/**
+ * Écart (en pixels de l'écran) entre le bas de la pastille du marqueur (`.pin`, qui porte le
+ * visuel agrandi) et la position projetée du lieu. Le marqueur est ancré par le bas
+ * (`anchor: 'bottom'`) : l'écart doit rester nul, même mis en évidence.
+ */
+async function markerOffset(page: Page, name: string, lngLat: [number, number]) {
+  const point = await page.evaluate(
+    (position) => (window as MapTestWindow).__mapProjectForTests?.(position),
+    lngLat,
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const box = await canvas.boundingBox();
+  const width = await canvas.evaluate((el) => (el as HTMLElement).offsetWidth);
+  const pin = await page
+    .getByRole('button', { name: new RegExp(` · ${name}$`) })
+    .locator('.pin')
+    .boundingBox();
+  if (!point || !box || !pin) return Number.POSITIVE_INFINITY;
+  const ratio = box.width / width;
+  return Math.hypot(
+    pin.x + pin.width / 2 - (box.x + point.x * ratio),
+    pin.y + pin.height - (box.y + point.y * ratio),
+  );
+}
+
+/** Pire de deux relevés espacés : pas de faux succès pendant le zoom ou l'agrandissement. */
+async function settledMarkerOffset(page: Page, name: string, lngLat: [number, number]) {
+  const first = await markerOffset(page, name, lngLat);
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
+  return Math.max(first, await markerOffset(page, name, lngLat));
+}
+
+test('clic sur un lieu : son marqueur, mis en évidence, reste à sa position (sous la popup)', async ({
+  page,
+}) => {
+  await tripWithTwoPlaces(page);
+  await cardButton(page, 'Musée d’Orsay').click();
+  await expect(page.locator('.map-marker', { hasText: '2' })).toHaveClass(/highlighted/);
+  await expect
+    .poll(() => settledMarkerOffset(page, 'Musée d’Orsay', [2.3266, 48.86]), { timeout: 10_000 })
+    .toBeLessThan(3);
+});
 
 test('clic sur un lieu de la colonne : sélection, zoom et popup, sans ouvrir l’édition', async ({
   page,
