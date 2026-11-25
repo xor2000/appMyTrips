@@ -6,12 +6,14 @@
     type PoiCategory,
     type WikiSummary,
   } from '@mytrips/core';
-  import ArrowLeft from 'lucide-svelte/icons/arrow-left';
   import RefreshCw from 'lucide-svelte/icons/refresh-cw';
   import ZoomIn from 'lucide-svelte/icons/zoom-in';
+  import ResultGroups from '#lib/components/places/ResultGroups.svelte';
+  import SidePanel from '#lib/components/places/SidePanel.svelte';
   import { plural } from '#lib/format.ts';
-  import { groupPoisByCategory, poiCounts } from '#lib/poi/explore.ts';
-  import { STEP_ICONS } from '#lib/steps/icons.ts';
+  import { poiResultGroups } from '#lib/places/results.ts';
+  import { poiCounts } from '#lib/poi/explore.ts';
+  import type { MenuPoint } from '#lib/steps/contextMenu.ts';
   import PoiCard from './PoiCard.svelte';
 
   interface Props {
@@ -23,8 +25,6 @@
     zoomTooLow: boolean;
     /** La carte a bougé depuis la dernière recherche. */
     stale: boolean;
-    dayLabel: string | null;
-    canEdit: boolean;
     /** Références OSM des étapes du voyage (lieux déjà ajoutés). */
     addedRefs: Set<string>;
     selectedId: string | null;
@@ -32,9 +32,9 @@
     /** « Tous » : toutes les catégories d'un coup (une seule recherche), ou aucune. */
     onSetCategories: (categories: PoiCategory[]) => void;
     onSearch: () => void;
-    onAdd: (poi: Poi, toDay: boolean) => Promise<void>;
     onSelect: (poi: Poi) => void;
-    onHover: (id: string | null) => void;
+    /** Clic droit, touche Menu ou Maj+F10 sur un lieu : menu contextuel commun. */
+    onContextMenu: (poi: Poi, point: MenuPoint) => void;
     onBack: () => void;
     loadWiki: (ref: string) => Promise<WikiSummary | null>;
   }
@@ -46,33 +46,23 @@
     error,
     zoomTooLow,
     stale,
-    dayLabel,
-    canEdit,
     addedRefs,
     selectedId,
     onToggleCategory,
     onSetCategories,
     onSearch,
-    onAdd,
     onSelect,
-    onHover,
+    onContextMenu,
     onBack,
     loadWiki,
   }: Props = $props();
 
   const counts = $derived(poiCounts(pois));
-  const groups = $derived(groupPoisByCategory(pois));
+  const groups = $derived(poiResultGroups(pois));
   const allOn = $derived(POI_CATEGORIES.every((c) => categories.includes(c)));
 </script>
 
-<section class="explore" aria-label="Explorer">
-  <div class="head">
-    <button type="button" class="btn btn-ghost back" onclick={onBack}>
-      <ArrowLeft size={16} />Retour au jour
-    </button>
-    <h2>Explorer la zone</h2>
-  </div>
-
+<SidePanel label="Explorer" title="Explorer la zone" {onBack}>
   <div class="chips" role="group" aria-label="Catégories">
     <button
       type="button"
@@ -116,65 +106,23 @@
 
   {#if pois.length > 0}
     <p class="total">{plural(pois.length, 'lieu', 'lieux')} dans la zone</p>
-    <!-- Groupés par catégorie : un titre (icône, libellé, nombre) et un filet, puis la liste des
-         lieux de la catégorie, nommée par son titre. -->
-    <div class="results" role="group" aria-label="Lieux trouvés">
-      {#each groups as group (group.category)}
-        {@const info = POI_CATEGORY_INFO[group.category]}
-        {@const Icon = STEP_ICONS[info.stepType]}
-        <section class="group">
-          <h3 id={`poi-group-${group.category}`}>
-            <Icon size={14} aria-hidden="true" />{info.label}
-            <span class="group-count"
-              >{group.pois.length}<span class="visually-hidden"
-                >{group.pois.length > 1 ? ' lieux' : ' lieu'}</span
-              ></span
-            >
-          </h3>
-          <ul class="list" aria-labelledby={`poi-group-${group.category}`}>
-            {#each group.pois as poi (poi.id)}
-              <PoiCard
-                {poi}
-                selected={poi.id === selectedId}
-                added={poi.osmRef !== null && addedRefs.has(poi.osmRef)}
-                {dayLabel}
-                {canEdit}
-                {onAdd}
-                {onSelect}
-                {onHover}
-                {loadWiki}
-              />
-            {/each}
-          </ul>
-        </section>
-      {/each}
-    </div>
+    <!-- Groupés par catégorie, comme les résultats de « Rechercher » (composants communs). -->
+    <ResultGroups {groups} label="Lieux trouvés" idPrefix="poi-group" key={(poi) => poi.id}>
+      {#snippet row(poi)}
+        <PoiCard
+          {poi}
+          selected={poi.id === selectedId}
+          added={poi.osmRef !== null && addedRefs.has(poi.osmRef)}
+          {onSelect}
+          {onContextMenu}
+          {loadWiki}
+        />
+      {/snippet}
+    </ResultGroups>
   {/if}
-</section>
+</SidePanel>
 
 <style>
-  .explore {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .head h2 {
-    font-size: 20px;
-  }
-
-  .back {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-  }
-
   .chips {
     display: flex;
     flex-wrap: wrap;
@@ -231,45 +179,5 @@
     margin: 0;
     font-size: 12px;
     color: var(--muted);
-  }
-
-  /* Groupes de résultats : titre (petite icône, libellé, nombre) avec un filet, puis la liste. */
-  .results {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .group h3 {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin: 0;
-    padding-bottom: var(--space-1);
-    border-bottom: 1px solid var(--line);
-    color: var(--muted);
-    font: 700 12px var(--font-display);
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
-
-  .group-count {
-    margin-left: auto;
-    font-weight: 600;
-  }
-
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: 0;
-    padding: 0;
-    list-style: none;
   }
 </style>

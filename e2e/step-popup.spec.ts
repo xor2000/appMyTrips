@@ -197,9 +197,9 @@ test('clic sur un trajet : la carte cadre le tracé et ouvre sa popup (infos, Mo
 
 test('clic sur une idée qui a un lieu : zoom et popup « … · Idée »', async ({ page }) => {
   await tripWithTwoPlaces(page);
-  // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
+  // Plus de bouton « Ajouter une idée » : le bouton « Lieu » de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
-  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
+  await page.getByRole('button', { name: 'Lieu', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Eiffel');
   await dialog.getByRole('button', { name: /Tour Eiffel/ }).click();

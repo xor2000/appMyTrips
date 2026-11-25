@@ -90,7 +90,18 @@ test('explorer les musées de la zone et en ajouter un à J2, avec ses horaires'
       ['poi-icon-museum', true],
     ]);
 
-  await explore.getByRole('button', { name: 'Ajouter Musée des Arts décoratifs à J2' }).click();
+  // Plus de bouton sur les lignes : « Ajouter à un jour » du menu contextuel.
+  await list
+    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menu', { name: 'Musée des Arts décoratifs', exact: true })
+    .getByRole('menuitem', { name: 'Ajouter à un jour' })
+    .click();
+  await page
+    .getByRole('menu', { name: 'Ajouter à un jour' })
+    .getByRole('menuitem', { name: /^J2/ })
+    .click();
   await expect(list.getByRole('listitem', { name: 'Musée des Arts décoratifs' })).toContainText(
     'Déjà ajouté',
   );
@@ -148,26 +159,28 @@ test('la carte a bougé : relancer la recherche dans la nouvelle zone', async ({
   await expect(explore.getByRole('button', { name: 'Rechercher dans cette zone' })).toHaveCount(0);
 });
 
-test('choisir un lieu dans la liste le met en évidence sur la carte, avec son nom', async ({
+test('choisir un lieu dans la liste : zoom et popup, sans mise en évidence de la pastille', async ({
   page,
 }) => {
   await tripCenteredOnLouvre(page);
   const explore = await exploreMuseums(page);
   await expect.poll(() => renderedPoiNames(page)).toHaveLength(3);
 
-  await explore
-    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+  const item = explore.getByRole('listitem', { name: 'Musée des Arts décoratifs' });
+  // Le survol d'une ligne ne met plus la pastille en évidence.
+  await item.hover();
+  // Deux images : l'effet de la carte a eu le temps de poser un éventuel état `active`.
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+  );
+  expect((await renderedPois(page)).filter((p) => p.active)).toEqual([]);
+
+  await item
     .getByRole('button', { name: /Musée des Arts décoratifs/ })
     .first()
     .click();
-  // La carte se déplace : « Rechercher dans cette zone » apparaît et décale la liste sous la souris
-  // restée immobile (le lieu passé dessous serait survolé). On l'éloigne de la liste.
-  await page.mouse.move(640, 5);
   const popup = page.getByTestId('poi-popup');
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Musée des Arts décoratifs');
-  await expect
-    .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
-    .toEqual(['Musée des Arts décoratifs']);
   // Zoom sur le lieu (15 au moins), comme la référence.
   await expect
     .poll(() =>
@@ -176,13 +189,73 @@ test('choisir un lieu dans la liste le met en évidence sur la carte, avec son n
       ),
     )
     .toBeGreaterThanOrEqual(15);
+  // La popup suffit : la pastille n'est pas agrandie.
+  await expect
+    .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
+    .toEqual([]);
+  await expect(item.getByRole('button', { expanded: true })).toBeVisible();
 
   // Fermer la popup désélectionne le lieu.
   await page.locator('.map-popup .maplibregl-popup-close-button').click();
   await expect(popup).toHaveCount(0);
-  await expect
-    .poll(async () => (await renderedPois(page)).filter((p) => p.active).map((p) => p.name))
-    .toEqual([]);
+  await expect(item.getByRole('button', { expanded: true })).toHaveCount(0);
+});
+
+test('menu contextuel d’un lieu découvert : idées, Google Maps, puis Supprimer une fois ajouté', async ({
+  page,
+  context,
+}) => {
+  await context.route('https://www.google.com/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>Google Maps</title>' }),
+  );
+  await tripCenteredOnLouvre(page);
+  const explore = await exploreMuseums(page);
+  const list = explore.getByRole('group', { name: 'Lieux trouvés' });
+  // Aucun bouton d'action sur les lignes : seulement le lieu lui-même.
+  await expect(list.getByRole('button', { name: /^Ajouter/ })).toHaveCount(0);
+
+  const item = list.getByRole('listitem', { name: 'Musée des Arts décoratifs' });
+  await item.click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Musée des Arts décoratifs', exact: true });
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Ajouter aux idées',
+    'Ajouter à un jour',
+    'Voir dans Google Maps',
+  ]);
+  await menu.getByRole('menuitem', { name: 'Ajouter à un jour' }).click();
+  await expect(
+    page.getByRole('menu', { name: 'Ajouter à un jour' }).getByRole('menuitem'),
+  ).toHaveText([/^J1/, /^J2/, /^J3/]);
+
+  // Google Maps : le point GPS dans un nouvel onglet.
+  const tabPromise = context.waitForEvent('page');
+  await menu.getByRole('menuitem', { name: 'Voir dans Google Maps' }).click();
+  const tab = await tabPromise;
+  expect(tab.url()).toContain('https://www.google.com/maps/search/?api=1&query=48.863,2.333');
+  await tab.close();
+
+  await item.click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Ajouter aux idées' }).click();
+  await expect(item).toContainText('Déjà ajouté');
+  await explore.getByRole('button', { name: 'Retour au jour' }).click();
+  await expect(page.getByRole('region', { name: 'Idées' }).getByTestId('step-card')).toContainText([
+    'Musée des Arts décoratifs',
+  ]);
+
+  // Déjà dans le voyage : « Supprimer », comme sa popup.
+  await page.getByRole('button', { name: 'Explorer' }).click();
+  await explore
+    .getByRole('listitem', { name: 'Musée des Arts décoratifs' })
+    .click({ button: 'right' });
+  await expect(menu.getByRole('menuitem')).toHaveText(['Supprimer', 'Voir dans Google Maps']);
+  await menu.getByRole('menuitem', { name: 'Supprimer' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Supprimer l’étape ?' })
+    .getByRole('button', { name: 'Supprimer' })
+    .click();
+  await expect(
+    explore.getByRole('listitem', { name: 'Musée des Arts décoratifs' }),
+  ).not.toContainText('Déjà ajouté');
 });
 
 test('popup d’un lieu découvert : type, source, Ajouter, puis « Déjà ajouté » et Supprimer', async ({

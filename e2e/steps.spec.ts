@@ -107,9 +107,9 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
   page,
 }) => {
   await createTripAndOpenDay1(page);
-  // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
+  // Plus de bouton « Ajouter une idée » : le bouton « Lieu » de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
-  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
+  await page.getByRole('button', { name: 'Lieu', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
@@ -141,9 +141,9 @@ test('une idée se place dans un jour (onglet), et une étape retourne aux idée
 test('une idée apparaît sur la carte, sans numéro ni trajet', async ({ page }) => {
   await createTripAndOpenDay1(page);
   await addPlace(page, 'Louvre', 'Musée du Louvre');
-  // Plus de bouton « Ajouter une idée » : la recherche de la carte, sur « Tout le voyage ».
+  // Plus de bouton « Ajouter une idée » : le bouton « Lieu » de la carte, sur « Tout le voyage ».
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
-  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
+  await page.getByRole('button', { name: 'Lieu', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();
@@ -215,10 +215,8 @@ test('fenêtre du lieu : latitude et longitude, nouvelle position en cliquant su
   await expect(editor).toBeHidden();
   const banner = page.getByRole('status').filter({ hasText: 'Cliquez sur la carte' });
   await expect(banner).toContainText('« Musée du Louvre »');
-  // Le bandeau prend la place du champ de recherche de la carte.
-  await expect(page.getByRole('button', { name: /Rechercher un lieu, une adresse/ })).toHaveCount(
-    0,
-  );
+  // Le bouton « Lieu » de la carte est masqué le temps du choix.
+  await expect(page.getByRole('button', { name: 'Lieu', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(editor).toBeVisible();
   await expect(banner).toHaveCount(0);

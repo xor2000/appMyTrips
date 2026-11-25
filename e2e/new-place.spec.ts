@@ -153,12 +153,10 @@ test('catégorie « Randonnée » : GPX importé dès la création', async ({ pa
   await expect(page.locator('.map-marker', { hasText: '⚑' })).toHaveCount(1);
 });
 
-test('la recherche de la carte ouvre la même fenêtre ; sur « Tout le voyage », dans les idées', async ({
-  page,
-}) => {
+test('« Lieu » sur « Tout le voyage » : le nouveau lieu va dans les idées', async ({ page }) => {
   await tripOnDay1(page);
   await page.getByRole('tab', { name: 'Tout le voyage' }).click();
-  await page.getByRole('button', { name: /Rechercher un lieu, une adresse/ }).click();
+  await page.getByRole('button', { name: 'Lieu', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un lieu' });
   await dialog.getByRole('searchbox', { name: 'Rechercher un lieu' }).fill('Orsay');
   await dialog.getByRole('button', { name: /Musée d’Orsay/ }).click();

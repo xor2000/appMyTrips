@@ -22,9 +22,15 @@ export type PopupTarget =
   | { kind: 'poi'; poi: Poi }
   | { kind: 'place'; place: Place };
 
-/** Élément choisi dans la colonne, à cadrer sur la carte (clé de point, de paire, id de lieu). */
+/**
+ * Élément choisi dans la colonne, à cadrer sur la carte : clé de point, de paire, id d'un lieu de la
+ * découverte, ou résultat de « Rechercher » (lieu trouvé, sans marqueur sur la carte).
+ */
 export type FocusTarget =
-  { kind: 'step'; key: string } | { kind: 'leg'; key: string } | { kind: 'poi'; id: string };
+  | { kind: 'step'; key: string }
+  | { kind: 'leg'; key: string }
+  | { kind: 'poi'; id: string }
+  | { kind: 'place'; place: Place };
 
 /** Bouton d'une popup de la carte. */
 export interface PopupAction {

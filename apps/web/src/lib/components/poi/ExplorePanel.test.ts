@@ -28,16 +28,13 @@ function setup(overrides: Record<string, unknown> = {}) {
     error: null as string | null,
     zoomTooLow: false,
     stale: false,
-    dayLabel: 'J2' as string | null,
-    canEdit: true,
     addedRefs: new Set(['N1000']),
     selectedId: null as string | null,
     onToggleCategory: vi.fn(),
     onSetCategories: vi.fn(),
     onSearch: vi.fn(),
-    onAdd: vi.fn().mockResolvedValue(undefined),
     onSelect: vi.fn(),
-    onHover: vi.fn(),
+    onContextMenu: vi.fn(),
     onBack: vi.fn(),
     loadWiki: vi.fn().mockResolvedValue({
       title: 'Musée du Louvre',
@@ -65,34 +62,53 @@ describe('ExplorePanel', () => {
     expect(props.onToggleCategory).toHaveBeenCalledWith('park');
   });
 
-  it('liste les lieux ; ajout au jour sélectionné ou aux idées', async () => {
-    const props = setup();
+  it('liste les lieux, sans aucun bouton d’action sur les lignes', () => {
+    setup();
     const list = screen.getByRole('group', { name: 'Lieux trouvés' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Ajouter Musée des Arts décoratifs à J2' }),
-    );
-    expect(props.onAdd).toHaveBeenCalledWith(POIS[0], true);
-    await fireEvent.click(screen.getByRole('button', { name: 'Ajouter Café Kitsuné aux idées' }));
-    expect(props.onAdd).toHaveBeenCalledWith(POIS[2], false);
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    // Un seul bouton par ligne : le lieu lui-même (les actions passent par le menu contextuel).
+    for (const item of items) expect(within(item).getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /^Ajouter/ })).toBeNull();
   });
 
-  it('marque un lieu déjà présent dans le voyage, sans bouton d’ajout', () => {
+  it('clic droit sur un lieu : menu contextuel au pointeur', async () => {
+    const props = setup();
+    const item = screen.getByRole('button', { name: /^Café Kitsuné/ });
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 120,
+      clientY: 80,
+    });
+    item.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(props.onContextMenu).toHaveBeenCalledWith(POIS[2], { x: 120, y: 80 });
+  });
+
+  it('clic droit dans le détail déplié (lien Wikipédia) : menu du navigateur, pas celui du lieu', async () => {
+    const props = setup({ selectedId: 'osm:N1000' });
+    const link = await screen.findByRole('link', { name: 'Lire sur Wikipédia' });
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    link.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(props.onContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('touche Maj+F10 sur un lieu : menu contextuel', async () => {
+    const props = setup();
+    await fireEvent.keyDown(screen.getByRole('button', { name: /^Café Kitsuné/ }), {
+      key: 'F10',
+      shiftKey: true,
+    });
+    expect(props.onContextMenu).toHaveBeenCalledWith(POIS[2], expect.objectContaining({}));
+  });
+
+  it('marque un lieu déjà présent dans le voyage', () => {
     setup();
     const louvre = screen.getByRole('listitem', { name: 'Musée du Louvre' });
     expect(within(louvre).getByText('Déjà ajouté')).toBeTruthy();
-    expect(within(louvre).queryByRole('button', { name: /^Ajouter/ })).toBeNull();
-  });
-
-  it('sans jour sélectionné, propose seulement les idées', () => {
-    setup({ dayLabel: null });
-    expect(screen.queryByRole('button', { name: /à J\d/ })).toBeNull();
-    expect(screen.getAllByRole('button', { name: /aux idées/ })).toHaveLength(2);
-  });
-
-  it('en lecture seule, n’affiche aucun bouton d’ajout', () => {
-    setup({ canEdit: false });
-    expect(screen.queryByRole('button', { name: /^Ajouter/ })).toBeNull();
+    expect(within(louvre).getAllByRole('button')).toHaveLength(1);
   });
 
   it('invite à zoomer quand la carte est trop éloignée', () => {
