@@ -136,13 +136,16 @@ test('menu contextuel d’un résultat : idées, un jour, Google Maps, puis Supp
   expect(tab.url()).toContain('https://www.google.com/maps/search/?api=1&query=48.8584,2.2945');
   await tab.close();
 
-  // Ajouter à J2.
+  // Ajouter à J2, à la souris : le survol ouvre le sous-menu, qui reste ouvert pendant que le
+  // pointeur traverse la marge du menu pour l'atteindre.
   await item.click({ button: 'right' });
-  await menu.getByRole('menuitem', { name: 'Ajouter à un jour' }).click();
-  await page
-    .getByRole('menu', { name: 'Ajouter à un jour' })
-    .getByRole('menuitem', { name: /^J2/ })
-    .click();
+  await menu.getByRole('menuitem', { name: 'Ajouter à un jour' }).hover();
+  const j2 = page.getByRole('menu', { name: 'Ajouter à un jour' }).getByRole('menuitem', {
+    name: /^J2/,
+  });
+  const box = (await j2.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 25 });
+  await j2.click();
   await expect(item).toContainText('Déjà ajouté');
 
   // Déjà dans le voyage : Supprimer et Google Maps.

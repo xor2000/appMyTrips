@@ -19,7 +19,7 @@
 </script>
 
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
 
   interface Props {
@@ -87,7 +87,28 @@
     action();
   }
 
+  /**
+   * Fermeture du sous-menu quand le pointeur quitte son entrée, différée : pour l'atteindre, le
+   * pointeur traverse la marge du menu (hors de l'entrée), ou coupe en diagonale une autre entrée.
+   * Revenir sur l'entrée ou sur le sous-menu (son descendant) l'annule.
+   */
+  const HIDE_DELAY_MS = 300;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function cancelHide() {
+    clearTimeout(hideTimer);
+    hideTimer = undefined;
+  }
+
+  function hideSubLater() {
+    cancelHide();
+    hideTimer = setTimeout(() => hideSub(false), HIDE_DELAY_MS);
+  }
+
+  onDestroy(cancelHide);
+
   async function showSub(index: number, focus: boolean) {
+    cancelHide();
     const parent = itemsOf(root)[index];
     const width = window.innerWidth / zoom;
     flip = parent !== undefined && left + (root?.offsetWidth ?? 0) + 220 > width;
@@ -98,6 +119,7 @@
   }
 
   function hideSub(refocus: boolean) {
+    cancelHide();
     const index = openSub;
     openSub = null;
     if (refocus && index !== null) itemsOf(root)[index]?.focus();
@@ -184,7 +206,7 @@
         class="sub-wrap"
         role="none"
         onmouseenter={() => void showSub(i, false)}
-        onmouseleave={() => hideSub(false)}
+        onmouseleave={hideSubLater}
       >
         <button
           type="button"
