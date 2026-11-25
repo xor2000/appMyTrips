@@ -142,8 +142,12 @@
   let LngLatBoundsClass: typeof import('maplibre-gl').LngLatBounds | undefined;
   let styleId = $state<MapStyleId>('plan');
   // Cache des marqueurs MapLibre, volontairement non réactif (mis à jour par les effets).
+  // `el` est positionné par MapLibre ; `pin`, à l'intérieur, porte le visuel (et la mise en évidence).
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const markers = new Map<string, { marker: Marker; el: HTMLElement; icon?: string }>();
+  const markers = new Map<
+    string,
+    { marker: Marker; el: HTMLElement; pin: HTMLElement; icon?: string }
+  >();
   let PopupClass: typeof Popup | undefined;
   /**
    * Popup ouverte (composant Svelte monté dans une popup MapLibre) et ce qu'elle montre.
@@ -339,8 +343,14 @@
           const current = points.find((x) => x.key === p.key) ?? p;
           if (current.stepId) onMarkerContextMenu(current, { x: ev.clientX, y: ev.clientY });
         });
+        // Visuel dans un élément intérieur : `scale` sur l'élément positionné par MapLibre
+        // agrandirait aussi sa translation (le marqueur mis en évidence s'éloignerait du lieu).
+        const pin = document.createElement('span');
+        pin.className = 'pin';
+        el.append(pin);
         entry = {
           el,
+          pin,
           marker: new MarkerClass({ element: el, anchor: 'bottom' })
             .setLngLat([p.lng, p.lat])
             .addTo(m),
@@ -352,12 +362,12 @@
       // Le SVG vient de l'icône Lucide du type (`stepIconSvg`), refait seulement s'il change.
       if (p.idea && p.type) {
         if (entry.icon !== p.type) {
-          entry.el.innerHTML = stepIconSvg(p.type, 'currentColor', 15);
+          entry.pin.innerHTML = stepIconSvg(p.type, 'currentColor', 15);
           entry.icon = p.type;
         }
         entry.el.dataset.icon = p.type;
       } else {
-        entry.el.textContent = p.label;
+        entry.pin.textContent = p.label;
         entry.icon = undefined;
         delete entry.el.dataset.icon;
       }
@@ -961,9 +971,32 @@
   }
 
   /* Marqueurs créés par MapLibre hors du composant : styles globaux. */
+  /* Élément positionné par MapLibre (`transform` en ligne) : ni visuel, ni `transform`, ni
+     `scale`, ni transition ici. `scale` s'appliquerait aussi à la translation et éloignerait le
+     marqueur de son lieu ; le visuel et sa mise en évidence sont sur `.pin`, à l'intérieur. */
   :global(.map-marker) {
     /* Au-dessus des lieux proposés par la découverte. */
     z-index: 1;
+    display: grid;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    /* Explicite : la valeur par défaut (`all`, 0 s) n'anime rien mais ressemble à une transition. */
+    transition: none;
+  }
+
+  /* Anneau de focus sur la pastille : il en suit la forme et l'agrandissement. */
+  :global(.map-marker:focus-visible) {
+    outline: none;
+  }
+
+  :global(.map-marker:focus-visible .pin) {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  :global(.map-marker .pin) {
     display: grid;
     place-items: center;
     min-width: 30px;
@@ -975,17 +1008,16 @@
     color: var(--on-type);
     font: 700 12px var(--font-display);
     box-shadow: var(--shadow-marker);
-    cursor: pointer;
-    /* MapLibre place le marqueur par `transform` (style en ligne) : jamais de transition ni de
-       `transform` ici, sinon le marqueur traîne derrière la carte. La mise en évidence passe par
-       la propriété `scale`, qui se combine avec la position. */
     transform-origin: 50% 100%;
     transition: scale 0.12s;
   }
 
   :global(.map-marker.highlighted) {
-    scale: 1.25;
     z-index: 2;
+  }
+
+  :global(.map-marker.highlighted .pin) {
+    scale: 1.25;
   }
 
   :global(.map-marker.faded) {
@@ -995,6 +1027,9 @@
   /* Idée (pas encore placée) : marqueur clair à contour pointillé, sans numéro, sous les étapes. */
   :global(.map-marker.idea) {
     z-index: 0;
+  }
+
+  :global(.map-marker.idea .pin) {
     border: 2px dashed var(--c);
     background: var(--surface);
     color: var(--c);
