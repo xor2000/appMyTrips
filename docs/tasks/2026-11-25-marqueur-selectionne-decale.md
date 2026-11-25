@@ -60,7 +60,8 @@ Revue indépendante (sous-agent relecteur), points vérifiés puis corrigés :
   possible pendant le zoom). Il mesure désormais `.pin` et garde le pire de deux relevés espacés
   de 250 ms.
 - Laissé (préexistant, hors périmètre) : une idée mise en évidence garde `z-index: 0`, la règle
-  `.map-marker.idea` venant après `.map-marker.highlighted` à spécificité égale.
+  `.map-marker.idea` venant après `.map-marker.highlighted` à spécificité égale. Corrigé ensuite :
+  `2026-11-25-idee-mise-en-evidence-au-dessus.md`.
 
 ## Reste à faire
 

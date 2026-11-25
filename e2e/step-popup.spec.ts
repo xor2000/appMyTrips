@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { clickMapAt, type MapTestWindow } from './map-helpers';
 import { addPlaceViaMap } from './place-helpers';
 
@@ -221,6 +221,14 @@ test('clic sur une idée qui a un lieu : zoom et popup « … · Idée »', asyn
   await expect(popup.getByRole('heading', { level: 4 })).toHaveText('Tour Eiffel');
   await expect(popup).toContainText('· Idée');
   await expect.poll(() => zoom(page)).toBeGreaterThanOrEqual(15);
+
+  // L'idée sélectionnée passe au-dessus des marqueurs d'étapes : un lieu voisin ne la masque pas.
+  const ideaMarker = page.locator('.map-marker.idea');
+  await expect(ideaMarker).toHaveClass(/highlighted/);
+  const zIndex = (marker: Locator) => marker.evaluate((el) => Number(getComputedStyle(el).zIndex));
+  expect(await zIndex(ideaMarker)).toBeGreaterThan(
+    await zIndex(page.locator('.map-marker', { hasText: '1' })),
+  );
 });
 
 test('clic droit sur la carte : popup du lieu trouvé par Photon, ajout au jour', async ({

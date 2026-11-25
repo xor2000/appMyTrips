@@ -1029,6 +1029,12 @@
     z-index: 0;
   }
 
+  /* Idée sélectionnée ou survolée : au-dessus des étapes, comme une étape mise en évidence
+     (la règle `.idea`, venue après, l'emportait à spécificité égale). */
+  :global(.map-marker.idea.highlighted) {
+    z-index: 2;
+  }
+
   :global(.map-marker.idea .pin) {
     border: 2px dashed var(--c);
     background: var(--surface);
