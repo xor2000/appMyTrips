@@ -1,6 +1,5 @@
 <script lang="ts">
   import Columns3 from 'lucide-svelte/icons/columns-3';
-  import GitCommitHorizontal from 'lucide-svelte/icons/git-commit-horizontal';
   import PanelLeft from 'lucide-svelte/icons/panel-left';
   import { LAYOUTS, type LayoutId } from '#lib/layout.ts';
 
@@ -11,7 +10,7 @@
 
   let { value, onChange }: Props = $props();
 
-  const icons = { list: PanelLeft, metro: GitCommitHorizontal, board: Columns3 };
+  const icons = { list: PanelLeft, board: Columns3 };
 </script>
 
 <!-- Sélecteur rapide de l'affichage, sur la page d'un voyage (le réglage vit aussi sur « Mon compte »). -->

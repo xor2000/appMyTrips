@@ -106,17 +106,6 @@
     flex-direction: column;
   }
 
-  .sketch.metro {
-    grid-template-rows: 1.6fr 1fr;
-  }
-
-  .sketch.metro .day b {
-    height: 6px;
-    align-self: center;
-    border-radius: 3px;
-    background: var(--accent);
-  }
-
   .sketch.board .map {
     display: none;
   }

@@ -32,26 +32,26 @@ async function createTrip(page: Page) {
   return name;
 }
 
-const stopNames = (page: Page) => page.getByTestId('metro-stop').locator('.name').allTextContents();
-
 test('choisir l’affichage sur Mon compte, puis basculer depuis la page du voyage', async ({
   page,
 }) => {
+  // Deux affichages seulement : plus de « Ligne de métro ».
   await page.goto('/compte');
-  await page.getByRole('radio', { name: /Ligne de métro/ }).check();
+  const layouts = page.getByRole('radiogroup', { name: 'Affichage de la journée' });
+  await expect(layouts.getByRole('radio')).toHaveCount(2);
+  await expect(layouts.getByRole('radio', { name: /Ligne de métro/ })).toHaveCount(0);
+  await layouts.getByRole('radio', { name: /Plein écran/ }).check();
   const name = await createTrip(page);
-  await page.getByRole('tab', { name: /J1/ }).click();
-  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre');
+  await expect(page.getByRole('button', { name: 'Ligne de métro' })).toHaveCount(0);
 
-  // Ligne de métro (choix de Mon compte).
-  await expect(page.getByTestId('metro-stop')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'Ligne de métro' })).toHaveAttribute(
+  // Plein écran (choix de Mon compte) : colonnes des jours, puis la carte.
+  await expect(page.getByRole('button', { name: 'Plein écran' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-
-  // Plein écran : colonnes des jours, puis la carte.
-  await page.getByRole('button', { name: 'Plein écran' }).click();
+  await page.getByRole('button', { name: 'Carte', exact: true }).click();
+  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre', { day: 1 });
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click();
   const j1 = page.getByRole('region', { name: 'J1', exact: true });
   await expect(j1.getByTestId('step-card').filter({ hasText: 'Musée du Louvre' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'J3', exact: true })).toBeVisible();
@@ -69,34 +69,6 @@ test('choisir l’affichage sur Mon compte, puis basculer depuis la page du voya
     'aria-pressed',
     'true',
   );
-});
-
-test('ligne de métro : ajouter, relier par un trajet, réordonner et glisser', async ({ page }) => {
-  await createTrip(page);
-  await page.getByRole('button', { name: 'Ligne de métro' }).click();
-  await page.getByRole('tab', { name: /J1/ }).click();
-  await addPlaceViaMap(page, 'Louvre', 'Musée du Louvre');
-  await addPlaceViaMap(page, 'Orsay', 'Musée d’Orsay');
-  await expect.poll(() => stopNames(page)).toEqual(['Musée du Louvre', 'Musée d’Orsay']);
-
-  // Trajet entre les deux stations : « + » compact qui se déplie pour choisir le mode.
-  const line = page.getByTestId('day-timeline');
-  const leg = line.getByTestId('metro-leg');
-  await leg.getByRole('button', { name: 'Ajouter un trajet' }).click();
-  await leg.getByRole('button', { name: 'Trajet en Voiture' }).click();
-  await expect(leg).toContainText('Voiture');
-  await expect(leg.getByRole('button', { name: /^Trajet en/ })).toHaveCount(0);
-  // Compact : pas plus large qu'une station.
-  const box = await leg.boundingBox();
-  expect(box!.width).toBeLessThanOrEqual(150);
-
-  // Glisser la dernière station dans la première zone de dépôt : l'ordre change.
-  await page.getByTestId('metro-stop').last().dragTo(line.getByTestId('drop-zone').first());
-  await expect.poll(() => stopNames(page)).toEqual(['Musée d’Orsay', 'Musée du Louvre']);
-
-  // Un clic sur une station ouvre l'éditeur.
-  await page.getByRole('button', { name: /^Musée du Louvre · Musée/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Modifier l’étape' })).toBeVisible();
 });
 
 test('plein écran : ajouter depuis la carte dans un jour choisi, glisser d’un jour à l’autre', async ({

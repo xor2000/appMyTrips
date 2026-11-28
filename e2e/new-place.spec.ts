@@ -37,11 +37,11 @@ async function tripOnDay1(page: Page) {
   await page.getByRole('tab', { name: /J1/ }).click();
 }
 
-test('plus de boutons d’ajout sous les lieux du jour, dans les trois affichages', async ({
+test('plus de boutons d’ajout sous les lieux du jour, dans les deux affichages', async ({
   page,
 }) => {
   await tripOnDay1(page);
-  for (const layout of ['Liste et carte', 'Ligne de métro', 'Plein écran']) {
+  for (const layout of ['Liste et carte', 'Plein écran']) {
     await page.getByRole('button', { name: layout, exact: true }).click();
     for (const name of [
       'Ajouter un lieu',

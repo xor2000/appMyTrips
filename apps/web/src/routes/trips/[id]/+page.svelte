@@ -122,8 +122,6 @@
   import IdeasPanel from '#lib/components/steps/IdeasPanel.svelte';
   import StayDialog, { type StayValues } from '#lib/components/steps/StayDialog.svelte';
   import StepEditor, { type NewPlaceResult } from '#lib/components/steps/StepEditor.svelte';
-  import MetroLeg from '#lib/components/legs/MetroLeg.svelte';
-  import MetroLine from '#lib/components/steps/MetroLine.svelte';
   import Timeline from '#lib/components/steps/Timeline.svelte';
   import LayoutSwitch from '#lib/components/LayoutSwitch.svelte';
   import { readLayout, saveLayout, type LayoutId } from '#lib/layout.ts';
@@ -135,7 +133,7 @@
   let loadError = $state<string | null>(null);
   let notice = $state<string | null>(null);
   let selectedDay = $state<string | null>(null);
-  /** Affichage de la journée (liste, ligne de métro, plein écran), mémorisé par appareil. */
+  /** Affichage de la journée (liste ou plein écran), mémorisé par appareil. */
   let layout = $state<LayoutId>(readLayout());
   /** Plein écran : carte ou timeline des jours en colonnes. */
   let boardMode = $state<'map' | 'timeline'>('timeline');
@@ -264,7 +262,7 @@
   const schedules = $derived(
     new Map(trip ? days.map((d) => [d.id, scheduleDay(dayInput(d))]) : []),
   );
-  /** Modèle de chaque jour, partagé par les trois affichages (voir lib/trips/dayViews.ts). */
+  /** Modèle de chaque jour, partagé par les deux affichages (voir lib/trips/dayViews.ts). */
   const dayViews = $derived(buildDayViews({ days, steps, stays, legs }, schedules));
   const dayView = $derived(dayViews.find((v) => v.day.id === selectedDay) ?? null);
   const labels = $derived(dayView?.labels ?? new Map<string, string>());
@@ -1155,24 +1153,6 @@
   {/if}
 {/snippet}
 
-<!-- Ligne de métro : trajet compact sur la ligne (mêmes actions que la tuile de la liste). -->
-{#snippet metroLegAfter(key: string)}
-  {@const pair = pairs.get(key)}
-  {#if pair}
-    <MetroLeg
-      {pair}
-      leg={pair.leg}
-      color={pair.color}
-      {canEdit}
-      highlighted={highlighted === `${pair.fromKey}>${pair.toKey}`}
-      suggestion={pair.leg ? null : suggestionFor(pair, removedLegs)}
-      onCreate={(input) => addLeg(pair, input)}
-      onEdit={(leg) => (editingLegId = leg.id)}
-      onHover={(k) => (highlighted = k)}
-    />
-  {/if}
-{/snippet}
-
 <!-- Jours et actions du voyage, sur la ligne de l'en-tête de l'application (layout), après le
      choix du voyage. -->
 {#snippet headerContent()}
@@ -1384,7 +1364,7 @@
       />
     {/snippet}
 
-    <!-- Trois affichages de la journée (lib/layout.ts) : mêmes données, mêmes actions. -->
+    <!-- Deux affichages de la journée (lib/layout.ts) : mêmes données, mêmes actions. -->
     <div class="body">
       {#if layout === 'list'}
         <SplitPane>
@@ -1427,44 +1407,6 @@
             {@render tripMap()}
           {/snippet}
         </SplitPane>
-      {:else if layout === 'metro'}
-        <div class="metro-layout">
-          <div class="metro-map">{@render tripMap()}</div>
-          <section class="metro-panel" aria-label="Journée">
-            {#if sidePanel}
-              <div class="metro-main">{@render sidePanelContent()}</div>
-            {:else}
-              <div class="metro-main">
-                {#if day}
-                  {@render dayHead(day)}
-                  <div
-                    class="metro-scroll"
-                    data-testid="day-timeline"
-                    role="presentation"
-                    ondragover={onFileDragOver}
-                    ondrop={onFileDrop}
-                  >
-                    <MetroLine
-                      {items}
-                      {labels}
-                      {canEdit}
-                      {highlighted}
-                      onEdit={(s) => (editingStepId = s.id)}
-                      onEditStay={editStay}
-                      onContextMenu={openContextMenu}
-                      onDrop={drop}
-                      after={metroLegAfter}
-                      {times}
-                    />
-                  </div>
-                {:else}
-                  {@render allDays()}
-                {/if}
-              </div>
-              <aside class="metro-ideas">{@render ideasBlock()}</aside>
-            {/if}
-          </section>
-        </div>
       {:else}
         <div class="board-layout">
           <div class="board-bar">
@@ -1858,44 +1800,6 @@
     margin: 0;
     font-size: 13px;
     white-space: pre-wrap;
-  }
-
-  /* Ligne de métro : carte en haut, journée en ligne dessous, idées à droite. */
-  .metro-layout {
-    display: grid;
-    grid-template-rows: minmax(240px, 1fr) auto;
-    height: 100%;
-  }
-
-  .metro-map {
-    position: relative;
-    min-height: 0;
-  }
-
-  .metro-panel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    max-height: 52vh;
-    border-top: 1px solid var(--line);
-    background: var(--surface);
-    overflow: hidden;
-  }
-
-  .metro-main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    overflow: auto;
-  }
-
-  .metro-scroll {
-    overflow-x: auto;
-    padding-top: var(--space-2);
-  }
-
-  .metro-ideas {
-    border-left: 1px solid var(--line);
-    overflow: auto;
   }
 
   /* Plein écran : carte ou colonnes de jours sur toute la surface. */

@@ -11,8 +11,8 @@ import { dayPairs, type DayPair } from '#lib/legs/legs.ts';
 import { mapPoints } from '#lib/map/points.ts';
 
 /**
- * Tout ce qu'il faut pour dessiner un jour, quel que soit l'affichage (liste, ligne de métro,
- * colonnes du plein écran) : les trois affichages partagent ces calculs.
+ * Tout ce qu'il faut pour dessiner un jour, quel que soit l'affichage (liste ou colonnes du plein
+ * écran) : les deux affichages partagent ces calculs.
  */
 export interface DayView {
   day: Day;

@@ -4,15 +4,13 @@
   interface Props {
     /** Refuser les dossiers (zone à l'intérieur d'un dossier). */
     stepsOnly?: boolean;
-    /** Zone verticale (ligne de métro) : largeur fixe, toute la hauteur. */
-    vertical?: boolean;
     /** Variante compacte (idées) : hauteur fixe réduite. */
     dense?: boolean;
     label: string;
     onDrop: (stepId: string) => void;
   }
 
-  let { stepsOnly = false, vertical = false, dense = false, label, onDrop }: Props = $props();
+  let { stepsOnly = false, dense = false, label, onDrop }: Props = $props();
 
   let over = $state(false);
   const active = $derived(drag.stepId !== null && !(stepsOnly && drag.kind === 'group'));
@@ -34,7 +32,6 @@
 
 <div
   class="zone"
-  class:vertical
   class:dense
   class:active
   class:over
@@ -61,16 +58,6 @@
   /* Variante compacte (idées) : même principe, plus basse. */
   .zone.dense {
     height: var(--space-1);
-  }
-
-  /* Variante verticale : même principe, taille fixe dans l'autre sens. */
-  .zone.vertical {
-    flex: none;
-    align-self: stretch;
-    width: var(--space-3);
-    height: auto;
-    min-height: 120px;
-    margin: 0 var(--space-1);
   }
 
   .zone.active {
