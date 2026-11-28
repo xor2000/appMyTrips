@@ -1,6 +1,6 @@
 /**
  * Affichage de la journée sur la page d'un voyage, choisi sur « Mon compte » ou par le sélecteur
- * rapide de la page, mémorisé dans le navigateur (par appareil). Les trois affichages partagent
+ * rapide de la page, mémorisé dans le navigateur (par appareil). Les deux affichages partagent
  * données, calculs, fenêtres d'édition et actions ; seule la présentation change.
  */
 export const LAYOUTS = [
@@ -8,11 +8,6 @@ export const LAYOUTS = [
     id: 'list',
     label: 'Liste et carte',
     hint: 'La journée en liste à gauche, la carte à droite',
-  },
-  {
-    id: 'metro',
-    label: 'Ligne de métro',
-    hint: 'La carte en grand, la journée en ligne horizontale dessous',
   },
   {
     id: 'board',
@@ -35,7 +30,10 @@ function defaultStorage(): LayoutStorage | null {
   }
 }
 
-/** Affichage mémorisé ; « list » s'il n'y en a pas, s'il est inconnu ou si le stockage est bloqué. */
+/**
+ * Affichage mémorisé ; « list » s'il n'y en a pas, s'il est inconnu (dont l'ancienne « ligne de
+ * métro », retirée) ou si le stockage est bloqué.
+ */
 export function readLayout(storage: LayoutStorage | null = defaultStorage()): LayoutId {
   try {
     const value = storage?.getItem(LAYOUT_KEY) ?? null;

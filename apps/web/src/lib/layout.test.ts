@@ -23,21 +23,25 @@ const blocked = {
 };
 
 describe('affichage de la journée', () => {
-  it('propose la liste (actuel), la ligne de métro et le plein écran', () => {
-    expect(LAYOUTS.map((l) => l.id)).toEqual(['list', 'metro', 'board']);
+  it('propose la liste et le plein écran (plus de ligne de métro)', () => {
+    expect(LAYOUTS.map((l) => l.id)).toEqual(['list', 'board']);
   });
 
   it('lit l’affichage mémorisé ; « list » par défaut, si inconnu ou si le stockage est bloqué', () => {
-    expect(readLayout(memoryStorage({ [LAYOUT_KEY]: 'metro' }))).toBe('metro');
+    expect(readLayout(memoryStorage({ [LAYOUT_KEY]: 'board' }))).toBe('board');
     expect(readLayout(memoryStorage())).toBe('list');
     expect(readLayout(memoryStorage({ [LAYOUT_KEY]: 'kanban' }))).toBe('list');
     expect(readLayout(blocked)).toBe('list');
+  });
+
+  it('ramène à la liste l’ancien affichage « ligne de métro » encore mémorisé', () => {
+    expect(readLayout(memoryStorage({ [LAYOUT_KEY]: 'metro' }))).toBe('list');
   });
 
   it('mémorise le choix, sans erreur si le stockage est bloqué', () => {
     const storage = memoryStorage();
     saveLayout('board', storage);
     expect(storage.getItem(LAYOUT_KEY)).toBe('board');
-    expect(() => saveLayout('metro', blocked)).not.toThrow();
+    expect(() => saveLayout('list', blocked)).not.toThrow();
   });
 });

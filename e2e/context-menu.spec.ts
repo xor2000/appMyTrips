@@ -44,13 +44,11 @@ const timelineCard = (page: Page, name: string) =>
 const ideas = (page: Page) => page.getByRole('region', { name: 'Idées' });
 const menuOf = (page: Page, name: string) => page.getByRole('menu', { name, exact: true });
 
-test('survol d’un lieu ou d’un séjour (jour, idées, métro) : rien n’est mis en évidence', async ({
+test('survol d’un lieu ou d’un séjour (jour, idées) : rien n’est mis en évidence', async ({
   page,
 }) => {
   await tripWithTwoPlaces(page);
-  const louvre = timelineCard(page, 'Musée du Louvre');
   const orsay = timelineCard(page, 'Musée d’Orsay');
-  const louvreMarker = page.locator('.map-marker', { hasText: '1' });
   const orsayMarker = page.locator('.map-marker', { hasText: '2' });
 
   // Le survol d'un marqueur met toujours le lieu en évidence dans la liste (sens carte → liste).
@@ -88,15 +86,6 @@ test('survol d’un lieu ou d’un séjour (jour, idées, métro) : rien n’est
   await idea.hover();
   await expect(idea).not.toHaveClass(/highlighted/);
   await expect(page.locator('.map-marker.idea')).not.toHaveClass(/highlighted/);
-
-  // Station de la ligne de métro.
-  await page.mouse.move(5, 5);
-  await expect(louvre).toBeVisible();
-  await page.getByRole('button', { name: 'Ligne de métro' }).click();
-  const stop = page.getByTestId('metro-stop').filter({ hasText: 'Musée du Louvre' });
-  await stop.hover();
-  await expect(stop).not.toHaveClass(/highlighted/);
-  await expect(louvreMarker).not.toHaveClass(/highlighted/);
 });
 
 test('clic droit sur un lieu : menu contextuel, déplacement vers les idées et annulation', async ({
@@ -218,23 +207,4 @@ test('clic droit sur un marqueur, une idée, un dossier : même menu ; icône de
     'Supprimer',
     'Déplacer vers',
   ]);
-});
-
-test('ligne de métro : clic droit sur une station, plus de flèches plus tôt / plus tard', async ({
-  page,
-}) => {
-  await tripWithTwoPlaces(page);
-  await page.getByRole('button', { name: 'Ligne de métro' }).click();
-  const stop = page.getByTestId('metro-stop').filter({ hasText: 'Musée du Louvre' });
-  await stop.hover();
-  await expect(page.getByRole('button', { name: /^Plus (tôt|tard) :/ })).toHaveCount(0);
-  await stop.click({ button: 'right' });
-  const menu = menuOf(page, 'Musée du Louvre');
-  await menu.getByRole('menuitem', { name: 'Déplacer vers' }).click();
-  await page
-    .getByRole('menu', { name: 'Déplacer vers' })
-    .getByRole('menuitem', { name: /^J2/ })
-    .click();
-  await expect(page.getByTestId('metro-stop')).toHaveCount(1);
-  await expect(page.getByTestId('metro-stop')).toContainText('Musée d’Orsay');
 });
